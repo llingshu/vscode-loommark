@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use LoomMark in published work, please cite the software."
+title: "LoomMark"
+type: software
+authors:
+  - family-names: "llingshu"
+version: 0.1.0
+date-released: 2026-07-10
+url: "https://github.com/llingshu/vscode-loommark"
+repository-code: "https://github.com/llingshu/vscode-loommark"
+license: MIT
+keywords:
+  - markdown
+  - visual-studio-code
+  - wysiwyg
+  - milkdown

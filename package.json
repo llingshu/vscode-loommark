@@ -1,0 +1,162 @@
+{
+  "name": "loommark",
+  "displayName": "LoomMark",
+  "description": "A source-backed, live-rendering WYSIWYG Markdown editor for VS Code.",
+  "version": "0.1.0",
+  "publisher": "llingshu",
+  "license": "MIT",
+  "icon": "assets/icon.png",
+  "homepage": "https://github.com/llingshu/vscode-loommark#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/llingshu/vscode-loommark.git"
+  },
+  "bugs": {
+    "url": "https://github.com/llingshu/vscode-loommark/issues"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization",
+    "Formatters"
+  ],
+  "keywords": [
+    "markdown",
+    "wysiwyg",
+    "editor",
+    "milkdown",
+    "crepe",
+    "prosemirror",
+    "live preview"
+  ],
+  "galleryBanner": {
+    "color": "#171717",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onCustomEditor:loommark.editor"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "loommark.editor",
+        "displayName": "LoomMark",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "loommark.openSource",
+        "title": "LoomMark: Open Source Editor",
+        "icon": "$(code)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "loommark.openSource",
+          "when": "activeCustomEditorId == loommark.editor",
+          "group": "navigation"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "loommark.outline",
+          "name": "Markdown Outline",
+          "when": "activeCustomEditorId == loommark.editor && (config.loommark.outline == both || config.loommark.outline == explorer)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "LoomMark",
+      "properties": {
+        "loommark.syncDelay": {
+          "type": "number",
+          "default": 180,
+          "minimum": 50,
+          "maximum": 2000,
+          "description": "Milliseconds to group continuous input before updating the text document."
+        },
+        "loommark.openByDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open Markdown files with LoomMark by default. Disable this to use VS Code's normal editor association."
+        },
+        "loommark.theme": {
+          "type": "string",
+          "enum": [
+            "vscode",
+            "crepe",
+            "frame",
+            "nord"
+          ],
+          "enumDescriptions": [
+            "Follow the active VS Code color theme.",
+            "Use Crepe's warm editorial palette.",
+            "Use Crepe's neutral monochrome palette.",
+            "Use Crepe's cool Nord palette."
+          ],
+          "default": "vscode",
+          "description": "Color theme used by the LoomMark editor. Light and dark variants follow VS Code automatically."
+        },
+        "loommark.outline": {
+          "type": "string",
+          "enum": [
+            "both",
+            "editor",
+            "explorer",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Show both the in-editor outline and the Explorer view.",
+            "Show only the in-editor outline.",
+            "Show only the native Explorer view.",
+            "Disable both outlines."
+          ],
+          "default": "both",
+          "description": "Controls where the Markdown document outline is shown."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build && npm run licenses",
+    "clean": "node scripts/clean.mjs",
+    "compile": "node esbuild.mjs",
+    "build": "node esbuild.mjs --production",
+    "licenses": "node scripts/generate-third-party-licenses.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "node --test test/*.test.mjs",
+    "check": "tsc --noEmit && node --test test/*.test.mjs",
+    "package": "npm run clean && npm run check && npm run build && npm run licenses && vsce package --no-dependencies --out artifacts/loommark.vsix",
+    "publish:vscode": "vsce publish --packagePath artifacts/loommark.vsix",
+    "publish:openvsx": "ovsx publish artifacts/loommark.vsix"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.21.2",
+    "@milkdown/kit": "^7.21.2",
+    "mdast-util-from-markdown": "^2.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "ovsx": "^1.0.2",
+    "typescript": "^5.9.0"
+  }
+}

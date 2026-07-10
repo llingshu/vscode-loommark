@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible problem in LoomMark.
+title: "[Bug]: "
+labels: [bug, triage]
+body:
+  - type: checkboxes
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and tested the latest LoomMark release.
+          required: true
+        - label: This report does not contain sensitive or private document content.
+          required: true
+  - type: input
+    attributes:
+      label: LoomMark version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: VS Code and operating system
+      placeholder: VS Code 1.xx.x on Windows 11
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal Markdown sample when possible.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Actual behavior and logs
+      description: Use Help > Toggle Developer Tools and the Extension Host output when relevant.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Include relevant settings and whether the issue persists with other extensions disabled.

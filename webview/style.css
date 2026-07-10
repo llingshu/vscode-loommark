@@ -1,0 +1,451 @@
+:root {
+  color-scheme: light dark;
+  font-family: var(--vscode-font-family);
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+body {
+  overflow-y: auto;
+}
+
+#workspace {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr) 248px;
+}
+
+body.outline-collapsed #workspace {
+  grid-template-columns: minmax(0, 1fr) 42px;
+}
+
+body.editor-outline-disabled #workspace,
+body.editor-outline-disabled.outline-collapsed #workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.editor-outline-disabled #outline {
+  display: none;
+}
+
+#editor {
+  width: min(100% - 40px, 860px);
+  min-height: 100vh;
+  margin: 0 auto;
+}
+
+#outline {
+  position: sticky;
+  top: 0;
+  box-sizing: border-box;
+  height: 100vh;
+  overflow: hidden;
+  border-left: 1px solid var(--vscode-sideBar-border, var(--vscode-widget-border));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  color: var(--vscode-sideBar-foreground, var(--vscode-editor-foreground));
+}
+
+.outline-header {
+  box-sizing: border-box;
+  display: flex;
+  height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.outline-title {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#outline-toggle {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+#outline-toggle:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#outline-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.outline-toggle-icon {
+  display: grid;
+  width: 14px;
+  gap: 3px;
+}
+
+.outline-toggle-icon i {
+  display: block;
+  height: 1px;
+  background: currentColor;
+}
+
+.outline-toggle-icon i:nth-child(2) {
+  width: 10px;
+}
+
+.outline-toggle-icon i:nth-child(3) {
+  width: 6px;
+}
+
+.outline-nav {
+  height: calc(100vh - 42px);
+  overflow: auto;
+  padding: 6px 0 16px;
+}
+
+#outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#outline-list li {
+  margin: 0;
+  padding: 0;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  height: 28px;
+  overflow: hidden;
+  padding: 0 10px 0 calc(12px + var(--outline-level) * 12px);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: 28px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-item:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+
+.outline-item.active {
+  border-left-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-inactiveSelectionBackground);
+  color: var(--vscode-list-inactiveSelectionForeground);
+}
+
+.outline-item:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+#outline-empty {
+  margin: 12px 14px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+#outline.collapsed .outline-title,
+#outline.collapsed .outline-nav {
+  display: none;
+}
+
+#outline.collapsed .outline-header {
+  justify-content: center;
+  padding: 0;
+  border-bottom: 0;
+}
+
+#editor .milkdown {
+  --crepe-color-background: var(--vscode-editor-background);
+  --crepe-color-on-background: var(--vscode-editor-foreground);
+  --crepe-color-surface: var(--vscode-menu-background);
+  --crepe-color-surface-low: var(--vscode-editorWidget-background);
+  --crepe-color-on-surface: var(--vscode-menu-foreground);
+  --crepe-color-on-surface-variant: var(--vscode-descriptionForeground);
+  --crepe-color-outline: var(--vscode-widget-border);
+  --crepe-color-primary: var(--vscode-focusBorder);
+  --crepe-color-secondary: var(--vscode-list-activeSelectionBackground);
+  --crepe-color-on-secondary: var(--vscode-list-activeSelectionForeground);
+  --crepe-color-inverse: var(--vscode-editor-foreground);
+  --crepe-color-on-inverse: var(--vscode-editor-background);
+  --crepe-color-inline-code: var(--vscode-textPreformat-foreground);
+  --crepe-color-error: var(--vscode-errorForeground);
+  --crepe-color-hover: var(--vscode-list-hoverBackground);
+  --crepe-color-selected: var(--vscode-editor-selectionBackground);
+  --crepe-color-inline-area: var(--vscode-textCodeBlock-background);
+  --crepe-font-title: var(--vscode-font-family);
+  --crepe-font-default: var(--vscode-font-family);
+  --crepe-font-code: var(--vscode-editor-font-family);
+  background: transparent;
+}
+
+#editor .ProseMirror {
+  min-height: calc(100vh - 80px);
+  padding: 40px 8px 120px;
+  caret-color: var(--vscode-editorCursor-foreground);
+  outline: none;
+}
+
+#editor .ProseMirror ::selection {
+  background: var(--vscode-editor-selectionBackground);
+}
+
+#editor .milkdown-list-item-block li .label-wrapper {
+  color: var(--vscode-editor-foreground);
+}
+
+#editor .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--vscode-editor-foreground);
+}
+
+#editor .ProseMirror :is(h1, h2, h3, h4, h5, h6)::before {
+  margin-right: 8px;
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 28px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-left: 2px solid var(--crepe-color-primary);
+  border-radius: 3px;
+  background: var(--crepe-color-surface-low);
+  color: var(--crepe-color-on-surface-variant);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0;
+  vertical-align: middle;
+  user-select: none;
+}
+
+#editor .ProseMirror h1::before { content: "H1"; }
+#editor .ProseMirror h2::before { content: "H2"; }
+#editor .ProseMirror h3::before { content: "H3"; }
+#editor .ProseMirror h4::before { content: "H4"; }
+#editor .ProseMirror h5::before { content: "H5"; }
+#editor .ProseMirror h6::before { content: "H6"; }
+
+body[data-loommark-theme="crepe"].vscode-light #editor .milkdown {
+  --crepe-color-background: #fffdfb;
+  --crepe-color-on-background: #1f1b16;
+  --crepe-color-surface: #fff8f4;
+  --crepe-color-surface-low: #fff1e5;
+  --crepe-color-on-surface: #201b13;
+  --crepe-color-on-surface-variant: #4f4539;
+  --crepe-color-outline: #817567;
+  --crepe-color-primary: #805610;
+  --crepe-color-secondary: #fbdebc;
+  --crepe-color-on-secondary: #271904;
+  --crepe-color-inline-code: #ba1a1a;
+  --crepe-color-hover: #f9ecdf;
+  --crepe-color-selected: #ede0d4;
+  --crepe-color-inline-area: #e4d8cc;
+}
+
+body[data-loommark-theme="crepe"].vscode-dark #editor .milkdown {
+  --crepe-color-background: #1f1b16;
+  --crepe-color-on-background: #eae1d9;
+  --crepe-color-surface: #18120b;
+  --crepe-color-surface-low: #201b13;
+  --crepe-color-on-surface: #ede0d4;
+  --crepe-color-on-surface-variant: #d3c4b4;
+  --crepe-color-outline: #9c8f80;
+  --crepe-color-primary: #f4bd6f;
+  --crepe-color-secondary: #56442a;
+  --crepe-color-on-secondary: #fbdebc;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-hover: #251f17;
+  --crepe-color-selected: #3b342b;
+  --crepe-color-inline-area: #3f3830;
+}
+
+body[data-loommark-theme="frame"].vscode-light #editor .milkdown {
+  --crepe-color-background: #fff;
+  --crepe-color-on-background: #000;
+  --crepe-color-surface: #f7f7f7;
+  --crepe-color-surface-low: #ededed;
+  --crepe-color-on-surface: #1c1c1c;
+  --crepe-color-on-surface-variant: #4d4d4d;
+  --crepe-color-outline: #a8a8a8;
+  --crepe-color-primary: #333;
+  --crepe-color-secondary: #cfcfcf;
+  --crepe-color-on-secondary: #000;
+  --crepe-color-inline-code: #ba1a1a;
+  --crepe-color-hover: #e0e0e0;
+  --crepe-color-selected: #d5d5d5;
+  --crepe-color-inline-area: #cacaca;
+}
+
+body[data-loommark-theme="frame"].vscode-dark #editor .milkdown {
+  --crepe-color-background: #1a1a1a;
+  --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #121212;
+  --crepe-color-surface-low: #1c1c1c;
+  --crepe-color-on-surface: #d1d1d1;
+  --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575;
+  --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d;
+  --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inline-code: #f66;
+  --crepe-color-hover: #232323;
+  --crepe-color-selected: #2f2f2f;
+  --crepe-color-inline-area: #2b2b2b;
+}
+
+body[data-loommark-theme="nord"].vscode-light #editor .milkdown {
+  --crepe-color-background: #fdfcff;
+  --crepe-color-on-background: #1b1c1d;
+  --crepe-color-surface: #f8f9ff;
+  --crepe-color-surface-low: #f2f3fa;
+  --crepe-color-on-surface: #191c20;
+  --crepe-color-on-surface-variant: #43474e;
+  --crepe-color-outline: #73777f;
+  --crepe-color-primary: #37618e;
+  --crepe-color-secondary: #d7e3f8;
+  --crepe-color-on-secondary: #101c2b;
+  --crepe-color-inline-code: #ba1a1a;
+  --crepe-color-hover: #eceef4;
+  --crepe-color-selected: #e1e2e8;
+  --crepe-color-inline-area: #d8dae0;
+}
+
+body[data-loommark-theme="nord"].vscode-dark #editor .milkdown {
+  --crepe-color-background: #1b1c1d;
+  --crepe-color-on-background: #f8f9ff;
+  --crepe-color-surface: #111418;
+  --crepe-color-surface-low: #191c20;
+  --crepe-color-on-surface: #e1e2e8;
+  --crepe-color-on-surface-variant: #c3c6cf;
+  --crepe-color-outline: #8d9199;
+  --crepe-color-primary: #a1c9fd;
+  --crepe-color-secondary: #3c4858;
+  --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-hover: #1d2024;
+  --crepe-color-selected: #32353a;
+  --crepe-color-inline-area: #111418;
+}
+
+body[data-loommark-theme="crepe"].vscode-light { background: #fffdfb; color: #1f1b16; }
+body[data-loommark-theme="crepe"].vscode-dark { background: #1f1b16; color: #eae1d9; }
+body[data-loommark-theme="frame"].vscode-light { background: #fff; color: #000; }
+body[data-loommark-theme="frame"].vscode-dark { background: #1a1a1a; color: #e6e6e6; }
+body[data-loommark-theme="nord"].vscode-light { background: #fdfcff; color: #1b1c1d; }
+body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9ff; }
+
+body.vscode-light .milkdown .milkdown-code-block,
+body.vscode-light .milkdown .milkdown-code-block :is(.cm-editor, .cm-scroller, .cm-gutters) {
+  background: #0d0d0d;
+  color: #fff;
+  caret-color: #fff;
+}
+
+body.vscode-dark .milkdown .milkdown-code-block,
+body.vscode-dark .milkdown .milkdown-code-block :is(.cm-editor, .cm-scroller, .cm-gutters) {
+  background: #fff;
+  color: #000;
+  caret-color: #000;
+}
+
+body.vscode-light .milkdown .milkdown-code-block :is(.cm-content, .cm-content *, .milkdown-code-block-placeholder, .milkdown-code-block-placeholder code) {
+  color: #fff !important;
+}
+
+body.vscode-dark .milkdown .milkdown-code-block :is(.cm-content, .cm-content *, .milkdown-code-block-placeholder, .milkdown-code-block-placeholder code) {
+  color: #000 !important;
+}
+
+body.vscode-light .milkdown .milkdown-code-block .cm-cursor {
+  border-left-color: #fff;
+}
+
+body.vscode-dark .milkdown .milkdown-code-block .cm-cursor {
+  border-left-color: #000;
+}
+
+body.vscode-light .milkdown .milkdown-table-block th,
+body.vscode-light .milkdown .milkdown-table-block td {
+  border-color: rgb(0 0 0 / 38%);
+}
+
+body.vscode-dark .milkdown .milkdown-table-block th,
+body.vscode-dark .milkdown .milkdown-table-block td {
+  border-color: rgb(255 255 255 / 38%);
+}
+
+body.vscode-high-contrast .milkdown .milkdown-table-block th,
+body.vscode-high-contrast .milkdown .milkdown-table-block td,
+body.vscode-high-contrast-light .milkdown .milkdown-table-block th,
+body.vscode-high-contrast-light .milkdown .milkdown-table-block td {
+  border-color: var(--vscode-contrastBorder);
+}
+
+#status {
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  min-height: 18px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  #workspace,
+  body.outline-collapsed #workspace {
+    display: block;
+  }
+
+  #editor {
+    width: calc(100% - 24px);
+  }
+
+  #outline {
+    position: fixed;
+    z-index: 20;
+    right: 0;
+    width: min(82vw, 280px);
+    box-shadow: -4px 0 16px rgb(0 0 0 / 20%);
+  }
+
+  #outline.collapsed {
+    width: 42px;
+    box-shadow: none;
+  }
+
+  #editor .ProseMirror {
+    padding-top: 24px;
+  }
+}

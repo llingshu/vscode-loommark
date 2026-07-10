@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and test
+        run: npm run check
+
+      - name: Clean generated output
+        run: npm run clean
+
+      - name: Build production bundles
+        run: npm run build
+
+      - name: Validate extension contents
+        run: npx --no-install vsce ls --no-dependencies
+
+      - name: Package VSIX
+        run: npx --no-install vsce package --no-dependencies --out artifacts/loommark.vsix
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: loommark-vsix
+          path: artifacts/loommark.vsix
+          if-no-files-found: error
