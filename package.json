@@ -147,7 +147,7 @@
     "publish:openvsx": "ovsx publish artifacts/loommark.vsix"
   },
   "dependencies": {
-    "@milkdown/crepe": "^7.21.2",
+    "@milkdown/crepe": "^7.21.3",
     "@milkdown/kit": "^7.21.2",
     "mdast-util-from-markdown": "^2.0.3"
   },
