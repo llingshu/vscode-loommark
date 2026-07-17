@@ -220,6 +220,220 @@ body.editor-outline-disabled #outline {
   background: var(--vscode-editor-selectionBackground);
 }
 
+/* Source-backed block editor. Inactive blocks are rendered views; only the
+   active block receives a CodeMirror instance and can update the source. */
+#editor.source-backed-editor {
+  min-height: 100vh;
+  padding: 40px 8px 120px;
+  box-sizing: border-box;
+}
+
+.source-block {
+  position: relative;
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: text;
+  line-height: 1.65;
+}
+
+.source-block:hover {
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, transparent);
+}
+
+.source-block-active {
+  padding: 0;
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-editor-background);
+  cursor: text;
+}
+
+.source-block-active .cm-editor {
+  min-height: 28px;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.source-block-active .cm-scroller {
+  overflow: auto;
+}
+
+.source-block-active .cm-content {
+  padding: 8px;
+}
+
+.source-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.source-block-heading .source-preview {
+  color: var(--vscode-editor-foreground);
+  font-weight: 650;
+}
+
+.source-block-heading .source-preview::before {
+  content: "H" attr(data-level);
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.source-preview a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.source-preview a:hover {
+  text-decoration: underline;
+}
+
+.source-preview img {
+  max-width: min(100%, 720px);
+  max-height: 480px;
+  vertical-align: middle;
+}
+
+.source-block-code pre {
+  margin: 4px 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.source-gap {
+  min-height: 12px;
+  cursor: text;
+}
+
+#editor > .cm-editor {
+  min-height: 100vh;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+#editor > .cm-editor.cm-focused {
+  outline: none;
+}
+
+#editor > .cm-editor .cm-scroller {
+  min-height: 100vh;
+  overflow: visible;
+  font-family: inherit;
+}
+
+#editor > .cm-editor .cm-content {
+  min-height: calc(100vh - 160px);
+  padding: 40px 8px 120px;
+  caret-color: var(--vscode-editorCursor-foreground);
+}
+
+#editor > .cm-editor .cm-line {
+  line-height: 1.65;
+}
+
+#editor > .cm-editor .cm-selectionBackground,
+#editor > .cm-editor.cm-focused .cm-selectionBackground {
+  background: var(--vscode-editor-selectionBackground);
+}
+
+#editor > .cm-editor .cm-cursor {
+  border-left-color: var(--vscode-editorCursor-foreground);
+}
+
+#editor > .cm-editor .cm-loommark-heading {
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+#editor > .cm-editor .cm-loommark-heading:not(.cm-loommark-heading-active)::before {
+  display: inline-flex;
+  width: 26px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  border-left: 2px solid var(--vscode-focusBorder);
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+#editor > .cm-editor .cm-loommark-h1 { font-size: 2em; }
+#editor > .cm-editor .cm-loommark-h2 { font-size: 1.6em; }
+#editor > .cm-editor .cm-loommark-h3 { font-size: 1.35em; }
+#editor > .cm-editor .cm-loommark-h4 { font-size: 1.15em; }
+#editor > .cm-editor .cm-loommark-h5 { font-size: 1em; }
+#editor > .cm-editor .cm-loommark-h6 { font-size: 0.92em; }
+#editor > .cm-editor .cm-loommark-h1::before { content: "H1"; }
+#editor > .cm-editor .cm-loommark-h2::before { content: "H2"; }
+#editor > .cm-editor .cm-loommark-h3::before { content: "H3"; }
+#editor > .cm-editor .cm-loommark-h4::before { content: "H4"; }
+#editor > .cm-editor .cm-loommark-h5::before { content: "H5"; }
+#editor > .cm-editor .cm-loommark-h6::before { content: "H6"; }
+
+#editor > .cm-editor .cm-loommark-strong {
+  font-weight: 700;
+}
+
+#editor > .cm-editor .cm-loommark-emphasis {
+  font-style: italic;
+}
+
+#editor > .cm-editor .cm-loommark-strikethrough {
+  color: var(--vscode-descriptionForeground);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+#editor > .cm-editor .cm-loommark-link {
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+#editor > .cm-editor .cm-loommark-link:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
+#editor > .cm-editor .cm-loommark-wiki-link::before {
+  content: "[[";
+  margin-right: 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  opacity: 0.7;
+}
+
+#editor > .cm-editor .cm-loommark-wiki-link::after {
+  content: "]]";
+  margin-left: 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  opacity: 0.7;
+}
+
 #editor .milkdown-list-item-block li .label-wrapper {
   color: var(--vscode-editor-foreground);
 }

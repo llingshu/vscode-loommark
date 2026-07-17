@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
 import type { HostToWebview, OutlineMode, EditorTheme } from './protocol';
 import { isWebviewMessage } from './protocol';
@@ -21,6 +22,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('loommark.openSource', async () => {
       const uri = provider.activeDocumentUri;
       if (uri) await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+    }),
+    vscode.commands.registerCommand('loommark.focusOutline', async () => {
+      await vscode.commands.executeCommand('workbench.view.explorer');
+      await vscode.commands.executeCommand('loommark.outline.focus');
+    }),
+    vscode.commands.registerCommand('loommark.copyDiagnostics', async () => {
+      if (!provider.requestDiagnostics()) {
+        void vscode.window.showWarningMessage('Open a Markdown file in LoomMark first.');
+      }
     }),
     vscode.window.createTreeView('loommark.outline', {
       treeDataProvider: outlineProvider,
@@ -141,9 +151,13 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     panel: vscode.WebviewPanel,
   ): Promise<void> {
     this.setActiveDocument(document, panel);
+    const documentDirectory = vscode.Uri.joinPath(document.uri, '..');
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+        documentDirectory,
+      ],
     };
     panel.webview.html = this.html(panel.webview);
 
@@ -152,10 +166,12 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     let ready = false;
 
     const post = (message: HostToWebview) => panel.webview.postMessage(message);
-    const initialize = () => post({
+    const initialize = async () => post({
       type: 'init',
       text: document.getText(),
       revision: documentRevision,
+      resourceBase: ensureTrailingSlash(panel.webview.asWebviewUri(documentDirectory).toString()),
+      wikiFiles: await findWikiFiles(document),
       ...editorConfiguration(),
     });
 
@@ -166,11 +182,22 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         await initialize();
         return;
       }
+      if (raw.type === 'openLink') {
+        await post({ type: 'linkOpenResult', href: raw.href, status: 'received' });
+        const result = await openLink(raw.href, document, raw.wiki ?? false);
+        await post({ type: 'linkOpenResult', href: raw.href, ...result });
+        return;
+      }
+      if (raw.type === 'diagnostics') {
+        await vscode.env.clipboard.writeText(raw.report);
+        void vscode.window.showInformationMessage('LoomMark diagnostics copied to the clipboard.');
+        return;
+      }
 
       const current = document.getText();
       const splice = singleSplice(current, raw.text);
       if (!splice) {
-        await post({ type: 'ack', clientRevision: raw.clientRevision, documentRevision });
+        await post({ type: 'ack', clientRevision: raw.clientRevision, documentRevision, text: current });
         return;
       }
 
@@ -186,7 +213,12 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
 
       if (applied) {
         documentRevision = document.version;
-        await post({ type: 'ack', clientRevision: raw.clientRevision, documentRevision });
+        await post({
+          type: 'ack',
+          clientRevision: raw.clientRevision,
+          documentRevision,
+          text: document.getText(),
+        });
       } else {
         await post({ type: 'documentChanged', text: document.getText(), documentRevision });
       }
@@ -204,6 +236,22 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       await post({ type: 'configuration', ...editorConfiguration() });
     });
 
+    const refreshWikiFiles = async () => {
+      if (!ready) return;
+      await post({ type: 'wikiFilesChanged', wikiFiles: await findWikiFiles(document) });
+    };
+    const createFilesSubscription = vscode.workspace.onDidCreateFiles((event) => {
+      if (event.files.some(isMarkdownUri)) void refreshWikiFiles();
+    });
+    const deleteFilesSubscription = vscode.workspace.onDidDeleteFiles((event) => {
+      if (event.files.some(isMarkdownUri)) void refreshWikiFiles();
+    });
+    const renameFilesSubscription = vscode.workspace.onDidRenameFiles((event) => {
+      if (event.files.some((file) => isMarkdownUri(file.oldUri) || isMarkdownUri(file.newUri))) {
+        void refreshWikiFiles();
+      }
+    });
+
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.active) this.setActiveDocument(document, panel);
     });
@@ -211,6 +259,9 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       messageSubscription.dispose();
       documentSubscription.dispose();
       configurationSubscription.dispose();
+      createFilesSubscription.dispose();
+      deleteFilesSubscription.dispose();
+      renameFilesSubscription.dispose();
       if (this.activeDocumentUri?.toString() === document.uri.toString()) {
         this.activeDocumentUri = undefined;
         this.activePanel = undefined;
@@ -221,6 +272,12 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
 
   revealHeading(ordinal: number): Thenable<boolean> | undefined {
     return this.activePanel?.webview.postMessage({ type: 'revealHeading', ordinal } satisfies HostToWebview);
+  }
+
+  requestDiagnostics(): boolean {
+    if (!this.activePanel) return false;
+    void this.activePanel.webview.postMessage({ type: 'requestDiagnostics' } satisfies HostToWebview);
+    return true;
   }
 
   dispose(): void {
@@ -269,9 +326,76 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
   }
 }
 
+type LinkOpenResult = {
+  status: 'opened' | 'error';
+  resolvedUri?: string;
+  error?: string;
+};
+
+async function openLink(
+  href: string,
+  document: vscode.TextDocument,
+  wiki: boolean,
+): Promise<LinkOpenResult> {
+  const explicitScheme = href.match(/^([a-z][a-z\d+.-]*):/i)?.[1].toLowerCase();
+  if (explicitScheme) {
+    let external: vscode.Uri;
+    try {
+      external = vscode.Uri.parse(href, true);
+    } catch (error: unknown) {
+      return { status: 'error', error: String(error) };
+    }
+    if (explicitScheme === 'http' || explicitScheme === 'https' || explicitScheme === 'mailto') {
+      await vscode.env.openExternal(external);
+      return { status: 'opened', resolvedUri: external.toString(true) };
+    }
+    return {
+      status: 'error',
+      resolvedUri: external.toString(true),
+      error: `Unsupported URI scheme: ${explicitScheme}`,
+    };
+  }
+
+  let targetPath = href.split('#')[0];
+  if (wiki && !path.extname(targetPath)) targetPath += '.md';
+  const uri = vscode.Uri.joinPath(document.uri, '..', targetPath);
+  try {
+    await vscode.workspace.fs.stat(uri);
+    await vscode.commands.executeCommand('vscode.open', uri, { preview: false });
+    return { status: 'opened', resolvedUri: uri.toString(true) };
+  } catch (error: unknown) {
+    const detail = String(error);
+    void vscode.window.showWarningMessage(
+      `LoomMark could not open ${href} (${uri.toString(true)}): ${detail}`,
+    );
+    return { status: 'error', resolvedUri: uri.toString(true), error: detail };
+  }
+}
+
 function getNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+}
+
+function ensureTrailingSlash(uri: string): string {
+  return uri.endsWith('/') ? uri : `${uri}/`;
+}
+
+async function findWikiFiles(document: vscode.TextDocument): Promise<string[]> {
+  const files = await vscode.workspace.findFiles(
+    '**/*.{md,markdown}',
+    '**/{.git,node_modules,.vscode-test}/**',
+    3000,
+  );
+  const directory = path.posix.dirname(document.uri.path);
+  return files
+    .filter((uri) => uri.toString() !== document.uri.toString())
+    .map((uri) => path.posix.relative(directory, uri.path).replace(/\.(?:md|markdown)$/i, ''))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function isMarkdownUri(uri: vscode.Uri): boolean {
+  return /\.(?:md|markdown)$/i.test(uri.path);
 }
 
 export function deactivate(): void {}

@@ -38,3 +38,27 @@ test('finds a replacement spanning multiple edits', () => {
 test('returns null for equal text', () => {
   assert.equal(singleSplice('same', 'same'), null);
 });
+
+test('preserves unsupported markdown around an edit byte for byte', () => {
+  const before = String.raw`[[Notes/Plan]]
+
+\[intentional escape\]
+
+<custom-block data-id="7">
+original
+</custom-block>`;
+  const after = before.replace('original', 'edited');
+  const edit = singleSplice(before, after);
+  assert.deepEqual(edit, { from: before.indexOf('original'), to: before.indexOf('original') + 8, insert: 'edited' });
+  assert.equal(before.slice(0, edit.from) + edit.insert + before.slice(edit.to), after);
+});
+
+test('rapid snapshots always produce the latest exact source', () => {
+  let host = '# Heading\n\n';
+  for (const snapshot of ['# Heading\n\na', '# Heading\n\nab', '# Heading\n\nabc']) {
+    const edit = singleSplice(host, snapshot);
+    assert.ok(edit);
+    host = host.slice(0, edit.from) + edit.insert + host.slice(edit.to);
+  }
+  assert.equal(host, '# Heading\n\nabc');
+});
