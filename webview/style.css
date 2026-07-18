@@ -440,7 +440,7 @@ body.editor-outline-disabled #outline {
   align-items: center;
   gap: 10px;
   padding: 0 8px 0 12px;
-  border: 1px solid #cfd1d6;
+  border: 1px solid #383a40;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: #eceef2;
@@ -511,7 +511,7 @@ body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line {
 }
 
 body.vscode-dark .cm-loommark-code-toolbar {
-  border-color: #45474d;
+  border-color: #d0d0d0;
   background: #292b30;
   color: #e5e7eb;
 }
