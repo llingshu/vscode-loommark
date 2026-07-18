@@ -1,5 +1,6 @@
 import { EditorView, WidgetType } from '@codemirror/view';
 import type { FencedCodeRange, ImageRange, TableCell, TableRange } from './markdown-ranges';
+import type { TableMode } from '../src/protocol';
 
 export const codeLanguages = [
   '', 'bash', 'shell', 'powershell', 'javascript', 'typescript', 'json', 'python',
@@ -232,29 +233,59 @@ export class ImageWidget extends WidgetType {
   }
 }
 
+type TableEditFocus = { tableFrom: number; row: number; column: number };
+let pendingTableFocus: TableEditFocus | undefined;
+
+function normalizeCellText(text: string): string {
+  return text.replace(/\r?\n/g, ' ').replace(/\\\|/g, '|').replace(/\|/g, '\\|').trim();
+}
+
+type EditingCell = {
+  element: HTMLTableCellElement;
+  row: number;
+  column: number;
+  keydownHandler: (event: KeyboardEvent) => void;
+  blurHandler: () => void;
+};
+
 export class TableWidget extends WidgetType {
+  private allRows: TableCell[][];
+  private cellElements: HTMLTableCellElement[][] = [];
+  private editing: EditingCell | undefined;
+
   constructor(
     private readonly table: TableRange,
     private readonly source: string,
+    private readonly mode: TableMode,
   ) {
     super();
+    this.allRows = [this.table.header, ...this.table.rows];
   }
 
   eq(other: TableWidget): boolean {
-    return this.table.from === other.table.from && this.source === other.source;
+    return this.table.from === other.table.from
+      && this.source === other.source
+      && this.mode === other.mode;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement('div');
-    container.className = 'cm-loommark-table';
+    container.className = `cm-loommark-table${this.mode === 'rich' ? ' is-rich' : ''}`;
     container.contentEditable = 'false';
     const table = document.createElement('table');
     const head = document.createElement('thead');
-    head.append(this.renderRow(view, this.table.header, 'th'));
+    head.append(this.renderRow(view, 0, 'th'));
     const body = document.createElement('tbody');
-    for (const row of this.table.rows) body.append(this.renderRow(view, row, 'td'));
+    for (let rowIndex = 1; rowIndex < this.allRows.length; rowIndex++) {
+      body.append(this.renderRow(view, rowIndex, 'td'));
+    }
     table.append(head, body);
     container.append(table);
+    if (pendingTableFocus && pendingTableFocus.tableFrom === this.table.from) {
+      const focus = pendingTableFocus;
+      pendingTableFocus = undefined;
+      window.setTimeout(() => this.startEditing(view, focus.row, focus.column), 0);
+    }
     return container;
   }
 
@@ -262,14 +293,27 @@ export class TableWidget extends WidgetType {
     return true;
   }
 
-  private renderRow(view: EditorView, cells: TableCell[], tag: 'th' | 'td'): HTMLTableRowElement {
+  private renderRow(view: EditorView, rowIndex: number, tag: 'th' | 'td'): HTMLTableRowElement {
+    const cells = this.allRows[rowIndex];
     const row = document.createElement('tr');
+    this.cellElements[rowIndex] = [];
     cells.forEach((cell, column) => {
       const element = document.createElement(tag);
       const alignment = this.table.alignments[column];
       if (alignment) element.style.textAlign = alignment;
       element.append(renderInlineMarkdown(cell.text));
       element.addEventListener('mousedown', (event) => {
+        if (this.mode === 'rich') {
+          if (this.editing?.element === element) return;
+          event.preventDefault();
+          if (this.editing) {
+            pendingTableFocus = { tableFrom: this.table.from, row: rowIndex, column };
+            if (this.commitCell(view, this.editing)) return;
+            pendingTableFocus = undefined;
+          }
+          this.startEditing(view, rowIndex, column);
+          return;
+        }
         event.preventDefault();
         view.dispatch({
           selection: { anchor: Math.min(cell.to, view.state.doc.length) },
@@ -278,7 +322,97 @@ export class TableWidget extends WidgetType {
         view.focus();
       });
       row.append(element);
+      this.cellElements[rowIndex][column] = element;
     });
     return row;
+  }
+
+  private rawCellText(cell: TableCell): string {
+    return this.source.slice(cell.from - this.table.from, cell.to - this.table.from);
+  }
+
+  private startEditing(view: EditorView, rowIndex: number, column: number): void {
+    const element = this.cellElements[rowIndex]?.[column];
+    const cell = this.allRows[rowIndex]?.[column];
+    if (!element || !cell) return;
+    const keydownHandler = (event: KeyboardEvent): void => {
+      const editing = this.editing;
+      if (!editing || editing.element !== element) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.commitCell(view, editing);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.cancelEditing();
+      } else if (event.key === 'Tab') {
+        event.preventDefault();
+        const next = this.siblingCell(editing.row, editing.column, event.shiftKey ? -1 : 1);
+        if (next) pendingTableFocus = { tableFrom: this.table.from, ...next };
+        if (this.commitCell(view, editing)) return;
+        if (next) {
+          pendingTableFocus = undefined;
+          this.startEditing(view, next.row, next.column);
+        }
+      }
+    };
+    const blurHandler = (): void => {
+      const editing = this.editing;
+      if (editing && editing.element === element) this.commitCell(view, editing);
+    };
+    this.editing = { element, row: rowIndex, column, keydownHandler, blurHandler };
+    element.textContent = this.rawCellText(cell);
+    element.contentEditable = 'plaintext-only';
+    element.classList.add('is-editing');
+    element.addEventListener('keydown', keydownHandler, { capture: true });
+    element.addEventListener('blur', blurHandler);
+    element.focus();
+    const selection = window.getSelection();
+    if (selection) {
+      selection.selectAllChildren(element);
+      selection.collapseToEnd();
+    }
+  }
+
+  private siblingCell(rowIndex: number, column: number, step: number): { row: number; column: number } | undefined {
+    let row = rowIndex;
+    let next = column + step;
+    while (true) {
+      if (next >= 0 && next < this.allRows[row].length) return { row, column: next };
+      row += step;
+      if (row < 0 || row >= this.allRows.length) return undefined;
+      next = step > 0 ? 0 : this.allRows[row].length - 1;
+    }
+  }
+
+  private commitCell(view: EditorView, editing: EditingCell): boolean {
+    const cell = this.allRows[editing.row][editing.column];
+    const raw = this.rawCellText(cell);
+    const next = normalizeCellText(editing.element.textContent ?? '');
+    if (next === raw) {
+      this.stopEditing(editing, cell);
+      return false;
+    }
+    this.detachEditing(editing);
+    view.dispatch({ changes: { from: cell.from, to: cell.to, insert: next } });
+    return true;
+  }
+
+  private cancelEditing(): void {
+    if (!this.editing) return;
+    this.stopEditing(this.editing, this.allRows[this.editing.row][this.editing.column]);
+  }
+
+  private stopEditing(editing: EditingCell, cell: TableCell): void {
+    this.detachEditing(editing);
+    editing.element.replaceChildren(renderInlineMarkdown(cell.text));
+    editing.element.blur();
+  }
+
+  private detachEditing(editing: EditingCell): void {
+    this.editing = undefined;
+    editing.element.contentEditable = 'false';
+    editing.element.classList.remove('is-editing');
+    editing.element.removeEventListener('keydown', editing.keydownHandler, { capture: true });
+    editing.element.removeEventListener('blur', editing.blurHandler);
   }
 }

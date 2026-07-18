@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
-import type { HostToWebview, OutlineMode, EditorTheme } from './protocol';
+import type { HostToWebview, OutlineMode, EditorTheme, TableMode } from './protocol';
 import { isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
 
@@ -71,7 +71,7 @@ async function syncDefaultEditorAssociation(): Promise<void> {
   }
 }
 
-function editorConfiguration(): { syncDelay: number; theme: EditorTheme; outline: OutlineMode } {
+function editorConfiguration(): { syncDelay: number; theme: EditorTheme; outline: OutlineMode; table: TableMode } {
   const configuration = vscode.workspace.getConfiguration('loommark');
   const configuredTheme = configuration.get<string>('theme', 'vscode');
   const theme: EditorTheme = ['crepe', 'frame', 'nord'].includes(configuredTheme)
@@ -81,10 +81,12 @@ function editorConfiguration(): { syncDelay: number; theme: EditorTheme; outline
   const outline: OutlineMode = ['editor', 'explorer', 'off'].includes(configuredOutline)
     ? configuredOutline as OutlineMode
     : 'both';
+  const table: TableMode = configuration.get<string>('table', 'rich') === 'source' ? 'source' : 'rich';
   return {
     syncDelay: configuration.get('syncDelay', 180),
     theme,
     outline,
+    table,
   };
 }
 

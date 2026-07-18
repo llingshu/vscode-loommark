@@ -634,6 +634,22 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   background: var(--vscode-list-hoverBackground);
 }
 
+#editor > .cm-editor .cm-loommark-table.is-rich th,
+#editor > .cm-editor .cm-loommark-table.is-rich td {
+  cursor: cell;
+}
+
+#editor > .cm-editor .cm-loommark-table th.is-editing,
+#editor > .cm-editor .cm-loommark-table td.is-editing {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+  cursor: text;
+  background: var(--vscode-editor-background);
+  caret-color: var(--vscode-editorCursor-foreground, currentcolor);
+  font-family: var(--vscode-editor-font-family);
+  font-weight: 400;
+}
+
 #editor > .cm-editor .cm-loommark-image img {
   max-width: 100%;
   max-height: 480px;

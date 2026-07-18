@@ -126,6 +126,19 @@
           "default": "vscode",
           "description": "Color theme used by the LoomMark editor. Light and dark variants follow VS Code automatically."
         },
+        "loommark.table": {
+          "type": "string",
+          "enum": [
+            "rich",
+            "source"
+          ],
+          "enumDescriptions": [
+            "Render tables and edit cells in place. Enter or focus loss commits a cell, Escape cancels, Tab moves between cells.",
+            "Render tables as widgets and expand to Markdown source when the cursor enters the table."
+          ],
+          "default": "rich",
+          "description": "How GFM tables are edited inside the LoomMark editor."
+        },
         "loommark.outline": {
           "type": "string",
           "enum": [

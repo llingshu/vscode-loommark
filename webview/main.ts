@@ -8,7 +8,7 @@ import {
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { EditorState, type Range, StateField } from '@codemirror/state';
+import { EditorState, type Range, StateEffect, StateField } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -41,7 +41,7 @@ import {
   ImageWidget,
   TableWidget,
 } from './widgets';
-import type { EditorTheme, HostToWebview, OutlineMode, WebviewToHost } from '../src/protocol';
+import type { EditorTheme, HostToWebview, OutlineMode, TableMode, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
   postMessage(message: WebviewToHost): void;
@@ -71,6 +71,7 @@ const savedState = vscode.getState();
 let sourceText = savedState?.text ?? '';
 let documentRevision = savedState?.documentRevision ?? 0;
 let resourceBase = '';
+let tableMode: TableMode = 'rich';
 let clientRevision = 0;
 let syncDelay = 180;
 let timer: number | undefined;
@@ -183,11 +184,16 @@ const codeToolbarField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const decorationsRefresh = StateEffect.define<null>();
+
 function selectionAwareField(build: (state: EditorState) => DecorationSet): StateField<DecorationSet> {
   return StateField.define<DecorationSet>({
     create: build,
     update(value, transaction) {
-      if (transaction.docChanged || transaction.selection) return build(transaction.state);
+      if (transaction.docChanged || transaction.selection
+        || transaction.effects.some((effect) => effect.is(decorationsRefresh))) {
+        return build(transaction.state);
+      }
       return value;
     },
     provide: (field) => EditorView.decorations.from(field),
@@ -199,9 +205,9 @@ const tableField = selectionAwareField((state) => {
   const cursor = state.selection.main.head;
   const source = state.doc.toString();
   for (const table of tableRanges(source)) {
-    if (cursor >= table.from && cursor <= table.to) continue;
+    if (tableMode === 'source' && cursor >= table.from && cursor <= table.to) continue;
     ranges.push(Decoration.replace({
-      widget: new TableWidget(table, source.slice(table.from, table.to)),
+      widget: new TableWidget(table, source.slice(table.from, table.to), tableMode),
       block: true,
     }).range(table.from, table.to));
   }
@@ -636,10 +642,18 @@ function setOutlineCollapsed(collapsed: boolean): void {
   saveState();
 }
 
-function applyConfiguration(nextSyncDelay: number, theme: EditorTheme, outlineMode: OutlineMode): void {
+function applyConfiguration(
+  nextSyncDelay: number,
+  theme: EditorTheme,
+  outlineMode: OutlineMode,
+  nextTableMode: TableMode,
+): void {
   syncDelay = nextSyncDelay;
   document.body.dataset.loommarkTheme = theme;
   document.body.classList.toggle('editor-outline-disabled', outlineMode === 'explorer' || outlineMode === 'off');
+  const tableModeChanged = tableMode !== nextTableMode;
+  tableMode = nextTableMode;
+  if (tableModeChanged) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 
 outlineToggle.addEventListener('click', () => setOutlineCollapsed(!outlineCollapsed));
@@ -652,12 +666,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
     documentRevision = message.revision;
     resourceBase = message.resourceBase;
     wikiFiles = message.wikiFiles;
-    applyConfiguration(message.syncDelay, message.theme, message.outline);
+    applyConfiguration(message.syncDelay, message.theme, message.outline, message.table);
     createEditor(message.text);
     status.textContent = '';
     saveState();
   } else if (message.type === 'configuration') {
-    applyConfiguration(message.syncDelay, message.theme, message.outline);
+    applyConfiguration(message.syncDelay, message.theme, message.outline, message.table);
   } else if (message.type === 'ack') {
     documentRevision = message.documentRevision;
     const sentGeneration = pendingEdits.get(message.clientRevision);

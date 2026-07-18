@@ -1,6 +1,6 @@
 export type HostToWebview =
-  | { type: 'init'; text: string; revision: number; syncDelay: number; theme: EditorTheme; outline: OutlineMode; resourceBase: string; wikiFiles: string[] }
-  | { type: 'configuration'; syncDelay: number; theme: EditorTheme; outline: OutlineMode }
+  | { type: 'init'; text: string; revision: number; syncDelay: number; theme: EditorTheme; outline: OutlineMode; table: TableMode; resourceBase: string; wikiFiles: string[] }
+  | { type: 'configuration'; syncDelay: number; theme: EditorTheme; outline: OutlineMode; table: TableMode }
   | { type: 'ack'; clientRevision: number; documentRevision: number; text: string }
   | { type: 'documentChanged'; text: string; documentRevision: number }
   | { type: 'revealHeading'; ordinal: number }
@@ -16,6 +16,7 @@ export type WebviewToHost =
 
 export type EditorTheme = 'vscode' | 'crepe' | 'frame' | 'nord';
 export type OutlineMode = 'both' | 'editor' | 'explorer' | 'off';
+export type TableMode = 'rich' | 'source';
 
 export function isWebviewMessage(value: unknown): value is WebviewToHost {
   if (!value || typeof value !== 'object') return false;
