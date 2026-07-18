@@ -4,8 +4,10 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  horizontalRuleRanges,
   imageRanges,
   listItemRanges,
+  quoteLineRanges,
   tableRanges,
 } from '../out/test/markdown-ranges.mjs';
 
@@ -112,4 +114,19 @@ test('parses ordered and task items', () => {
 test('does not treat horizontal rules or code as list items', () => {
   const source = '- - -\n```\n- in code\n```';
   assert.equal(listItemRanges(source).length, 0);
+});
+
+test('parses quote lines with depth and marker offsets', () => {
+  const source = '> outer\n> > inner\nplain';
+  const quotes = quoteLineRanges(source);
+  assert.equal(quotes.length, 2);
+  assert.deepEqual(quotes.map((quote) => quote.depth), [1, 2]);
+  assert.equal(source.slice(quotes[1].markerFrom, quotes[1].markerTo), '> > ');
+});
+
+test('parses horizontal rules and excludes code', () => {
+  const source = '---\n***\n___\n```\n---\n```';
+  const rules = horizontalRuleRanges(source);
+  assert.equal(rules.length, 3);
+  assert.equal(source.slice(rules[0].from, rules[0].to), '---');
 });

@@ -251,6 +251,42 @@ export function listItemRanges(source: string): ListItemRange[] {
   return results;
 }
 
+export type QuoteLineRange = { lineFrom: number; markerFrom: number; markerTo: number; depth: number };
+
+export function quoteLineRanges(source: string): QuoteLineRange[] {
+  const excluded = fencedCodeRanges(source);
+  const lines = source.split('\n');
+  const results: QuoteLineRange[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    const match = line.match(/^( {0,3})((?:> ?)+)/);
+    if (match && !containsPosition(excluded, offset)) {
+      results.push({
+        lineFrom: offset,
+        markerFrom: offset + match[1].length,
+        markerTo: offset + match[1].length + match[2].length,
+        depth: (match[2].match(/>/g) ?? []).length,
+      });
+    }
+    offset += line.length + 1;
+  }
+  return results;
+}
+
+export function horizontalRuleRanges(source: string): SourceRange[] {
+  const excluded = fencedCodeRanges(source);
+  const lines = source.split('\n');
+  const results: SourceRange[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    if (horizontalRulePattern.test(line) && !containsPosition(excluded, offset)) {
+      results.push({ from: offset, to: offset + line.length });
+    }
+    offset += line.length + 1;
+  }
+  return results;
+}
+
 export function inlineCodeRanges(
   source: string,
   excluded: SourceRange[],

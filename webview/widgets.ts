@@ -168,6 +168,22 @@ export class CheckboxWidget extends WidgetType {
   }
 }
 
+export class HorizontalRuleWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+
+  toDOM(): HTMLElement {
+    const rule = document.createElement('span');
+    rule.className = 'cm-loommark-hr';
+    return rule;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 export function resolveImageSource(src: string, resourceBase: string): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(src) || src.startsWith('//')) return src;
   return resourceBase + src.replace(/^\.\//, '');

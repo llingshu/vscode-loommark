@@ -668,6 +668,25 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   opacity: 0.65;
 }
 
+#editor > .cm-editor .cm-loommark-quote {
+  border-left: 3px solid var(--vscode-textBlockQuote-border, #888888);
+  background: var(--vscode-textBlockQuote-background, transparent);
+  padding-left: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+#editor > .cm-editor .cm-loommark-quote-depth-2 {
+  box-shadow: inset 6px 0 0 -3px var(--vscode-textBlockQuote-border, #888888);
+}
+
+#editor > .cm-editor .cm-loommark-hr {
+  display: inline-block;
+  width: 100%;
+  height: 2px;
+  vertical-align: middle;
+  background: var(--vscode-widget-border, #666666);
+}
+
 @media (max-width: 700px) {
   #workspace,
   body.outline-collapsed #workspace {

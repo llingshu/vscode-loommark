@@ -27,11 +27,20 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  horizontalRuleRanges,
   imageRanges,
   listItemRanges,
+  quoteLineRanges,
   tableRanges,
 } from './markdown-ranges';
-import { BulletWidget, CheckboxWidget, CodeToolbarWidget, ImageWidget, TableWidget } from './widgets';
+import {
+  BulletWidget,
+  CheckboxWidget,
+  CodeToolbarWidget,
+  HorizontalRuleWidget,
+  ImageWidget,
+  TableWidget,
+} from './widgets';
 import type { EditorTheme, HostToWebview, OutlineMode, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
@@ -240,6 +249,27 @@ const listField = selectionAwareField((state) => {
       ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
         .range(item.task.boxFrom, item.task.boxTo));
     }
+  }
+  return Decoration.set(ranges, true);
+});
+
+const quoteField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  for (const quote of quoteLineRanges(source)) {
+    const line = state.doc.lineAt(quote.lineFrom);
+    ranges.push(Decoration.line({
+      attributes: { class: `cm-loommark-quote cm-loommark-quote-depth-${Math.min(quote.depth, 3)}` },
+    }).range(line.from));
+    if (!(cursor >= line.from && cursor <= line.to)) {
+      ranges.push(Decoration.replace({}).range(quote.markerFrom, quote.markerTo));
+    }
+  }
+  for (const rule of horizontalRuleRanges(source)) {
+    const line = state.doc.lineAt(rule.from);
+    if (cursor >= line.from && cursor <= line.to) continue;
+    ranges.push(Decoration.replace({ widget: new HorizontalRuleWidget() }).range(rule.from, rule.to));
   }
   return Decoration.set(ranges, true);
 });
@@ -462,6 +492,7 @@ function createEditor(text: string): void {
         tableField,
         imageField,
         listField,
+        quoteField,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),
