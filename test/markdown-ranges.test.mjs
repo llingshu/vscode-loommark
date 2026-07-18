@@ -4,6 +4,7 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  tableRanges,
 } from '../out/test/markdown-ranges.mjs';
 
 test('parses a fenced code block with language', () => {
@@ -26,4 +27,43 @@ test('inline code is excluded inside fenced blocks', () => {
   const ranges = inlineCodeRanges(source, fencedCodeRanges(source));
   assert.equal(ranges.length, 1);
   assert.equal(source.slice(ranges[0].from, ranges[0].to), '`inline`');
+});
+
+test('parses a basic table with offsets', () => {
+  const source = '| Name | Count |\n| --- | ---: |\n| Apple | 3 |\n| Pear | 12 |';
+  const [table] = tableRanges(source);
+  assert.equal(table.from, 0);
+  assert.equal(table.to, source.length);
+  assert.deepEqual(table.header.map((cell) => cell.text), ['Name', 'Count']);
+  assert.deepEqual(table.alignments, [null, 'right']);
+  assert.equal(table.rows.length, 2);
+  assert.equal(source.slice(table.rows[0][0].from, table.rows[0][0].to), 'Apple');
+});
+
+test('parses all alignment kinds', () => {
+  const source = '| a | b | c | d |\n| :-- | :-: | --: | --- |\n| 1 | 2 | 3 | 4 |';
+  const [table] = tableRanges(source);
+  assert.deepEqual(table.alignments, ['left', 'center', 'right', null]);
+});
+
+test('unescapes escaped pipes inside cells', () => {
+  const source = '| a | b |\n| --- | --- |\n| x \\| y | z |';
+  const [table] = tableRanges(source);
+  assert.equal(table.rows[0][0].text, 'x | y');
+});
+
+test('rejects a header/delimiter column count mismatch', () => {
+  const source = '| a | b |\n| --- |\n| 1 | 2 |';
+  assert.equal(tableRanges(source).length, 0);
+});
+
+test('ignores tables inside fenced code blocks', () => {
+  const source = '```\n| a | b |\n| --- | --- |\n```';
+  assert.equal(tableRanges(source).length, 0);
+});
+
+test('table ends at the first line without a pipe', () => {
+  const source = '| a |\n| --- |\n| 1 |\nplain text';
+  const [table] = tableRanges(source);
+  assert.equal(source.slice(table.from, table.to), '| a |\n| --- |\n| 1 |');
 });

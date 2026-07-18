@@ -92,6 +92,96 @@ export function detailedFencedCodeRanges(source: string): FencedCodeRange[] {
   return ranges.filter((range) => range.contentStartLine <= range.contentEndLine);
 }
 
+export type TableCell = { text: string; from: number; to: number };
+export type TableAlignment = 'left' | 'center' | 'right' | null;
+export type TableRange = {
+  from: number;
+  to: number;
+  alignments: TableAlignment[];
+  header: TableCell[];
+  rows: TableCell[][];
+};
+
+export function tableRanges(source: string): TableRange[] {
+  const lines = source.split('\n');
+  const excluded = fencedCodeRanges(source);
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    offsets.push(offset);
+    offset += line.length + 1;
+  }
+  const results: TableRange[] = [];
+  let index = 0;
+  while (index < lines.length - 1) {
+    if (!lines[index].includes('|')
+      || containsPosition(excluded, offsets[index])
+      || !isDelimiterRow(lines[index + 1])) {
+      index++;
+      continue;
+    }
+    const header = splitTableRow(lines[index], offsets[index]);
+    const delimiterCells = splitTableRow(lines[index + 1], offsets[index + 1]);
+    if (header.length === 0 || delimiterCells.length !== header.length) {
+      index++;
+      continue;
+    }
+    const alignments = delimiterCells.map((cell) => alignmentOf(cell.text));
+    const rows: TableCell[][] = [];
+    let end = index + 1;
+    while (end + 1 < lines.length && lines[end + 1].includes('|') && !isDelimiterRow(lines[end + 1])) {
+      end++;
+      rows.push(splitTableRow(lines[end], offsets[end]));
+    }
+    results.push({ from: offsets[index], to: offsets[end] + lines[end].length, alignments, header, rows });
+    index = end + 1;
+  }
+  return results;
+}
+
+function isDelimiterRow(line: string): boolean {
+  return line.includes('-') && /^ {0,3}\|?(?:\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?\s*$/.test(line);
+}
+
+function alignmentOf(text: string): TableAlignment {
+  const left = text.startsWith(':');
+  const right = text.endsWith(':');
+  if (left && right) return 'center';
+  if (right) return 'right';
+  if (left) return 'left';
+  return null;
+}
+
+function splitTableRow(line: string, lineOffset: number): TableCell[] {
+  let start = 0;
+  let end = line.length;
+  while (start < end && line[start] === ' ') start++;
+  while (end > start && line[end - 1] === ' ') end--;
+  if (line[start] === '|') start++;
+  if (end > start && line[end - 1] === '|' && line[end - 2] !== '\\') end--;
+  const cells: TableCell[] = [];
+  let cellStart = start;
+  for (let position = start; position <= end; position++) {
+    if (position < end && line[position] === '\\') {
+      position++;
+      continue;
+    }
+    if (position === end || line[position] === '|') {
+      let from = cellStart;
+      let to = position;
+      while (from < to && line[from] === ' ') from++;
+      while (to > from && line[to - 1] === ' ') to--;
+      cells.push({
+        text: line.slice(from, to).replace(/\\\|/g, '|'),
+        from: lineOffset + from,
+        to: lineOffset + to,
+      });
+      cellStart = position + 1;
+    }
+  }
+  return cells;
+}
+
 export function inlineCodeRanges(
   source: string,
   excluded: SourceRange[],
