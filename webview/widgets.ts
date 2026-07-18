@@ -112,6 +112,62 @@ export function renderInlineMarkdown(text: string): DocumentFragment {
   return fragment;
 }
 
+const bulletCharacters = ['•', '◦', '▪'];
+
+export class BulletWidget extends WidgetType {
+  constructor(private readonly level: number) {
+    super();
+  }
+
+  eq(other: BulletWidget): boolean {
+    return this.level === other.level;
+  }
+
+  toDOM(): HTMLElement {
+    const bullet = document.createElement('span');
+    bullet.className = 'cm-loommark-bullet';
+    bullet.textContent = bulletCharacters[this.level % bulletCharacters.length];
+    return bullet;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+export class CheckboxWidget extends WidgetType {
+  constructor(
+    private readonly checked: boolean,
+    private readonly boxFrom: number,
+  ) {
+    super();
+  }
+
+  eq(other: CheckboxWidget): boolean {
+    return this.checked === other.checked && this.boxFrom === other.boxFrom;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = this.checked;
+    input.className = 'cm-loommark-checkbox';
+    input.setAttribute('aria-label', this.checked ? 'Mark task as not done' : 'Mark task as done');
+    input.addEventListener('mousedown', (event) => event.preventDefault());
+    input.addEventListener('click', (event) => {
+      event.preventDefault();
+      view.dispatch({
+        changes: { from: this.boxFrom + 1, to: this.boxFrom + 2, insert: this.checked ? ' ' : 'x' },
+      });
+    });
+    return input;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 export function resolveImageSource(src: string, resourceBase: string): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(src) || src.startsWith('//')) return src;
   return resourceBase + src.replace(/^\.\//, '');

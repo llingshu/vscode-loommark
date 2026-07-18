@@ -651,6 +651,23 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   font-size: 0.9em;
 }
 
+#editor > .cm-editor .cm-loommark-bullet {
+  display: inline-block;
+  width: 1ch;
+  color: var(--vscode-descriptionForeground);
+}
+
+#editor > .cm-editor .cm-loommark-checkbox {
+  margin: 0 2px 2px 0;
+  vertical-align: middle;
+  accent-color: var(--vscode-focusBorder);
+  cursor: pointer;
+}
+
+#editor > .cm-editor .cm-loommark-task-done {
+  opacity: 0.65;
+}
+
 @media (max-width: 700px) {
   #workspace,
   body.outline-collapsed #workspace {

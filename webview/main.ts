@@ -28,9 +28,10 @@ import {
   fencedCodeRanges,
   inlineCodeRanges,
   imageRanges,
+  listItemRanges,
   tableRanges,
 } from './markdown-ranges';
-import { CodeToolbarWidget, ImageWidget, TableWidget } from './widgets';
+import { BulletWidget, CheckboxWidget, CodeToolbarWidget, ImageWidget, TableWidget } from './widgets';
 import type { EditorTheme, HostToWebview, OutlineMode, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
@@ -215,6 +216,29 @@ const imageField = selectionAwareField((state) => {
       ranges.push(Decoration.replace({
         widget: new ImageWidget(image, resourceBase, false),
       }).range(image.from, image.to));
+    }
+  }
+  return Decoration.set(ranges, true);
+});
+
+const listField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  for (const item of listItemRanges(source)) {
+    if (item.task?.checked) {
+      ranges.push(Decoration.line({
+        attributes: { class: 'cm-loommark-task-done' },
+      }).range(item.lineFrom));
+    }
+    if (cursor >= item.lineFrom && cursor <= item.lineTo) continue;
+    if (!item.ordered) {
+      ranges.push(Decoration.replace({ widget: new BulletWidget(item.level) })
+        .range(item.markerFrom, item.markerTo));
+    }
+    if (item.task) {
+      ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
+        .range(item.task.boxFrom, item.task.boxTo));
     }
   }
   return Decoration.set(ranges, true);
@@ -437,6 +461,7 @@ function createEditor(text: string): void {
         codeToolbarField,
         tableField,
         imageField,
+        listField,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),

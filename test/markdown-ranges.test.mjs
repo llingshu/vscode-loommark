@@ -5,6 +5,7 @@ import {
   fencedCodeRanges,
   inlineCodeRanges,
   imageRanges,
+  listItemRanges,
   tableRanges,
 } from '../out/test/markdown-ranges.mjs';
 
@@ -88,4 +89,27 @@ test('parses an inline image and a titled image', () => {
 test('ignores images inside code', () => {
   const source = '```\n![a](b.png)\n```\nand `![c](d.png)` too';
   assert.equal(imageRanges(source).length, 0);
+});
+
+test('parses bullet levels and marker offsets', () => {
+  const source = '- top\n  - nested\n    * deep';
+  const items = listItemRanges(source);
+  assert.deepEqual(items.map((item) => item.level), [0, 1, 2]);
+  assert.equal(source.slice(items[1].markerFrom, items[1].markerTo), '-');
+  assert.equal(items.every((item) => !item.ordered), true);
+});
+
+test('parses ordered and task items', () => {
+  const source = '1. first\n- [ ] todo\n- [x] done';
+  const items = listItemRanges(source);
+  assert.equal(items[0].ordered, true);
+  assert.equal(items[0].task, undefined);
+  assert.equal(items[1].task.checked, false);
+  assert.equal(items[2].task.checked, true);
+  assert.equal(source.slice(items[1].task.boxFrom, items[1].task.boxTo), '[ ]');
+});
+
+test('does not treat horizontal rules or code as list items', () => {
+  const source = '- - -\n```\n- in code\n```';
+  assert.equal(listItemRanges(source).length, 0);
 });

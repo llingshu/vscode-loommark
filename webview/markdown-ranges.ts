@@ -207,6 +207,50 @@ function splitTableRow(line: string, lineOffset: number): TableCell[] {
   return cells;
 }
 
+export type ListItemRange = {
+  lineFrom: number;
+  lineTo: number;
+  markerFrom: number;
+  markerTo: number;
+  level: number;
+  ordered: boolean;
+  task?: { checked: boolean; boxFrom: number; boxTo: number };
+};
+
+const listItemPattern = /^([ \t]*)(?:([-*+])|(\d{1,9})([.)]))([ \t]+)(?:(\[([ xX])\])(?=[ \t]))?/;
+const horizontalRulePattern = /^ {0,3}(?:(?:\* *){3,}|(?:- *){3,}|(?:_ *){3,})$/;
+
+export function listItemRanges(source: string): ListItemRange[] {
+  const excluded = fencedCodeRanges(source);
+  const lines = source.split('\n');
+  const results: ListItemRange[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    const match = line.match(listItemPattern);
+    if (match && !horizontalRulePattern.test(line) && !containsPosition(excluded, offset)) {
+      const indent = match[1].replace(/\t/g, '  ').length;
+      const ordered = match[3] !== undefined;
+      const markerFrom = offset + match[1].length;
+      const markerTo = markerFrom + (ordered ? match[3].length + 1 : 1);
+      const item: ListItemRange = {
+        lineFrom: offset,
+        lineTo: offset + line.length,
+        markerFrom,
+        markerTo,
+        level: Math.min(Math.floor(indent / 2), 5),
+        ordered,
+      };
+      if (match[7] !== undefined) {
+        const boxFrom = markerTo + match[5].length;
+        item.task = { checked: match[7].toLowerCase() === 'x', boxFrom, boxTo: boxFrom + 3 };
+      }
+      results.push(item);
+    }
+    offset += line.length + 1;
+  }
+  return results;
+}
+
 export function inlineCodeRanges(
   source: string,
   excluded: SourceRange[],
