@@ -153,8 +153,8 @@
     "build": "node esbuild.mjs --production",
     "licenses": "node scripts/generate-third-party-licenses.mjs",
     "watch": "node esbuild.mjs --watch",
-    "test": "node --test test/*.test.mjs",
-    "check": "tsc --noEmit && node --test test/*.test.mjs",
+    "test": "node scripts/build-test-bundle.mjs && node --test test/*.test.mjs",
+    "check": "tsc --noEmit && npm run test",
     "package": "npm run clean && npm run check && npm run build && npm run licenses && vsce package --no-dependencies --out artifacts/loommark.vsix",
     "publish:vscode": "vsce publish --packagePath artifacts/loommark.vsix",
     "publish:openvsx": "ovsx publish artifacts/loommark.vsix"
