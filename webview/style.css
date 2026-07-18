@@ -634,6 +634,23 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   background: var(--vscode-list-hoverBackground);
 }
 
+#editor > .cm-editor .cm-loommark-image img {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#editor > .cm-editor .cm-loommark-image.is-block {
+  display: block;
+  padding: 4px 0;
+}
+
+#editor > .cm-editor .cm-loommark-image-error {
+  color: var(--vscode-errorForeground);
+  font-size: 0.9em;
+}
+
 @media (max-width: 700px) {
   #workspace,
   body.outline-collapsed #workspace {

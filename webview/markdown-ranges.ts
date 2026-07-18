@@ -92,6 +92,31 @@ export function detailedFencedCodeRanges(source: string): FencedCodeRange[] {
   return ranges.filter((range) => range.contentStartLine <= range.contentEndLine);
 }
 
+export type ImageRange = { from: number; to: number; alt: string; src: string; ownLine: boolean };
+
+const imagePattern = /!\[([^\]\n]*)\]\(([^\s)]+)(?:\s+["'][^"'\n]*["'])?\)/g;
+
+export function imageRanges(source: string): ImageRange[] {
+  const excluded = codeRanges(source);
+  const results: ImageRange[] = [];
+  for (const match of source.matchAll(imagePattern)) {
+    const from = match.index ?? 0;
+    const to = from + match[0].length;
+    if (containsPosition(excluded, from)) continue;
+    const lineStart = source.lastIndexOf('\n', from - 1) + 1;
+    const lineBreak = source.indexOf('\n', to);
+    const lineEnd = lineBreak < 0 ? source.length : lineBreak;
+    results.push({
+      from,
+      to,
+      alt: match[1],
+      src: match[2],
+      ownLine: source.slice(lineStart, lineEnd).trim() === match[0],
+    });
+  }
+  return results;
+}
+
 export type TableCell = { text: string; from: number; to: number };
 export type TableAlignment = 'left' | 'center' | 'right' | null;
 export type TableRange = {

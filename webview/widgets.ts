@@ -1,5 +1,5 @@
 import { EditorView, WidgetType } from '@codemirror/view';
-import type { FencedCodeRange, TableCell, TableRange } from './markdown-ranges';
+import type { FencedCodeRange, ImageRange, TableCell, TableRange } from './markdown-ranges';
 
 export const codeLanguages = [
   '', 'bash', 'shell', 'powershell', 'javascript', 'typescript', 'json', 'python',
@@ -110,6 +110,54 @@ export function renderInlineMarkdown(text: string): DocumentFragment {
   }
   if (last < text.length) fragment.append(text.slice(last));
   return fragment;
+}
+
+export function resolveImageSource(src: string, resourceBase: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(src) || src.startsWith('//')) return src;
+  return resourceBase + src.replace(/^\.\//, '');
+}
+
+export class ImageWidget extends WidgetType {
+  constructor(
+    private readonly image: ImageRange,
+    private readonly resourceBase: string,
+    private readonly block: boolean,
+  ) {
+    super();
+  }
+
+  eq(other: ImageWidget): boolean {
+    return this.image.from === other.image.from
+      && this.image.src === other.image.src
+      && this.image.alt === other.image.alt
+      && this.resourceBase === other.resourceBase;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement(this.block ? 'div' : 'span');
+    container.className = `cm-loommark-image${this.block ? ' is-block' : ''}`;
+    container.contentEditable = 'false';
+    const img = document.createElement('img');
+    img.src = resolveImageSource(this.image.src, this.resourceBase);
+    img.alt = this.image.alt;
+    img.addEventListener('error', () => {
+      const failure = document.createElement('span');
+      failure.className = 'cm-loommark-image-error';
+      failure.textContent = `Image not found: ${this.image.alt || 'image'} (${this.image.src})`;
+      img.replaceWith(failure);
+    });
+    container.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.image.from }, scrollIntoView: true });
+      view.focus();
+    });
+    container.append(img);
+    return container;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
 }
 
 export class TableWidget extends WidgetType {

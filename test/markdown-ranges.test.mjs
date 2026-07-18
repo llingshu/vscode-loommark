@@ -4,6 +4,7 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  imageRanges,
   tableRanges,
 } from '../out/test/markdown-ranges.mjs';
 
@@ -66,4 +67,25 @@ test('table ends at the first line without a pipe', () => {
   const source = '| a |\n| --- |\n| 1 |\nplain text';
   const [table] = tableRanges(source);
   assert.equal(source.slice(table.from, table.to), '| a |\n| --- |\n| 1 |');
+});
+
+test('parses an own-line image', () => {
+  const source = 'before\n![diagram](img/a.png)\nafter';
+  const [image] = imageRanges(source);
+  assert.equal(image.alt, 'diagram');
+  assert.equal(image.src, 'img/a.png');
+  assert.equal(image.ownLine, true);
+});
+
+test('parses an inline image and a titled image', () => {
+  const source = 'see ![icon](i.svg "The icon") here';
+  const [image] = imageRanges(source);
+  assert.equal(image.ownLine, false);
+  assert.equal(image.src, 'i.svg');
+  assert.equal(source.slice(image.from, image.to), '![icon](i.svg "The icon")');
+});
+
+test('ignores images inside code', () => {
+  const source = '```\n![a](b.png)\n```\nand `![c](d.png)` too';
+  assert.equal(imageRanges(source).length, 0);
 });

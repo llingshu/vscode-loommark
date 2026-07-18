@@ -27,9 +27,10 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  imageRanges,
   tableRanges,
 } from './markdown-ranges';
-import { CodeToolbarWidget, TableWidget } from './widgets';
+import { CodeToolbarWidget, ImageWidget, TableWidget } from './widgets';
 import type { EditorTheme, HostToWebview, OutlineMode, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
@@ -59,6 +60,7 @@ const savedState = vscode.getState();
 
 let sourceText = savedState?.text ?? '';
 let documentRevision = savedState?.documentRevision ?? 0;
+let resourceBase = '';
 let clientRevision = 0;
 let syncDelay = 180;
 let timer: number | undefined;
@@ -196,6 +198,28 @@ const tableField = selectionAwareField((state) => {
   return Decoration.set(ranges, true);
 });
 
+const imageField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  for (const image of imageRanges(source)) {
+    if (image.ownLine) {
+      const line = state.doc.lineAt(image.from);
+      if (cursor >= line.from && cursor <= line.to) continue;
+      ranges.push(Decoration.replace({
+        widget: new ImageWidget(image, resourceBase, true),
+        block: true,
+      }).range(line.from, line.to));
+    } else {
+      if (cursor >= image.from && cursor <= image.to) continue;
+      ranges.push(Decoration.replace({
+        widget: new ImageWidget(image, resourceBase, false),
+      }).range(image.from, image.to));
+    }
+  }
+  return Decoration.set(ranges, true);
+});
+
 function buildCodeToolbarDecorations(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   for (const block of detailedFencedCodeRanges(state.doc.toString())) {
@@ -287,6 +311,7 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
   for (const match of source.matchAll(linkPattern)) {
       const from = match.index ?? 0;
       const to = from + match[0].length;
+      if (from > 0 && source[from - 1] === '!') continue;
       if (containsPosition(excluded, from)) continue;
       if (wikiRanges.some((range) => from < range.to && to > range.from)) continue;
       const labelFrom = from + 1;
@@ -411,6 +436,7 @@ function createEditor(text: string): void {
         fencedCodeDecorations,
         codeToolbarField,
         tableField,
+        imageField,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),
@@ -568,6 +594,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
   if (message.type === 'init') {
     sourceText = message.text;
     documentRevision = message.revision;
+    resourceBase = message.resourceBase;
     wikiFiles = message.wikiFiles;
     applyConfiguration(message.syncDelay, message.theme, message.outline);
     createEditor(message.text);
