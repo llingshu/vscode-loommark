@@ -7,6 +7,9 @@
 # Test and coverage output
 /.vscode-test/
 /coverage/
+/.nyc_output/
+/playwright-report/
+/test-results/
 
 # Local environment and logs
 .env
@@ -14,12 +17,17 @@
 !.env.example
 *.log
 npm-debug.log*
+*.tsbuildinfo
+/.cache/
+/.eslintcache
 
 # Editor and operating-system files
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+.idea/
+*.code-workspace
 
 # Temporary files
 *.tmp

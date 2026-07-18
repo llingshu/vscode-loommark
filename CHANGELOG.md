@@ -11,6 +11,16 @@ All notable changes to LoomMark are documented here. This project follows
 - GitHub community health files, continuous integration, release automation, citation metadata,
   and third-party notices.
 - Collapsible in-editor outline and native Explorer TreeView with AST-based heading navigation.
+- Source-preserving CodeMirror editing core with stale-update protection.
+- Progressive heading, emphasis, link, wiki-link, inline-code, and fenced-code presentation.
+- Wiki-link workspace completion and Ctrl/Cmd + click navigation.
+- Language-aware code blocks with line numbers, copy controls, and an explicit language selector.
+- Runtime editor diagnostics command for reproducible Webview bug reports.
+
+### Changed
+
+- Replaced the Milkdown/ProseMirror serialization pipeline with a continuous source-backed
+  CodeMirror document. Opening a file no longer normalizes Markdown through a rich-text serializer.
 
 ## [0.1.0] - 2026-07-10
 

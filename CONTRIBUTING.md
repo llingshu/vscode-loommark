@@ -31,9 +31,11 @@ on the extension or Webview.
 - `src/protocol.ts`: typed host/Webview messages.
 - `src/outline.ts`: Markdown AST extraction for the native Explorer outline.
 - `src/text.ts`: minimal text replacement logic.
-- `webview/`: Milkdown editor entry point and theme styles.
+- `webview/`: CodeMirror source-preserving editor and presentation styles.
 - `test/`: Node test runner suites.
-- `DESIGN.md`: synchronization invariants and architecture roadmap.
+- `docs/ARCHITECTURE.md`: runtime ownership and synchronization protocol.
+- `docs/EDITOR_TECHNOLOGY.md`: decoration and parser implementation guidance.
+- `docs/DEVELOPMENT.md`: setup, debugging, diagnostics, testing, and packaging.
 
 `dist/`, `artifacts/`, and VSIX files are generated and must not be committed.
 
@@ -49,6 +51,10 @@ npm run build
 Describe the user-visible behavior, explain important tradeoffs, and add focused tests when logic
 changes. Update `README.md`, `CHANGELOG.md`, configuration metadata, or `DESIGN.md` when their
 contracts change. Include before-and-after screenshots for visible editor changes.
+
+Editor contributions must preserve source fidelity. Decorations must not dispatch text changes.
+Explicit commands may edit source only through a narrow, undoable transaction. Test unsupported
+syntax and code exclusions when adding a Markdown scanner.
 
 By submitting a contribution, you agree that it is licensed under the repository's MIT License.
 
