@@ -16,7 +16,6 @@ import {
   keymap,
   ViewPlugin,
   type ViewUpdate,
-  WidgetType,
 } from '@codemirror/view';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { tags } from '@lezer/highlight';
@@ -28,8 +27,9 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
-  type FencedCodeRange,
+  tableRanges,
 } from './markdown-ranges';
+import { CodeToolbarWidget, TableWidget } from './widgets';
 import type { EditorTheme, HostToWebview, OutlineMode, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
@@ -171,81 +171,30 @@ const codeToolbarField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-const codeLanguages = [
-  '', 'bash', 'shell', 'powershell', 'javascript', 'typescript', 'json', 'python',
-  'html', 'css', 'scss', 'sql', 'yaml', 'markdown', 'java', 'c', 'cpp', 'rust', 'go',
-];
-
-class CodeToolbarWidget extends WidgetType {
-  constructor(private readonly block: FencedCodeRange) {
-    super();
-  }
-
-  eq(other: CodeToolbarWidget): boolean {
-    return this.block.openFrom === other.block.openFrom
-      && this.block.language === other.block.language
-      && this.block.code === other.block.code;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const toolbar = document.createElement('div');
-    toolbar.className = `cm-loommark-code-toolbar${isTerminalLanguage(this.block.language) ? ' is-terminal' : ''}`;
-    toolbar.contentEditable = 'false';
-
-    const chrome = document.createElement('span');
-    chrome.className = 'cm-loommark-code-chrome';
-    chrome.ariaHidden = 'true';
-    chrome.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
-
-    const select = document.createElement('select');
-    select.className = 'cm-loommark-code-language';
-    select.title = 'Code language';
-    const current = this.block.language.toLowerCase();
-    const options = current && !codeLanguages.includes(current) ? [current, ...codeLanguages] : codeLanguages;
-    for (const language of options) {
-      const option = document.createElement('option');
-      option.value = language;
-      option.textContent = language || 'Plain text';
-      option.selected = language === current;
-      select.append(option);
-    }
-    select.addEventListener('change', () => {
-      view.dispatch({
-        changes: {
-          from: this.block.languageFrom,
-          to: this.block.languageTo,
-          insert: select.value,
-        },
-      });
-      view.focus();
-    });
-
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'cm-loommark-code-copy';
-    copy.title = 'Copy code';
-    copy.setAttribute('aria-label', 'Copy code');
-    copy.textContent = 'Copy';
-    copy.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(this.block.code);
-      copy.textContent = 'Copied';
-      window.setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
-    });
-
-    toolbar.append(chrome, select, copy);
-    return toolbar;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
-  }
+function selectionAwareField(build: (state: EditorState) => DecorationSet): StateField<DecorationSet> {
+  return StateField.define<DecorationSet>({
+    create: build,
+    update(value, transaction) {
+      if (transaction.docChanged || transaction.selection) return build(transaction.state);
+      return value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
 }
 
-function isTerminalLanguage(language: string): boolean {
-  return ['bash', 'sh', 'shell', 'zsh', 'fish', 'powershell', 'pwsh', 'console', 'terminal'].includes(
-    language.toLowerCase(),
-  );
-}
+const tableField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  for (const table of tableRanges(source)) {
+    if (cursor >= table.from && cursor <= table.to) continue;
+    ranges.push(Decoration.replace({
+      widget: new TableWidget(table, source.slice(table.from, table.to)),
+      block: true,
+    }).range(table.from, table.to));
+  }
+  return Decoration.set(ranges, true);
+});
 
 function buildCodeToolbarDecorations(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
@@ -461,6 +410,7 @@ function createEditor(text: string): void {
         inlineCodeDecorations,
         fencedCodeDecorations,
         codeToolbarField,
+        tableField,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),

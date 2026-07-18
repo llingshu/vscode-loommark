@@ -608,6 +608,32 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   white-space: pre-wrap;
 }
 
+#editor > .cm-editor .cm-loommark-table {
+  padding: 4px 0;
+}
+
+#editor > .cm-editor .cm-loommark-table table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+#editor > .cm-editor .cm-loommark-table th,
+#editor > .cm-editor .cm-loommark-table td {
+  padding: 4px 12px;
+  border: 1px solid var(--vscode-widget-border, #666666);
+  cursor: pointer;
+  text-align: left;
+}
+
+#editor > .cm-editor .cm-loommark-table th {
+  background: var(--vscode-editorWidget-background);
+  font-weight: 600;
+}
+
+#editor > .cm-editor .cm-loommark-table td:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
 @media (max-width: 700px) {
   #workspace,
   body.outline-collapsed #workspace {
