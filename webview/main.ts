@@ -6,8 +6,9 @@ import {
   type CompletionResult,
 } from '@codemirror/autocomplete';
 import { markdown } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { EditorState, type Range } from '@codemirror/state';
+import { EditorState, type Range, StateField } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -15,6 +16,7 @@ import {
   keymap,
   ViewPlugin,
   type ViewUpdate,
+  WidgetType,
 } from '@codemirror/view';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { tags } from '@lezer/highlight';
@@ -58,6 +60,7 @@ let wikiFiles: string[] = [];
 let lastPointerDiagnostic: Record<string, unknown> | undefined;
 let lastLinkRequest: Record<string, unknown> | undefined;
 let lastHostLinkResult: Record<string, unknown> | undefined;
+let editorInitializationError: string | undefined;
 let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
 let outlineCollapsed = savedState?.outlineCollapsed
@@ -95,6 +98,12 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.controlKeyword], color: '#ff7ab2' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#a8cc8c' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#d2a6ff' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: '#82d2ce' },
+  { tag: [tags.typeName, tags.className], color: '#ffc66d' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: '#8b8e98', fontStyle: 'italic' },
 ]);
 
 const linkDecorations = ViewPlugin.fromClass(class {
@@ -110,6 +119,138 @@ const linkDecorations = ViewPlugin.fromClass(class {
     }
   }
 }, { decorations: (value) => value.decorations });
+
+const inlineCodeDecorations = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = buildInlineCodeDecorations(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
+      this.decorations = buildInlineCodeDecorations(update.view);
+    }
+  }
+}, { decorations: (value) => value.decorations });
+
+const fencedCodeDecorations = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = buildFencedCodeDecorations(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
+      this.decorations = buildFencedCodeDecorations(update.view);
+    }
+  }
+}, { decorations: (value) => value.decorations });
+
+const codeCursorAttributes = EditorView.editorAttributes.of((view) => ({
+  class: isCursorInFencedCode(view) ? 'cm-loommark-code-cursor' : '',
+}));
+
+const codeToolbarField = StateField.define<DecorationSet>({
+  create(state) {
+    return buildCodeToolbarDecorations(state);
+  },
+  update(value, transaction) {
+    if (transaction.docChanged) return buildCodeToolbarDecorations(transaction.state);
+    return value.map(transaction.changes);
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+const codeLanguages = [
+  '', 'bash', 'shell', 'powershell', 'javascript', 'typescript', 'json', 'python',
+  'html', 'css', 'scss', 'sql', 'yaml', 'markdown', 'java', 'c', 'cpp', 'rust', 'go',
+];
+
+class CodeToolbarWidget extends WidgetType {
+  constructor(private readonly block: FencedCodeRange) {
+    super();
+  }
+
+  eq(other: CodeToolbarWidget): boolean {
+    return this.block.openFrom === other.block.openFrom
+      && this.block.language === other.block.language
+      && this.block.code === other.block.code;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const toolbar = document.createElement('div');
+    toolbar.className = `cm-loommark-code-toolbar${isTerminalLanguage(this.block.language) ? ' is-terminal' : ''}`;
+    toolbar.contentEditable = 'false';
+
+    const chrome = document.createElement('span');
+    chrome.className = 'cm-loommark-code-chrome';
+    chrome.ariaHidden = 'true';
+    chrome.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+
+    const select = document.createElement('select');
+    select.className = 'cm-loommark-code-language';
+    select.title = 'Code language';
+    const current = this.block.language.toLowerCase();
+    const options = current && !codeLanguages.includes(current) ? [current, ...codeLanguages] : codeLanguages;
+    for (const language of options) {
+      const option = document.createElement('option');
+      option.value = language;
+      option.textContent = language || 'Plain text';
+      option.selected = language === current;
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      view.dispatch({
+        changes: {
+          from: this.block.languageFrom,
+          to: this.block.languageTo,
+          insert: select.value,
+        },
+      });
+      view.focus();
+    });
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'cm-loommark-code-copy';
+    copy.title = 'Copy code';
+    copy.setAttribute('aria-label', 'Copy code');
+    copy.textContent = 'Copy';
+    copy.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(this.block.code);
+      copy.textContent = 'Copied';
+      window.setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
+    });
+
+    toolbar.append(chrome, select, copy);
+    return toolbar;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+function isTerminalLanguage(language: string): boolean {
+  return ['bash', 'sh', 'shell', 'zsh', 'fish', 'powershell', 'pwsh', 'console', 'terminal'].includes(
+    language.toLowerCase(),
+  );
+}
+
+function buildCodeToolbarDecorations(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  for (const block of detailedFencedCodeRanges(state.doc.toString())) {
+    const position = state.doc.line(block.contentStartLine).from;
+    ranges.push(Decoration.widget({
+      widget: new CodeToolbarWidget(block),
+      block: true,
+      side: -1,
+    }).range(position));
+  }
+  return Decoration.set(ranges, true);
+}
 
 function buildHeadingDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
@@ -202,6 +343,58 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
   return Decoration.set(ranges, true);
 }
 
+function buildInlineCodeDecorations(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = view.state.selection.main.head;
+  const source = view.state.doc.toString();
+  for (const range of inlineCodeRanges(source, fencedCodeRanges(source))) {
+    const markerLength = range.markerLength;
+    addHiddenSyntax(ranges, cursor, range.from, range.from + markerLength);
+    addHiddenSyntax(ranges, cursor, range.to - markerLength, range.to);
+    ranges.push(Decoration.mark({
+      attributes: { class: 'cm-loommark-inline-code' },
+    }).range(range.from + markerLength, range.to - markerLength));
+  }
+  return Decoration.set(ranges, true);
+}
+
+function buildFencedCodeDecorations(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = view.state.selection.main.head;
+  for (const block of detailedFencedCodeRanges(view.state.doc.toString())) {
+    const fenceActive = view.hasFocus && (
+      cursor >= block.openFrom && cursor <= block.openTo
+      || block.closeFrom !== undefined && block.closeTo !== undefined
+        && cursor >= block.closeFrom && cursor <= block.closeTo
+    );
+    for (let lineNumber = block.contentStartLine; lineNumber <= block.contentEndLine; lineNumber++) {
+      const line = view.state.doc.line(lineNumber);
+      ranges.push(Decoration.line({
+        attributes: {
+          class: `cm-loommark-code-block-line${lineNumber === block.contentStartLine ? ' cm-loommark-code-block-first' : ''}${lineNumber === block.contentEndLine ? ' cm-loommark-code-block-last' : ''}`,
+          'data-line-number': String(lineNumber - block.contentStartLine + 1),
+        },
+      }).range(line.from));
+    }
+    if (!fenceActive) {
+      ranges.push(Decoration.replace({}).range(block.openFrom, block.openTo));
+      if (block.closeFrom !== undefined && block.closeTo !== undefined) {
+        ranges.push(Decoration.replace({}).range(block.closeFrom, block.closeTo));
+      }
+    }
+  }
+  return Decoration.set(ranges, true);
+}
+
+function isCursorInFencedCode(view: EditorView): boolean {
+  const cursor = view.state.selection.main.head;
+  return detailedFencedCodeRanges(view.state.doc.toString()).some((block) => {
+    const contentFrom = view.state.doc.line(block.contentStartLine).from;
+    const contentTo = view.state.doc.line(block.contentEndLine).to;
+    return cursor >= contentFrom && cursor <= contentTo;
+  });
+}
+
 function addHiddenSyntax(
   ranges: Range<Decoration>[],
   cursor: number,
@@ -218,22 +411,104 @@ function containsPosition(ranges: Array<{ from: number; to: number }>, position:
 }
 
 function codeRanges(source: string): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  const fencePattern = /^ {0,3}(`{3,}|~{3,})[^\n]*(?:\n|$)/gm;
-  let fence: { marker: string; from: number } | undefined;
-  for (const match of source.matchAll(fencePattern)) {
-    const marker = match[1][0];
-    const from = match.index ?? 0;
-    if (!fence) fence = { marker, from };
-    else if (fence.marker === marker) {
-      ranges.push({ from: fence.from, to: from + match[0].length });
-      fence = undefined;
+  const ranges = fencedCodeRanges(source);
+  for (const range of inlineCodeRanges(source, ranges)) ranges.push(range);
+  return ranges;
+}
+
+function fencedCodeRanges(source: string): Array<{ from: number; to: number }> {
+  return detailedFencedCodeRanges(source).map(({ from, to }) => ({ from, to }));
+}
+
+type FencedCodeRange = {
+  from: number;
+  to: number;
+  openFrom: number;
+  openTo: number;
+  closeFrom?: number;
+  closeTo?: number;
+  contentStartLine: number;
+  contentEndLine: number;
+  language: string;
+  languageFrom: number;
+  languageTo: number;
+  code: string;
+};
+
+function detailedFencedCodeRanges(source: string): FencedCodeRange[] {
+  const lines = source.split('\n');
+  const ranges: FencedCodeRange[] = [];
+  let offset = 0;
+  let open: { marker: string; length: number; from: number; to: number; line: number; language: string; languageFrom: number; languageTo: number } | undefined;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    const lineFrom = offset;
+    const lineTo = offset + line.length;
+    if (match) {
+      const marker = match[1][0];
+      if (!open) {
+        const language = match[2].trim().split(/\s+/)[0] ?? '';
+        const languageStart = line.indexOf(language, match[1].length);
+        open = {
+          marker,
+          length: match[1].length,
+          from: lineFrom,
+          to: lineTo,
+          line: index + 1,
+          language,
+          languageFrom: language ? lineFrom + languageStart : lineFrom + match[1].length,
+          languageTo: language ? lineFrom + languageStart + language.length : lineFrom + match[1].length,
+        };
+      } else if (marker === open.marker && match[1].length >= open.length && !match[2].trim()) {
+        ranges.push({
+          from: open.from,
+          to: lineTo,
+          openFrom: open.from,
+          openTo: open.to,
+          closeFrom: lineFrom,
+          closeTo: lineTo,
+          contentStartLine: open.line + 1,
+          contentEndLine: index,
+          language: open.language,
+          languageFrom: open.languageFrom,
+          languageTo: open.languageTo,
+          code: lines.slice(open.line, index).join('\n'),
+        });
+        open = undefined;
+      }
     }
+    offset = lineTo + 1;
   }
-  if (fence) ranges.push({ from: fence.from, to: source.length });
-  for (const match of source.matchAll(/`+[^`\n]*`+/g)) {
+  if (open) {
+    ranges.push({
+      from: open.from,
+      to: source.length,
+      openFrom: open.from,
+      openTo: open.to,
+      contentStartLine: open.line + 1,
+      contentEndLine: lines.length,
+      language: open.language,
+      languageFrom: open.languageFrom,
+      languageTo: open.languageTo,
+      code: lines.slice(open.line).join('\n'),
+    });
+  }
+  return ranges.filter((range) => range.contentStartLine <= range.contentEndLine);
+}
+
+function inlineCodeRanges(
+  source: string,
+  excluded: Array<{ from: number; to: number }>,
+): Array<{ from: number; to: number; markerLength: number }> {
+  const ranges: Array<{ from: number; to: number; markerLength: number }> = [];
+  const pattern = /(`+)([^\n]*?)\1/g;
+  for (const match of source.matchAll(pattern)) {
     const from = match.index ?? 0;
-    if (!containsPosition(ranges, from)) ranges.push({ from, to: from + match[0].length });
+    if (containsPosition(excluded, from)) continue;
+    const markerLength = match[1].length;
+    if (!match[2] || match[2].includes('`'.repeat(markerLength))) continue;
+    ranges.push({ from, to: from + match[0].length, markerLength });
   }
   return ranges;
 }
@@ -268,18 +543,24 @@ function scheduleSync(): void {
 function createEditor(text: string): void {
   editor?.destroy();
   root.replaceChildren();
-  editor = new EditorView({
-    parent: root,
-    state: EditorState.create({
+  editorInitializationError = undefined;
+  try {
+    editor = new EditorView({
+      parent: root,
+      state: EditorState.create({
       doc: text,
       extensions: [
         history(),
-        markdown({ extensions: [GFM] }),
+        markdown({ extensions: [GFM], codeLanguages: languages }),
         autocompletion({ override: [wikiLinkCompletions] }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         headingDecorations,
         inlineDecorations,
+        inlineCodeDecorations,
+        fencedCodeDecorations,
+        codeToolbarField,
+        codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),
         EditorView.updateListener.of((update) => {
@@ -291,8 +572,19 @@ function createEditor(text: string): void {
           refreshOutline();
         }),
       ],
-    }),
-  });
+      }),
+    });
+  } catch (error: unknown) {
+    editor = undefined;
+    editorInitializationError = error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack ?? ''}`
+      : String(error);
+    root.replaceChildren();
+    const failure = document.createElement('pre');
+    failure.className = 'loommark-editor-error';
+    failure.textContent = `LoomMark editor failed to initialize.\n\n${editorInitializationError}`;
+    root.append(failure);
+  }
   refreshOutline();
 }
 
@@ -468,6 +760,20 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       wikiFileCount: wikiFiles.length,
       wikiFiles: wikiFiles.slice(0, 50),
       completionStatus: editor ? completionStatus(editor.state) : null,
+      fencedCodeRanges: detailedFencedCodeRanges(sourceText),
+      editorClasses: editor?.dom.className,
+      codeLines: Array.from(document.querySelectorAll<HTMLElement>('.cm-loommark-code-block-line'))
+        .map((line) => ({
+          text: line.textContent,
+          className: line.className,
+          background: getComputedStyle(line).backgroundColor,
+          color: getComputedStyle(line).color,
+        })),
+      cursorStyles: Array.from(document.querySelectorAll<HTMLElement>('.cm-cursor')).map((cursor) => ({
+        className: cursor.className,
+        borderLeftColor: getComputedStyle(cursor).borderLeftColor,
+        borderLeftWidth: getComputedStyle(cursor).borderLeftWidth,
+      })),
       activeElement: document.activeElement?.className || document.activeElement?.tagName,
       sourceMatches: {
         wiki: Array.from(sourceText.matchAll(/\[\[([^\]\n|]+)(?:\|([^\]\n]+))?\]\]/g))
@@ -486,6 +792,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       lastLinkRequest,
       lastHostLinkResult,
       editorLoaded: Boolean(editor),
+      editorInitializationError,
       editorText: editor?.state.doc.toString(),
       classes: Array.from(document.querySelectorAll<HTMLElement>('[class*="loommark"]'))
         .map((element) => element.className),

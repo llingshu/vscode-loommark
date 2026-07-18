@@ -185,41 +185,6 @@ body.editor-outline-disabled #outline {
   border-bottom: 0;
 }
 
-#editor .milkdown {
-  --crepe-color-background: var(--vscode-editor-background);
-  --crepe-color-on-background: var(--vscode-editor-foreground);
-  --crepe-color-surface: var(--vscode-menu-background);
-  --crepe-color-surface-low: var(--vscode-editorWidget-background);
-  --crepe-color-on-surface: var(--vscode-menu-foreground);
-  --crepe-color-on-surface-variant: var(--vscode-descriptionForeground);
-  --crepe-color-outline: var(--vscode-widget-border);
-  --crepe-color-primary: var(--vscode-focusBorder);
-  --crepe-color-secondary: var(--vscode-list-activeSelectionBackground);
-  --crepe-color-on-secondary: var(--vscode-list-activeSelectionForeground);
-  --crepe-color-inverse: var(--vscode-editor-foreground);
-  --crepe-color-on-inverse: var(--vscode-editor-background);
-  --crepe-color-inline-code: var(--vscode-textPreformat-foreground);
-  --crepe-color-error: var(--vscode-errorForeground);
-  --crepe-color-hover: var(--vscode-list-hoverBackground);
-  --crepe-color-selected: var(--vscode-editor-selectionBackground);
-  --crepe-color-inline-area: var(--vscode-textCodeBlock-background);
-  --crepe-font-title: var(--vscode-font-family);
-  --crepe-font-default: var(--vscode-font-family);
-  --crepe-font-code: var(--vscode-editor-font-family);
-  background: transparent;
-}
-
-#editor .ProseMirror {
-  min-height: calc(100vh - 80px);
-  padding: 40px 8px 120px;
-  caret-color: var(--vscode-editorCursor-foreground);
-  outline: none;
-}
-
-#editor .ProseMirror ::selection {
-  background: var(--vscode-editor-selectionBackground);
-}
-
 /* Source-backed block editor. Inactive blocks are rendered views; only the
    active block receives a CodeMirror instance and can update the source. */
 #editor.source-backed-editor {
@@ -434,142 +399,186 @@ body.editor-outline-disabled #outline {
   opacity: 0.7;
 }
 
-#editor .milkdown-list-item-block li .label-wrapper {
-  color: var(--vscode-editor-foreground);
-}
-
-#editor .milkdown-list-item-block li .label-wrapper svg {
-  fill: var(--vscode-editor-foreground);
-}
-
-#editor .ProseMirror :is(h1, h2, h3, h4, h5, h6)::before {
-  margin-right: 8px;
-  box-sizing: border-box;
-  display: inline-flex;
-  width: 28px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  border-left: 2px solid var(--crepe-color-primary);
+#editor > .cm-editor .cm-loommark-inline-code {
+  padding: 1px 4px;
+  border: 1px solid var(--vscode-widget-border);
   border-radius: 3px;
-  background: var(--crepe-color-surface-low);
-  color: var(--crepe-color-on-surface-variant);
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground);
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 20px;
-  letter-spacing: 0;
-  vertical-align: middle;
+  font-size: 0.92em;
+}
+
+#editor > .cm-editor .cm-loommark-code-block-line {
+  box-sizing: border-box;
+  padding-right: 16px;
+  padding-left: 54px;
+  border-right: 1px solid #383a40;
+  border-left: 1px solid #383a40;
+  background: #111214;
+  color: #f4f4f5;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  line-height: 1.55;
+}
+
+#editor > .cm-editor .cm-loommark-code-block-line::before {
+  content: attr(data-line-number);
+  position: absolute;
+  left: 0;
+  width: 40px;
+  color: #72757e;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   user-select: none;
 }
 
-#editor .ProseMirror h1::before { content: "H1"; }
-#editor .ProseMirror h2::before { content: "H2"; }
-#editor .ProseMirror h3::before { content: "H3"; }
-#editor .ProseMirror h4::before { content: "H4"; }
-#editor .ProseMirror h5::before { content: "H5"; }
-#editor .ProseMirror h6::before { content: "H6"; }
-
-body[data-loommark-theme="crepe"].vscode-light #editor .milkdown {
-  --crepe-color-background: #fffdfb;
-  --crepe-color-on-background: #1f1b16;
-  --crepe-color-surface: #fff8f4;
-  --crepe-color-surface-low: #fff1e5;
-  --crepe-color-on-surface: #201b13;
-  --crepe-color-on-surface-variant: #4f4539;
-  --crepe-color-outline: #817567;
-  --crepe-color-primary: #805610;
-  --crepe-color-secondary: #fbdebc;
-  --crepe-color-on-secondary: #271904;
-  --crepe-color-inline-code: #ba1a1a;
-  --crepe-color-hover: #f9ecdf;
-  --crepe-color-selected: #ede0d4;
-  --crepe-color-inline-area: #e4d8cc;
+.cm-loommark-code-toolbar {
+  box-sizing: border-box;
+  display: flex;
+  height: 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 12px;
+  border: 1px solid #cfd1d6;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: #eceef2;
+  color: #34363b;
+  font-family: var(--vscode-font-family);
 }
 
-body[data-loommark-theme="crepe"].vscode-dark #editor .milkdown {
-  --crepe-color-background: #1f1b16;
-  --crepe-color-on-background: #eae1d9;
-  --crepe-color-surface: #18120b;
-  --crepe-color-surface-low: #201b13;
-  --crepe-color-on-surface: #ede0d4;
-  --crepe-color-on-surface-variant: #d3c4b4;
-  --crepe-color-outline: #9c8f80;
-  --crepe-color-primary: #f4bd6f;
-  --crepe-color-secondary: #56442a;
-  --crepe-color-on-secondary: #fbdebc;
-  --crepe-color-inline-code: #ffb4ab;
-  --crepe-color-hover: #251f17;
-  --crepe-color-selected: #3b342b;
-  --crepe-color-inline-area: #3f3830;
+.cm-loommark-code-chrome {
+  display: flex;
+  width: 44px;
+  gap: 5px;
 }
 
-body[data-loommark-theme="frame"].vscode-light #editor .milkdown {
-  --crepe-color-background: #fff;
-  --crepe-color-on-background: #000;
-  --crepe-color-surface: #f7f7f7;
-  --crepe-color-surface-low: #ededed;
-  --crepe-color-on-surface: #1c1c1c;
-  --crepe-color-on-surface-variant: #4d4d4d;
-  --crepe-color-outline: #a8a8a8;
-  --crepe-color-primary: #333;
-  --crepe-color-secondary: #cfcfcf;
-  --crepe-color-on-secondary: #000;
-  --crepe-color-inline-code: #ba1a1a;
-  --crepe-color-hover: #e0e0e0;
-  --crepe-color-selected: #d5d5d5;
-  --crepe-color-inline-area: #cacaca;
+.cm-loommark-code-chrome i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #a8abb2;
 }
 
-body[data-loommark-theme="frame"].vscode-dark #editor .milkdown {
-  --crepe-color-background: #1a1a1a;
-  --crepe-color-on-background: #e6e6e6;
-  --crepe-color-surface: #121212;
-  --crepe-color-surface-low: #1c1c1c;
-  --crepe-color-on-surface: #d1d1d1;
-  --crepe-color-on-surface-variant: #a9a9a9;
-  --crepe-color-outline: #757575;
-  --crepe-color-primary: #b5b5b5;
-  --crepe-color-secondary: #4d4d4d;
-  --crepe-color-on-secondary: #d6d6d6;
-  --crepe-color-inline-code: #f66;
-  --crepe-color-hover: #232323;
-  --crepe-color-selected: #2f2f2f;
-  --crepe-color-inline-area: #2b2b2b;
+.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(1) { background: #ff5f57; }
+.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(2) { background: #febc2e; }
+.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(3) { background: #28c840; }
+
+.cm-loommark-code-language {
+  min-width: 0;
+  flex: 1;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
 }
 
-body[data-loommark-theme="nord"].vscode-light #editor .milkdown {
-  --crepe-color-background: #fdfcff;
-  --crepe-color-on-background: #1b1c1d;
-  --crepe-color-surface: #f8f9ff;
-  --crepe-color-surface-low: #f2f3fa;
-  --crepe-color-on-surface: #191c20;
-  --crepe-color-on-surface-variant: #43474e;
-  --crepe-color-outline: #73777f;
-  --crepe-color-primary: #37618e;
-  --crepe-color-secondary: #d7e3f8;
-  --crepe-color-on-secondary: #101c2b;
-  --crepe-color-inline-code: #ba1a1a;
-  --crepe-color-hover: #eceef4;
-  --crepe-color-selected: #e1e2e8;
-  --crepe-color-inline-area: #d8dae0;
+.cm-loommark-code-copy {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #bec1c7;
+  border-radius: 4px;
+  background: #f8f8f9;
+  color: #34363b;
+  cursor: pointer;
+  font: inherit;
 }
 
-body[data-loommark-theme="nord"].vscode-dark #editor .milkdown {
-  --crepe-color-background: #1b1c1d;
-  --crepe-color-on-background: #f8f9ff;
-  --crepe-color-surface: #111418;
-  --crepe-color-surface-low: #191c20;
-  --crepe-color-on-surface: #e1e2e8;
-  --crepe-color-on-surface-variant: #c3c6cf;
-  --crepe-color-outline: #8d9199;
-  --crepe-color-primary: #a1c9fd;
-  --crepe-color-secondary: #3c4858;
-  --crepe-color-on-secondary: #d7e3f8;
-  --crepe-color-inline-code: #ffb4ab;
-  --crepe-color-hover: #1d2024;
-  --crepe-color-selected: #32353a;
-  --crepe-color-inline-area: #111418;
+.cm-loommark-code-copy:hover {
+  background: #ffffff;
+}
+
+#editor > .cm-editor .cm-loommark-code-block-first {
+  padding-top: 12px;
+}
+
+#editor > .cm-editor .cm-loommark-code-block-last {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #383a40;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 2px 5px #0000001f;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line {
+  border-right-color: #d0d0d0;
+  border-left-color: #d0d0d0;
+  background: #fafafa;
+  color: #161616;
+}
+
+body.vscode-dark .cm-loommark-code-toolbar {
+  border-color: #45474d;
+  background: #292b30;
+  color: #e5e7eb;
+}
+
+body.vscode-dark .cm-loommark-code-copy {
+  border-color: #555861;
+  background: #363940;
+  color: #f4f4f5;
+}
+
+body.vscode-dark .cm-loommark-code-copy:hover {
+  background: #42454d;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-first,
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-last {
+  border-color: #d0d0d0;
+}
+
+body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
+  color: #ff7ab2;
+}
+
+body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line .tok-string {
+  color: #a8cc8c;
+}
+
+body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
+  color: #d2a6ff;
+}
+
+body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line .tok-comment {
+  color: #8b8e98;
+  font-style: italic;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
+  color: #a3215b;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line .tok-string {
+  color: #326b17;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
+  color: #7040a0;
+}
+
+body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line .tok-comment {
+  color: #686b72;
+  font-style: italic;
+}
+
+body.vscode-light #editor > .cm-editor.cm-loommark-code-cursor .cm-cursor {
+  border-left: 2px solid #ffffff;
+}
+
+body.vscode-light #editor > .cm-editor.cm-loommark-code-cursor .cm-content {
+  caret-color: #ffffff;
+}
+
+body.vscode-dark #editor > .cm-editor.cm-loommark-code-cursor .cm-cursor {
+  border-left: 2px solid #000000;
+}
+
+body.vscode-dark #editor > .cm-editor.cm-loommark-code-cursor .cm-content {
+  caret-color: #000000;
 }
 
 body[data-loommark-theme="crepe"].vscode-light { background: #fffdfb; color: #1f1b16; }
@@ -579,53 +588,6 @@ body[data-loommark-theme="frame"].vscode-dark { background: #1a1a1a; color: #e6e
 body[data-loommark-theme="nord"].vscode-light { background: #fdfcff; color: #1b1c1d; }
 body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9ff; }
 
-body.vscode-light .milkdown .milkdown-code-block,
-body.vscode-light .milkdown .milkdown-code-block :is(.cm-editor, .cm-scroller, .cm-gutters) {
-  background: #0d0d0d;
-  color: #fff;
-  caret-color: #fff;
-}
-
-body.vscode-dark .milkdown .milkdown-code-block,
-body.vscode-dark .milkdown .milkdown-code-block :is(.cm-editor, .cm-scroller, .cm-gutters) {
-  background: #fff;
-  color: #000;
-  caret-color: #000;
-}
-
-body.vscode-light .milkdown .milkdown-code-block :is(.cm-content, .cm-content *, .milkdown-code-block-placeholder, .milkdown-code-block-placeholder code) {
-  color: #fff !important;
-}
-
-body.vscode-dark .milkdown .milkdown-code-block :is(.cm-content, .cm-content *, .milkdown-code-block-placeholder, .milkdown-code-block-placeholder code) {
-  color: #000 !important;
-}
-
-body.vscode-light .milkdown .milkdown-code-block .cm-cursor {
-  border-left-color: #fff;
-}
-
-body.vscode-dark .milkdown .milkdown-code-block .cm-cursor {
-  border-left-color: #000;
-}
-
-body.vscode-light .milkdown .milkdown-table-block th,
-body.vscode-light .milkdown .milkdown-table-block td {
-  border-color: rgb(0 0 0 / 38%);
-}
-
-body.vscode-dark .milkdown .milkdown-table-block th,
-body.vscode-dark .milkdown .milkdown-table-block td {
-  border-color: rgb(255 255 255 / 38%);
-}
-
-body.vscode-high-contrast .milkdown .milkdown-table-block th,
-body.vscode-high-contrast .milkdown .milkdown-table-block td,
-body.vscode-high-contrast-light .milkdown .milkdown-table-block th,
-body.vscode-high-contrast-light .milkdown .milkdown-table-block td {
-  border-color: var(--vscode-contrastBorder);
-}
-
 #status {
   position: fixed;
   right: 12px;
@@ -634,6 +596,16 @@ body.vscode-high-contrast-light .milkdown .milkdown-table-block td {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
   pointer-events: none;
+}
+
+.loommark-editor-error {
+  margin: 32px;
+  padding: 16px;
+  border: 1px solid var(--vscode-errorForeground);
+  border-radius: 4px;
+  color: var(--vscode-errorForeground);
+  font-family: var(--vscode-editor-font-family);
+  white-space: pre-wrap;
 }
 
 @media (max-width: 700px) {
@@ -659,7 +631,4 @@ body.vscode-high-contrast-light .milkdown .milkdown-table-block td {
     box-shadow: none;
   }
 
-  #editor .ProseMirror {
-    padding-top: 24px;
-  }
 }

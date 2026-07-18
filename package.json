@@ -19,16 +19,15 @@
   },
   "categories": [
     "Other",
-    "Visualization",
-    "Formatters"
+    "Visualization"
   ],
   "keywords": [
     "markdown",
     "wysiwyg",
     "editor",
-    "milkdown",
-    "crepe",
-    "prosemirror",
+    "codemirror",
+    "wiki-link",
+    "source-preserving",
     "live preview"
   ],
   "galleryBanner": {
@@ -165,12 +164,11 @@
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.4",
+    "@codemirror/language-data": "^6.5.2",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.1",
-    "@milkdown/crepe": "^7.21.2",
-    "@milkdown/kit": "^7.21.2",
     "mdast-util-from-markdown": "^2.0.3"
   },
   "devDependencies": {
