@@ -409,57 +409,110 @@ body.editor-outline-disabled #outline {
   font-size: 0.92em;
 }
 
+/* Code blocks invert the editor theme: an obsidian slab in a light room,
+   a paper card in a dark room. All surfaces derive from these variables. */
+body {
+  --loommark-code-surface: #14161b;
+  --loommark-code-surface-edge: #2c2f36;
+  --loommark-code-ink: #e8e9ec;
+  --loommark-code-gutter-ink: #575b66;
+  --loommark-code-gutter-edge: #22242b;
+  --loommark-code-selection: rgb(122 162 255 / 28%);
+  --loommark-code-titlebar: linear-gradient(#f7f8fa, #e9ebef);
+  --loommark-code-titlebar-ink: #3c3f45;
+  --loommark-code-titlebar-gloss: rgb(255 255 255 / 55%);
+  --loommark-code-titlebar-edge: #2c2f36;
+  --loommark-code-button-edge: #c3c6cc;
+  --loommark-code-button-surface: rgb(255 255 255 / 65%);
+  --loommark-code-shadow: 0 18px 28px -20px rgb(14 16 22 / 60%);
+}
+
+body.vscode-dark {
+  --loommark-code-surface: #f6f6f4;
+  --loommark-code-surface-edge: #c7c9ce;
+  --loommark-code-ink: #1d1f24;
+  --loommark-code-gutter-ink: #9a9da6;
+  --loommark-code-gutter-edge: #e5e5e2;
+  --loommark-code-selection: rgb(46 96 204 / 20%);
+  --loommark-code-titlebar: linear-gradient(#2c2e34, #24262b);
+  --loommark-code-titlebar-ink: #d7d9de;
+  --loommark-code-titlebar-gloss: rgb(255 255 255 / 7%);
+  --loommark-code-titlebar-edge: #c7c9ce;
+  --loommark-code-button-edge: #4c4f57;
+  --loommark-code-button-surface: rgb(255 255 255 / 9%);
+  --loommark-code-shadow: 0 18px 30px -18px rgb(0 0 0 / 65%);
+}
+
 #editor > .cm-editor .cm-loommark-code-block-line {
   box-sizing: border-box;
   padding-right: 16px;
-  padding-left: 54px;
-  border-right: 1px solid #383a40;
-  border-left: 1px solid #383a40;
-  background: #111214;
-  color: #f4f4f5;
+  padding-left: 58px;
+  border-right: 1px solid var(--loommark-code-surface-edge);
+  border-left: 1px solid var(--loommark-code-surface-edge);
+  background:
+    linear-gradient(var(--loommark-code-gutter-edge), var(--loommark-code-gutter-edge))
+    44px 0 / 1px 100% no-repeat,
+    var(--loommark-code-surface);
+  color: var(--loommark-code-ink);
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 #editor > .cm-editor .cm-loommark-code-block-line::before {
   content: attr(data-line-number);
   position: absolute;
   left: 0;
-  width: 40px;
-  color: #72757e;
+  width: 34px;
+  padding-top: 0.14em;
+  color: var(--loommark-code-gutter-ink);
+  font-size: 0.82em;
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;
 }
 
+#editor > .cm-editor .cm-loommark-code-block-line::selection,
+#editor > .cm-editor .cm-loommark-code-block-line ::selection {
+  background: var(--loommark-code-selection);
+}
+
 .cm-loommark-code-toolbar {
   box-sizing: border-box;
   display: flex;
-  height: 34px;
+  height: 38px;
   align-items: center;
   gap: 10px;
-  padding: 0 8px 0 12px;
-  border: 1px solid #383a40;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--loommark-code-titlebar-edge);
   border-bottom: 0;
-  border-radius: 6px 6px 0 0;
-  background: #eceef2;
-  color: #34363b;
+  border-radius: 10px 10px 0 0;
+  background: var(--loommark-code-titlebar);
+  color: var(--loommark-code-titlebar-ink);
   font-family: var(--vscode-font-family);
+  box-shadow: inset 0 1px 0 var(--loommark-code-titlebar-gloss);
 }
 
 .cm-loommark-code-chrome {
   display: flex;
   width: 44px;
-  gap: 5px;
+  flex: none;
+  gap: 6px;
 }
 
 .cm-loommark-code-chrome i {
   display: block;
-  width: 9px;
-  height: 9px;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 1px solid color-mix(in srgb, currentcolor 30%, transparent);
   border-radius: 50%;
-  background: #a8abb2;
+  background: color-mix(in srgb, currentcolor 10%, transparent);
+}
+
+.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i {
+  border-color: rgb(0 0 0 / 15%);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 40%);
 }
 
 .cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(1) { background: #ff5f57; }
@@ -471,64 +524,74 @@ body.editor-outline-disabled #outline {
   flex: 1;
   height: 26px;
   border: 0;
+  appearance: none;
   background: transparent;
   color: inherit;
-  font: inherit;
+  cursor: pointer;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  opacity: 0.85;
   outline: none;
+  text-align: center;
+  text-align-last: center;
+  text-transform: uppercase;
+}
+
+.cm-loommark-code-language:hover {
+  opacity: 1;
+}
+
+.cm-loommark-code-language:focus-visible {
+  border-radius: 3px;
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
 }
 
 .cm-loommark-code-copy {
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid #bec1c7;
-  border-radius: 4px;
-  background: #f8f8f9;
-  color: #34363b;
+  height: 24px;
+  flex: none;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  font: inherit;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  text-transform: uppercase;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
 }
 
 .cm-loommark-code-copy:hover {
-  background: #ffffff;
+  border-color: var(--loommark-code-button-edge);
+  background: var(--loommark-code-button-surface);
+  opacity: 1;
+}
+
+.cm-loommark-code-copy:active {
+  transform: translateY(1px);
+}
+
+.cm-loommark-code-copy:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
 }
 
 #editor > .cm-editor .cm-loommark-code-block-first {
   padding-top: 12px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 #editor > .cm-editor .cm-loommark-code-block-last {
   padding-bottom: 14px;
-  border-bottom: 1px solid #383a40;
-  border-radius: 0 0 6px 6px;
-  box-shadow: 0 2px 5px #0000001f;
-}
-
-body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line {
-  border-right-color: #d0d0d0;
-  border-left-color: #d0d0d0;
-  background: #fafafa;
-  color: #161616;
-}
-
-body.vscode-dark .cm-loommark-code-toolbar {
-  border-color: #d0d0d0;
-  background: #292b30;
-  color: #e5e7eb;
-}
-
-body.vscode-dark .cm-loommark-code-copy {
-  border-color: #555861;
-  background: #363940;
-  color: #f4f4f5;
-}
-
-body.vscode-dark .cm-loommark-code-copy:hover {
-  background: #42454d;
-}
-
-body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-first,
-body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-last {
-  border-color: #d0d0d0;
+  border-bottom: 1px solid var(--loommark-code-surface-edge);
+  border-radius: 0 0 10px 10px;
+  box-shadow: var(--loommark-code-shadow);
 }
 
 body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
