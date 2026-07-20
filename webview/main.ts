@@ -8,6 +8,7 @@ import {
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { search, searchKeymap } from '@codemirror/search';
 import { EditorState, type Range, RangeSet, RangeValue, StateEffect, StateField } from '@codemirror/state';
 import {
   Decoration,
@@ -29,10 +30,12 @@ import {
   inlineCodeRanges,
   horizontalRuleRanges,
   imageRanges,
+  linkDestinationRanges,
   listItemRanges,
   mathRanges,
   quoteLineRanges,
   tableRanges,
+  tagRanges,
 } from './markdown-ranges';
 import {
   BulletWidget,
@@ -141,6 +144,20 @@ const linkDecorations = ViewPlugin.fromClass(class {
   update(update: ViewUpdate): void {
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
       this.decorations = buildLinkDecorations(update.view);
+    }
+  }
+}, { decorations: (value) => value.decorations });
+
+const tagDecorations = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = buildTagDecorations(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = buildTagDecorations(update.view);
     }
   }
 }, { decorations: (value) => value.decorations });
@@ -381,13 +398,20 @@ function buildInlineDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [];
   const cursor = view.state.selection.main.head;
   const source = view.state.doc.toString();
-  const excluded = codeRanges(source);
+  const excluded = [
+    ...codeRanges(source),
+    ...linkDestinationRanges(source),
+    ...tagRanges(source),
+  ];
+  // Content group matches a single non-space char alone, or a non-space char followed by
+  // anything lazily ending in a non-space char — unlike `(?=\S)(.+?\S)`, this also matches
+  // single-character content (`**a**`), which needs at least two characters to satisfy.
   const patterns = [
-    /\*\*(?=\S)(.+?\S)\*\*/g,
-    /__(?=\S)(.+?\S)__/g,
-    /~~(?=\S)(.+?\S)~~/g,
-    /(?<!\*)\*(?!\*)(?=\S)(.+?\S)\*(?!\*)/g,
-    /(?<!_)_(?!_)(?=\S)(.+?\S)_(?!_)/g,
+    /\*\*(\S(?:.*?\S)?)\*\*/g,
+    /__(\S(?:.*?\S)?)__/g,
+    /~~(\S(?:.*?\S)?)~~/g,
+    /(?<!\*)\*(?!\*)(\S(?:.*?\S)?)\*(?!\*)/g,
+    /(?<!_)_(?!_)(\S(?:.*?\S)?)_(?!_)/g,
   ];
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) {
@@ -431,7 +455,7 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
     }).range(labelFrom, labelTo));
   }
 
-  const linkPattern = /\[([^\]\n]+)\]\(([^\s)]+)(?:\s+["'][^"'\n]*["'])?\)/g;
+  const linkPattern = /\[([^\]\n]+)\]\((?:<([^<>\n]*)>|([^\s)]+))(?:\s+["'][^"'\n]*["'])?\)/g;
   for (const match of source.matchAll(linkPattern)) {
       const from = match.index ?? 0;
       const to = from + match[0].length;
@@ -443,8 +467,19 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
       addHiddenSyntax(ranges, cursor, from, labelFrom);
       addHiddenSyntax(ranges, cursor, labelTo, to);
       ranges.push(Decoration.mark({
-        attributes: { class: 'cm-loommark-link', 'data-loommark-href': match[2] },
+        attributes: { class: 'cm-loommark-link', 'data-loommark-href': match[2] ?? match[3] },
       }).range(labelFrom, labelTo));
+  }
+  return Decoration.set(ranges, true);
+}
+
+function buildTagDecorations(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const source = view.state.doc.toString();
+  for (const tag of tagRanges(source)) {
+    ranges.push(Decoration.mark({
+      attributes: { class: 'cm-loommark-tag' },
+    }).range(tag.from, tag.to));
   }
   return Decoration.set(ranges, true);
 }
@@ -552,7 +587,8 @@ function createEditor(text: string): void {
         history(),
         markdown({ extensions: [GFM], codeLanguages: languages }),
         autocompletion({ override: [wikiLinkCompletions] }),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        search({ top: true }),
+        keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         headingDecorations,
         inlineDecorations,
@@ -567,6 +603,7 @@ function createEditor(text: string): void {
         keyboardAtomicRanges,
         codeCursorAttributes,
         linkDecorations,
+        tagDecorations,
         syntaxHighlighting(markdownHighlightStyle),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || applyingHostUpdate) return;

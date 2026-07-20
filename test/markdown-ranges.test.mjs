@@ -6,10 +6,12 @@ import {
   inlineCodeRanges,
   horizontalRuleRanges,
   imageRanges,
+  linkDestinationRanges,
   listItemRanges,
   mathRanges,
   quoteLineRanges,
   tableRanges,
+  tagRanges,
 } from '../out/test/markdown-ranges.mjs';
 
 test('parses a fenced code block with language', () => {
@@ -92,6 +94,55 @@ test('parses an inline image and a titled image', () => {
 test('ignores images inside code', () => {
   const source = '```\n![a](b.png)\n```\nand `![c](d.png)` too';
   assert.equal(imageRanges(source).length, 0);
+});
+
+test('parses an angle-bracket wrapped image destination', () => {
+  const source = '![Fig 1a](<../Figures_all/Figure-1a-experiment_design.png>)';
+  const [image] = imageRanges(source);
+  assert.equal(image.src, '../Figures_all/Figure-1a-experiment_design.png');
+  assert.equal(image.ownLine, true);
+});
+
+test('parses a plain parent-directory image path', () => {
+  const source = '![Fig 1a](../Figures_all/Figure-1a-experiment_design.png)';
+  const [image] = imageRanges(source);
+  assert.equal(image.src, '../Figures_all/Figure-1a-experiment_design.png');
+});
+
+test('finds the destination-only range of an image, excluding the label', () => {
+  const source = '![Fig 1a](<../Figures_all/Figure-1a-experiment_design.png>)';
+  const [range] = linkDestinationRanges(source);
+  assert.equal(
+    source.slice(range.from, range.to),
+    '<../Figures_all/Figure-1a-experiment_design.png>',
+  );
+});
+
+test('finds the destination range of a plain link, excluding the label', () => {
+  const source = 'see [a_b_c](path/to/some_file_name.png) here';
+  const [range] = linkDestinationRanges(source);
+  assert.equal(source.slice(range.from, range.to), 'path/to/some_file_name.png');
+});
+
+test('parses simple and nested tags', () => {
+  const source = 'a #idea and a #project/alpha tag';
+  const tags = tagRanges(source);
+  assert.deepEqual(tags.map((tag) => tag.name), ['idea', 'project/alpha']);
+});
+
+test('does not treat a heading marker as a tag', () => {
+  const source = '# Heading one\n## Heading two';
+  assert.equal(tagRanges(source).length, 0);
+});
+
+test('does not treat a mid-word hash or a numeric hash as a tag', () => {
+  const source = 'foo#bar and issue #123 and c#sharp';
+  assert.equal(tagRanges(source).length, 0);
+});
+
+test('ignores tags inside code and link destinations', () => {
+  const source = '`#notreal` and [a](url#frag) and\n```\n#alsofake\n```';
+  assert.equal(tagRanges(source).length, 0);
 });
 
 test('parses bullet levels and marker offsets', () => {

@@ -17,17 +17,31 @@ All notable changes to LoomMark are documented here. This project follows
   regions.
 - `loommark.tableStyle` adds a booktabs-style `ruled` three-line table appearance alongside the
   default bordered `grid`.
+- `#tag` chips: standalone hashtags render as pills without hiding the `#`, since it carries
+  meaning. Heading markers, mid-word hashes, and numeric references like `#123` are not treated
+  as tags.
+- Find and replace inside the editor (Ctrl/Cmd+F), backed by CodeMirror's search panel and styled
+  to match the VS Code find widget.
 
 ### Changed
 
 - The in-editor outline is now an overlay drawer opened from a floating control in the top-right
   corner. It no longer reserves a column, so the editor uses the full width until the outline is
   opened. Escape closes it.
+- Local resources for images and links now resolve within the document's whole workspace folder,
+  not just its own directory, so relative paths that climb to a sibling folder (`../assets/x.png`)
+  load correctly.
 
 ### Fixed
 
 - The third-party license generator now matches package license filenames case-insensitively, so
   regeneration on case-sensitive filesystems no longer drops license texts.
+- Image and link destinations wrapped in angle brackets (`` [label](<path with spaces>) ``) now
+  parse correctly instead of including the brackets in the resolved path.
+- Text inside image and link destinations (a filename like `a_b_c.png`) is no longer scanned for
+  emphasis, so underscores in paths and titles don't get partially hidden as italics.
+- Single-character bold, italic, and strikethrough (`**a**`, `*a*`, `_a_`, `~~a~~`) now hide their
+  markers like longer spans; previously the markers stayed visible permanently.
 
 ## [0.2.0] - 2026-07-19
 

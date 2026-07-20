@@ -448,6 +448,17 @@ body.outline-collapsed #outline {
   opacity: 0.7;
 }
 
+/* #tag chips. The `#` stays part of the editable text (unlike heading/emphasis markers,
+   it carries meaning here), so this only adds pill styling, never hides anything. */
+#editor > .cm-editor .cm-loommark-tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 16%, transparent);
+  color: var(--vscode-textLink-foreground);
+  font-size: 0.92em;
+  font-weight: 500;
+}
+
 #editor > .cm-editor .cm-loommark-inline-code {
   padding: 1px 4px;
   border: 1px solid var(--vscode-widget-border);
@@ -878,6 +889,95 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   height: 2px;
   vertical-align: middle;
   background: var(--vscode-widget-border, #666666);
+}
+
+/* CodeMirror's built-in find/replace panel (@codemirror/search), restyled to match the
+   VS Code find widget instead of its plain default appearance. */
+#editor > .cm-editor .cm-panel.cm-search {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  padding: 6px 34px 6px 10px;
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border));
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+}
+
+#editor > .cm-editor .cm-panel.cm-search br {
+  flex-basis: 100%;
+  block-size: 0;
+}
+
+#editor > .cm-editor .cm-panel.cm-search .cm-textfield {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+#editor > .cm-editor .cm-panel.cm-search .cm-textfield:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+#editor > .cm-editor .cm-panel.cm-search .cm-button {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 3px;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
+  background-image: none;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  cursor: pointer;
+  font: inherit;
+}
+
+#editor > .cm-editor .cm-panel.cm-search .cm-button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+}
+
+#editor > .cm-editor .cm-panel.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+#editor > .cm-editor .cm-panel.cm-search button[name="close"] {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+#editor > .cm-editor .cm-panel.cm-search button[name="close"]:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#editor > .cm-editor .cm-searchMatch {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgb(234 92 0 / 33%));
+}
+
+#editor > .cm-editor .cm-searchMatch-selected {
+  background: var(--vscode-editor-findMatchBackground, rgb(246 185 77 / 50%));
 }
 
 @media (max-width: 700px) {

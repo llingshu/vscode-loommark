@@ -157,11 +157,16 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
   ): Promise<void> {
     this.setActiveDocument(document, panel);
     const documentDirectory = vscode.Uri.joinPath(document.uri, '..');
+    // Relative image and link paths may climb above the document's own directory (a
+    // sibling assets folder, for example). Grant the containing workspace folder when
+    // one exists so those resolve; a loose file outside any workspace keeps the
+    // narrower default of only its own directory.
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
     panel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
-        documentDirectory,
+        workspaceFolder?.uri ?? documentDirectory,
       ],
     };
     panel.webview.html = this.html(panel.webview);

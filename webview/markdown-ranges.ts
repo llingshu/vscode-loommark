@@ -94,7 +94,9 @@ export function detailedFencedCodeRanges(source: string): FencedCodeRange[] {
 
 export type ImageRange = { from: number; to: number; alt: string; src: string; ownLine: boolean };
 
-const imagePattern = /!\[([^\]\n]*)\]\(([^\s)]+)(?:\s+["'][^"'\n]*["'])?\)/g;
+// The destination is either a CommonMark `<...>` wrapped form (allows spaces, no `)`
+// ambiguity) or a bare token that stops at unescaped whitespace or a closing paren.
+const imagePattern = /!\[([^\]\n]*)\]\((?:<([^<>\n]*)>|([^\s)]+))(?:\s+["'][^"'\n]*["'])?\)/g;
 
 export function imageRanges(source: string): ImageRange[] {
   const excluded = codeRanges(source);
@@ -110,9 +112,48 @@ export function imageRanges(source: string): ImageRange[] {
       from,
       to,
       alt: match[1],
-      src: match[2],
+      src: match[2] ?? match[3],
       ownLine: source.slice(lineStart, lineEnd).trim() === match[0],
     });
+  }
+  return results;
+}
+
+// Destination ranges for `[label](dest)` and `![alt](dest)`, covering only the
+// parenthesized `dest` part (including a `<...>` wrapper when present), not the label.
+// Other scanners (emphasis, etc.) exclude these so a filename like `a_b_c.png` inside a
+// destination is never mistaken for Markdown syntax.
+const linkOrImagePattern = /!?\[[^\]\n]*\]\((?:<[^<>\n]*>|[^\s)]+)(?:\s+["'][^"'\n]*["'])?\)/g;
+
+export function linkDestinationRanges(source: string): SourceRange[] {
+  const excluded = fencedCodeRanges(source);
+  const ranges: SourceRange[] = [];
+  for (const match of source.matchAll(linkOrImagePattern)) {
+    const from = match.index ?? 0;
+    if (containsPosition(excluded, from)) continue;
+    const openParen = match[0].indexOf('](');
+    const destFrom = from + openParen + 2;
+    const destTo = from + match[0].length - 1;
+    ranges.push({ from: destFrom, to: destTo });
+  }
+  return ranges;
+}
+
+export type TagRange = { from: number; to: number; name: string };
+
+// Requires a letter/underscore right after `#` (excludes issue references like `#123`) and
+// forbids a word character or another `#` immediately before it (excludes `foo#bar`, `##`
+// heading markers, and C#). A heading's `#` is always followed by whitespace, which this
+// pattern never allows, so the two never overlap.
+const tagPattern = /(?<![\w#])#([A-Za-z_][\w/-]*)/g;
+
+export function tagRanges(source: string): TagRange[] {
+  const excluded = [...codeRanges(source), ...linkDestinationRanges(source)];
+  const results: TagRange[] = [];
+  for (const match of source.matchAll(tagPattern)) {
+    const from = match.index ?? 0;
+    if (containsPosition(excluded, from)) continue;
+    results.push({ from, to: from + match[0].length, name: match[1] });
   }
   return results;
 }

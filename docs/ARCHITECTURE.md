@@ -144,7 +144,8 @@ used as-is. Image loading remains restricted by `localResourceRoots` and the Web
 
 - The Webview CSP denies all sources by default.
 - Scripts require a per-document nonce.
-- Local resources are limited to the extension distribution and document directory.
+- Local resources are limited to the extension distribution and, when the document belongs to an
+  open workspace folder, that folder; otherwise only the document's own directory.
 - Rendered text is built through DOM APIs or CodeMirror, not arbitrary `innerHTML` injection.
 - Protocol messages are validated before use.
 - Diagnostic reports are copied only after an explicit user command.
