@@ -43,6 +43,8 @@ All notable changes to LoomMark are documented here. This project follows
   emphasis, so underscores in paths and titles don't get partially hidden as italics.
 - Single-character bold, italic, and strikethrough (`**a**`, `*a*`, `_a_`, `~~a~~`) now hide their
   markers like longer spans; previously the markers stayed visible permanently.
+- The packaged VSIX no longer includes the Node test bundle output (`out/test/`), which was
+  unintentionally shipped because `.vscodeignore` never excluded it.
 
 ## [0.2.0] - 2026-07-19
 
