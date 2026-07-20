@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const metadata = JSON.parse(await readFile('dist/metafile.json', 'utf8'));
@@ -12,15 +12,20 @@ for (const input of Object.keys(metadata.inputs)) {
   packageRoots.add(parts.slice(0, nodeModules + 1 + nameLength).join('/'));
 }
 
+// Package license files are not consistently cased (e.g. `license` vs `LICENSE`). A
+// case-sensitive filesystem (Linux, including GitHub Actions runners) silently misses
+// lowercase filenames if matched by exact case, so this compares names case-insensitively.
 async function firstExisting(root, names) {
+  let entries;
+  try {
+    entries = await readdir(root);
+  } catch {
+    return undefined;
+  }
+  const byLowerCase = new Map(entries.map((entry) => [entry.toLowerCase(), entry]));
   for (const name of names) {
-    const candidate = path.join(root, name);
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Try the next conventional license filename.
-    }
+    const match = byLowerCase.get(name.toLowerCase());
+    if (match) return path.join(root, match);
   }
   return undefined;
 }
