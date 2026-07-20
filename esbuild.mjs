@@ -25,7 +25,8 @@ const builds = [
     outfile: 'dist/webview.js',
     platform: 'browser',
     format: 'iife',
-    loader: { '.woff': 'dataurl', '.woff2': 'dataurl', '.ttf': 'dataurl' },
+    // The webview runs in Chromium, which always prefers woff2; drop legacy font fallbacks.
+    loader: { '.woff': 'empty', '.woff2': 'dataurl', '.ttf': 'empty' },
   },
 ];
 

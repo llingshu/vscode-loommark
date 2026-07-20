@@ -251,6 +251,30 @@ export function listItemRanges(source: string): ListItemRange[] {
   return results;
 }
 
+export type MathRange = { from: number; to: number; tex: string; display: boolean };
+
+const displayMathPattern = /\$\$([\s\S]+?)\$\$/g;
+const inlineMathPattern = /(?<![\\$])\$(?!\s|\$)([^$\n]+?)(?<![\s\\])\$(?!\d|\$)/g;
+
+export function mathRanges(source: string): MathRange[] {
+  const excluded = codeRanges(source);
+  const results: MathRange[] = [];
+  for (const match of source.matchAll(displayMathPattern)) {
+    const from = match.index ?? 0;
+    if (containsPosition(excluded, from)) continue;
+    const tex = match[1].trim();
+    if (!tex) continue;
+    results.push({ from, to: from + match[0].length, tex, display: true });
+  }
+  const displayRanges = results.map(({ from, to }) => ({ from, to }));
+  for (const match of source.matchAll(inlineMathPattern)) {
+    const from = match.index ?? 0;
+    if (containsPosition(excluded, from) || containsPosition(displayRanges, from)) continue;
+    results.push({ from, to: from + match[0].length, tex: match[1], display: false });
+  }
+  return results.sort((left, right) => left.from - right.from);
+}
+
 export type QuoteLineRange = { lineFrom: number; markerFrom: number; markerTo: number; depth: number };
 
 export function quoteLineRanges(source: string): QuoteLineRange[] {

@@ -6,6 +6,16 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- KaTeX-rendered math: inline `$...$` and display `$$...$$` blocks follow the same
+  render-outside/edit-inside model as other progressive syntax. Currency-like text stays plain.
+
+### Fixed
+
+- The third-party license generator now matches package license filenames case-insensitively, so
+  regeneration on case-sensitive filesystems no longer drops license texts.
+
 ## [0.2.0] - 2026-07-19
 
 ### Added

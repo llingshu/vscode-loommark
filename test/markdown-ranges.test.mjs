@@ -7,6 +7,7 @@ import {
   horizontalRuleRanges,
   imageRanges,
   listItemRanges,
+  mathRanges,
   quoteLineRanges,
   tableRanges,
 } from '../out/test/markdown-ranges.mjs';
@@ -129,4 +130,32 @@ test('parses horizontal rules and excludes code', () => {
   const rules = horizontalRuleRanges(source);
   assert.equal(rules.length, 3);
   assert.equal(source.slice(rules[0].from, rules[0].to), '---');
+});
+
+test('parses inline math', () => {
+  const source = 'Euler: $e^{i\\pi} + 1 = 0$ is neat';
+  const [math] = mathRanges(source);
+  assert.equal(math.tex, 'e^{i\\pi} + 1 = 0');
+  assert.equal(math.display, false);
+  assert.equal(source.slice(math.from, math.to), '$e^{i\\pi} + 1 = 0$');
+});
+
+test('parses display math including multi-line blocks', () => {
+  const source = 'before\n$$\n\\int_0^1 x^2 \\, dx\n$$\nafter and $$a+b$$ inline';
+  const blocks = mathRanges(source);
+  assert.equal(blocks.length, 2);
+  assert.equal(blocks[0].display, true);
+  assert.equal(blocks[0].tex, '\\int_0^1 x^2 \\, dx');
+  assert.equal(blocks[1].tex, 'a+b');
+  assert.equal(blocks[1].display, true);
+});
+
+test('does not treat currency as math', () => {
+  const source = 'It costs $5 and $10 total, $ 20 and 30$ too';
+  assert.equal(mathRanges(source).length, 0);
+});
+
+test('ignores math inside code', () => {
+  const source = '```\n$x+y$\n```\nand `$a$` too';
+  assert.equal(mathRanges(source).length, 0);
 });

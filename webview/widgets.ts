@@ -1,5 +1,7 @@
 import { EditorView, WidgetType } from '@codemirror/view';
-import type { FencedCodeRange, ImageRange, TableCell, TableRange } from './markdown-ranges';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+import type { FencedCodeRange, ImageRange, MathRange, TableCell, TableRange } from './markdown-ranges';
 import type { TableMode } from '../src/protocol';
 
 export const codeLanguages = [
@@ -188,6 +190,42 @@ export class CheckboxWidget extends WidgetType {
       });
     });
     return input;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+export class MathWidget extends WidgetType {
+  constructor(
+    private readonly math: MathRange,
+    private readonly block: boolean,
+  ) {
+    super();
+  }
+
+  eq(other: MathWidget): boolean {
+    return this.math.from === other.math.from
+      && this.math.tex === other.math.tex
+      && this.math.display === other.math.display
+      && this.block === other.block;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement(this.block ? 'div' : 'span');
+    container.className = `cm-loommark-math${this.block ? ' is-block' : ''}`;
+    container.contentEditable = 'false';
+    katex.render(this.math.tex, container, {
+      displayMode: this.math.display,
+      throwOnError: false,
+    });
+    container.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.math.from }, scrollIntoView: true });
+      view.focus();
+    });
+    return container;
   }
 
   ignoreEvent(): boolean {

@@ -182,9 +182,11 @@
     "@codemirror/view": "^6.43.6",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.1",
+    "katex": "^0.18.1",
     "mdast-util-from-markdown": "^2.0.3"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "@types/node": "^24.0.0",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.6.0",

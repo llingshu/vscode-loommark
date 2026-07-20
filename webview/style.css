@@ -775,6 +775,21 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   box-shadow: inset 6px 0 0 -3px var(--vscode-textBlockQuote-border, #888888);
 }
 
+#editor > .cm-editor .cm-loommark-math {
+  cursor: pointer;
+}
+
+#editor > .cm-editor .cm-loommark-math.is-block {
+  display: block;
+  padding: 6px 0;
+  text-align: center;
+}
+
+#editor > .cm-editor .cm-loommark-math:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-radius: 3px;
+}
+
 #editor > .cm-editor .cm-loommark-hr {
   display: inline-block;
   width: 100%;

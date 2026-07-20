@@ -23,6 +23,16 @@ Inline ![icon](./missing.png) placeholder demo.
 
 1. Ordered stays numeric
 
+## Math
+
+Euler's identity $e^{i\pi} + 1 = 0$ inline, and a display block:
+
+$$
+\int_0^1 x^2 \, dx = \frac{1}{3}
+$$
+
+Prices like $5 and $10 must stay plain text.
+
 ## Quote and rule
 
 > Outer quote

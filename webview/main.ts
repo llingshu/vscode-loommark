@@ -30,6 +30,7 @@ import {
   horizontalRuleRanges,
   imageRanges,
   listItemRanges,
+  mathRanges,
   quoteLineRanges,
   tableRanges,
 } from './markdown-ranges';
@@ -39,6 +40,7 @@ import {
   CodeToolbarWidget,
   HorizontalRuleWidget,
   ImageWidget,
+  MathWidget,
   TableWidget,
 } from './widgets';
 import type { EditorTheme, HostToWebview, OutlineMode, TableMode, WebviewToHost } from '../src/protocol';
@@ -254,6 +256,32 @@ const listField = selectionAwareField((state) => {
     if (item.task) {
       ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
         .range(item.task.boxFrom, item.task.boxTo));
+    }
+  }
+  return Decoration.set(ranges, true);
+});
+
+const mathField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  for (const math of mathRanges(source)) {
+    const startLine = state.doc.lineAt(math.from);
+    const endLine = state.doc.lineAt(math.to);
+    const multiLine = startLine.number !== endLine.number;
+    const ownLine = multiLine
+      || source.slice(startLine.from, endLine.to).trim() === source.slice(math.from, math.to);
+    if (math.display && ownLine) {
+      if (cursor >= startLine.from && cursor <= endLine.to) continue;
+      ranges.push(Decoration.replace({
+        widget: new MathWidget(math, true),
+        block: true,
+      }).range(startLine.from, endLine.to));
+    } else {
+      if (cursor >= math.from && cursor <= math.to) continue;
+      ranges.push(Decoration.replace({
+        widget: new MathWidget(math, false),
+      }).range(math.from, math.to));
     }
   }
   return Decoration.set(ranges, true);
@@ -499,6 +527,7 @@ function createEditor(text: string): void {
         imageField,
         listField,
         quoteField,
+        mathField,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),
