@@ -5,6 +5,7 @@
 artifacts/**
 docs/**
 node_modules/**
+out/**
 scripts/**
 src/**
 test/**
