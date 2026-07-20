@@ -23,6 +23,8 @@ All notable changes to LoomMark are documented here. This project follows
 - Find and replace inside the editor (Ctrl/Cmd+F), backed by CodeMirror's search panel and styled
   as a floating card anchored to the editor's top-right corner, matching VS Code's native find
   widget instead of a full-width bar clipped to the editor column.
+- Backslash escapes (`\*`, `\_`, `\#`, `\!`, and other CommonMark-escapable punctuation) hide the
+  backslash and leave the character as plain text instead of live Markdown syntax.
 
 ### Changed
 
@@ -45,6 +47,9 @@ All notable changes to LoomMark are documented here. This project follows
   markers like longer spans; previously the markers stayed visible permanently.
 - The packaged VSIX no longer includes the Node test bundle output (`out/test/`), which was
   unintentionally shipped because `.vscodeignore` never excluded it.
+- A backslash-escaped delimiter (`\*`, `\#`, `\![`) is no longer treated as live Markdown syntax;
+  previously an escaped marker could still trigger emphasis, tag, image, or link rendering, or
+  incorrectly pair with unrelated real syntax later in the same line.
 
 ## [0.2.0] - 2026-07-19
 

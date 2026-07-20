@@ -28,8 +28,10 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  escapedCharRanges,
   horizontalRuleRanges,
   imageRanges,
+  isEscaped,
   linkDestinationRanges,
   listItemRanges,
   mathRanges,
@@ -158,6 +160,20 @@ const tagDecorations = ViewPlugin.fromClass(class {
   update(update: ViewUpdate): void {
     if (update.docChanged || update.viewportChanged) {
       this.decorations = buildTagDecorations(update.view);
+    }
+  }
+}, { decorations: (value) => value.decorations });
+
+const escapedCharDecorations = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = buildEscapedCharDecorations(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (update.docChanged || update.selectionSet) {
+      this.decorations = buildEscapedCharDecorations(update.view);
     }
   }
 }, { decorations: (value) => value.decorations });
@@ -417,9 +433,12 @@ function buildInlineDecorations(view: EditorView): DecorationSet {
     for (const match of source.matchAll(pattern)) {
       const from = match.index ?? 0;
       const to = from + match[0].length;
-      if (containsPosition(excluded, from)) continue;
+      if (containsPosition(excluded, from) || isEscaped(source, from)) continue;
       const markerLength = match[0].startsWith('**') || match[0].startsWith('__')
         || match[0].startsWith('~~') ? 2 : 1;
+      // A backslash-escaped closing marker (`**bold\**`) is not a real delimiter either;
+      // leave the whole span as plain text instead of treating it as emphasis.
+      if (isEscaped(source, to - markerLength)) continue;
       addHiddenSyntax(ranges, cursor, from, from + markerLength);
       addHiddenSyntax(ranges, cursor, to - markerLength, to);
     }
@@ -438,8 +457,8 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
   for (const match of source.matchAll(wikiPattern)) {
     const from = match.index ?? 0;
     const to = from + match[0].length;
+    if (containsPosition(excluded, from) || isEscaped(source, from)) continue;
     wikiRanges.push({ from, to });
-    if (containsPosition(excluded, from)) continue;
     const target = match[1].trim();
     const pipe = match[0].indexOf('|');
     const labelFrom = pipe < 0 ? from + 2 : from + pipe + 1;
@@ -460,7 +479,7 @@ function buildLinkDecorations(view: EditorView): DecorationSet {
       const from = match.index ?? 0;
       const to = from + match[0].length;
       if (from > 0 && source[from - 1] === '!') continue;
-      if (containsPosition(excluded, from)) continue;
+      if (containsPosition(excluded, from) || isEscaped(source, from)) continue;
       if (wikiRanges.some((range) => from < range.to && to > range.from)) continue;
       const labelFrom = from + 1;
       const labelTo = labelFrom + match[1].length;
@@ -480,6 +499,17 @@ function buildTagDecorations(view: EditorView): DecorationSet {
     ranges.push(Decoration.mark({
       attributes: { class: 'cm-loommark-tag' },
     }).range(tag.from, tag.to));
+  }
+  return Decoration.set(ranges, true);
+}
+
+function buildEscapedCharDecorations(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const cursor = view.state.selection.main.head;
+  const source = view.state.doc.toString();
+  for (const escape of escapedCharRanges(source)) {
+    // Hide only the backslash; the escaped character stays visible as plain text.
+    addHiddenSyntax(ranges, cursor, escape.from, escape.from + 1);
   }
   return Decoration.set(ranges, true);
 }
@@ -604,6 +634,7 @@ function createEditor(text: string): void {
         codeCursorAttributes,
         linkDecorations,
         tagDecorations,
+        escapedCharDecorations,
         syntaxHighlighting(markdownHighlightStyle),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || applyingHostUpdate) return;

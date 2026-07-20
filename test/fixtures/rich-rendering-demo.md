@@ -33,6 +33,14 @@ $$
 
 Prices like $5 and $10 must stay plain text.
 
+## Tags
+
+Ideas tagged #idea and #project/alpha, plus non-tags: issue #123 and c#sharp.
+
+## Escaping
+
+Literal characters: \*not bold\*, \_not italic\_, \#not a tag, \![not an image](x.png).
+
 ## Quote and rule
 
 > Outer quote

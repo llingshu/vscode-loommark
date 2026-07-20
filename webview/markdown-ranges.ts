@@ -20,6 +20,18 @@ export function containsPosition(ranges: SourceRange[], position: number): boole
   return ranges.some((range) => position >= range.from && position < range.to);
 }
 
+// A character is escaped when preceded by an odd number of backslashes: `\*` escapes the
+// star, but `\\*` is an escaped backslash followed by an unescaped, live star.
+export function isEscaped(source: string, position: number): boolean {
+  let backslashes = 0;
+  let index = position - 1;
+  while (index >= 0 && source[index] === '\\') {
+    backslashes++;
+    index--;
+  }
+  return backslashes % 2 === 1;
+}
+
 export function codeRanges(source: string): SourceRange[] {
   const ranges = fencedCodeRanges(source);
   for (const range of inlineCodeRanges(source, ranges)) ranges.push(range);
@@ -104,7 +116,7 @@ export function imageRanges(source: string): ImageRange[] {
   for (const match of source.matchAll(imagePattern)) {
     const from = match.index ?? 0;
     const to = from + match[0].length;
-    if (containsPosition(excluded, from)) continue;
+    if (containsPosition(excluded, from) || isEscaped(source, from)) continue;
     const lineStart = source.lastIndexOf('\n', from - 1) + 1;
     const lineBreak = source.indexOf('\n', to);
     const lineEnd = lineBreak < 0 ? source.length : lineBreak;
@@ -139,6 +151,25 @@ export function linkDestinationRanges(source: string): SourceRange[] {
   return ranges;
 }
 
+// CommonMark's escapable ASCII punctuation, as character-class ranges: !"#$%&'()*+,-./
+// then :;<=>? then @ then [\]^_` then {|}~. A leading backslash before any of these hides
+// the backslash and leaves the character as plain text instead of live Markdown syntax.
+// Matching left to right naturally reproduces the odd/even backslash-run pairing rule:
+// each match consumes two characters, so `\\\*` pairs as `\\` (escaped backslash) then
+// `\*` (escaped star), while `\\*` pairs as `\\` alone, leaving the star live.
+const escapableCharPattern = /\\[!-/:-@[-`{-~]/g;
+
+export function escapedCharRanges(source: string): SourceRange[] {
+  const excluded = codeRanges(source);
+  const results: SourceRange[] = [];
+  for (const match of source.matchAll(escapableCharPattern)) {
+    const from = match.index ?? 0;
+    if (containsPosition(excluded, from)) continue;
+    results.push({ from, to: from + 2 });
+  }
+  return results;
+}
+
 export type TagRange = { from: number; to: number; name: string };
 
 // Requires a letter/underscore right after `#` (excludes issue references like `#123`) and
@@ -152,7 +183,7 @@ export function tagRanges(source: string): TagRange[] {
   const results: TagRange[] = [];
   for (const match of source.matchAll(tagPattern)) {
     const from = match.index ?? 0;
-    if (containsPosition(excluded, from)) continue;
+    if (containsPosition(excluded, from) || isEscaped(source, from)) continue;
     results.push({ from, to: from + match[0].length, name: match[1] });
   }
   return results;

@@ -24,6 +24,7 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Inline and display math rendered with KaTeX.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
 - `#tag` chips that stay part of the editable text.
+- Backslash escapes (`\*`, `\#`, `\!`, ...) turn off Markdown syntax for a single character.
 - Find and replace inside the editor (Ctrl/Cmd+F), styled like VS Code's native find widget.
 - Obsidian-style `[[wiki links]]` and `[[target|label]]` without conversion to standard links.
 - Workspace Markdown file completion inside `[[...]]`.
@@ -155,6 +156,13 @@ tags.
 
 Ctrl/Cmd+F opens a find panel inside the editor with case-sensitive, regular-expression, and
 whole-word toggles, plus replace and replace-all. Escape closes it.
+
+## Escaping
+
+A backslash before CommonMark's escapable punctuation (``!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~``) hides
+the backslash and renders the character as plain text instead of live Markdown syntax:
+`\*not bold\*`, `\#not a tag`, `\![not an image](x.png)`. Escapes are ignored inside code, matching
+CommonMark.
 
 ## Privacy
 

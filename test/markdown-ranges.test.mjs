@@ -4,8 +4,10 @@ import {
   detailedFencedCodeRanges,
   fencedCodeRanges,
   inlineCodeRanges,
+  escapedCharRanges,
   horizontalRuleRanges,
   imageRanges,
+  isEscaped,
   linkDestinationRanges,
   listItemRanges,
   mathRanges,
@@ -109,6 +111,11 @@ test('parses a plain parent-directory image path', () => {
   assert.equal(image.src, '../Figures_all/Figure-1a-experiment_design.png');
 });
 
+test('does not treat an escaped image marker as an image', () => {
+  const source = 'literal \\![alt](a.png) text';
+  assert.equal(imageRanges(source).length, 0);
+});
+
 test('finds the destination-only range of an image, excluding the label', () => {
   const source = '![Fig 1a](<../Figures_all/Figure-1a-experiment_design.png>)';
   const [range] = linkDestinationRanges(source);
@@ -138,6 +145,50 @@ test('does not treat a heading marker as a tag', () => {
 test('does not treat a mid-word hash or a numeric hash as a tag', () => {
   const source = 'foo#bar and issue #123 and c#sharp';
   assert.equal(tagRanges(source).length, 0);
+});
+
+test('does not treat an escaped hash as a tag', () => {
+  const source = 'literal \\#idea here';
+  assert.equal(tagRanges(source).length, 0);
+});
+
+test('isEscaped checks for an odd number of preceding backslashes', () => {
+  assert.equal(isEscaped('\\*', 1), true);
+  assert.equal(isEscaped('\\\\*', 2), false);
+  assert.equal(isEscaped('\\\\\\*', 3), true);
+  assert.equal(isEscaped('*', 0), false);
+});
+
+test('finds a single escaped punctuation character', () => {
+  const source = 'literal \\* star';
+  const [range] = escapedCharRanges(source);
+  assert.equal(source.slice(range.from, range.to), '\\*');
+});
+
+test('pairs up a run of backslashes left to right like CommonMark', () => {
+  // \\* is an escaped backslash (one range) followed by a live, unescaped star (no range for it).
+  const source = '\\\\*';
+  const ranges = escapedCharRanges(source);
+  assert.equal(ranges.length, 1);
+  assert.equal(source.slice(ranges[0].from, ranges[0].to), '\\\\');
+});
+
+test('a run of three backslashes escapes both the backslash and the following star', () => {
+  const source = '\\\\\\*';
+  const ranges = escapedCharRanges(source);
+  assert.equal(ranges.length, 2);
+  assert.equal(source.slice(ranges[0].from, ranges[0].to), '\\\\');
+  assert.equal(source.slice(ranges[1].from, ranges[1].to), '\\*');
+});
+
+test('does not escape a backslash followed by a non-punctuation character', () => {
+  const source = 'a\\nb';
+  assert.equal(escapedCharRanges(source).length, 0);
+});
+
+test('ignores escape sequences inside code', () => {
+  const source = '`\\*` and\n```\n\\*\n```';
+  assert.equal(escapedCharRanges(source).length, 0);
 });
 
 test('ignores tags inside code and link destinations', () => {

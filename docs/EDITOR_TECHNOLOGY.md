@@ -72,6 +72,17 @@ The implementation uses two complementary mechanisms:
 Scanners are appropriate only when they are deterministic, preserve source offsets, and explicitly
 exclude code ranges. They must never be used as a serializer.
 
+### Backslash Escapes
+
+`isEscaped(source, position)` checks whether a character is preceded by an odd number of
+backslashes and is used by every scanner that recognizes a single-character marker (emphasis,
+tags, images, links). Hiding the backslash itself is a separate scanner, `escapedCharRanges`,
+matched left to right over CommonMark's escapable ASCII punctuation; matching two characters per
+step naturally reproduces the odd/even backslash-run pairing rule without extra bookkeeping. This
+is a match-level check, not a parser: an escaped delimiter in the middle of otherwise-real emphasis
+can still cause the surrounding span to fall back to plain text rather than finding the next valid
+pairing, since these scanners do not resolve delimiter runs the way a full CommonMark parser does.
+
 ## Wiki-Link Completion
 
 The extension host finds `*.md` and `*.markdown` files, excludes generated/vendor directories, and
