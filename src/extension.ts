@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
-import type { HostToWebview, OutlineMode, EditorTheme, TableMode } from './protocol';
+import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle } from './protocol';
 import { isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
 
@@ -71,7 +71,7 @@ async function syncDefaultEditorAssociation(): Promise<void> {
   }
 }
 
-function editorConfiguration(): { syncDelay: number; theme: EditorTheme; outline: OutlineMode; table: TableMode } {
+function editorConfiguration(): EditorConfiguration {
   const configuration = vscode.workspace.getConfiguration('loommark');
   const configuredTheme = configuration.get<string>('theme', 'vscode');
   const theme: EditorTheme = ['crepe', 'frame', 'nord'].includes(configuredTheme)
@@ -82,11 +82,14 @@ function editorConfiguration(): { syncDelay: number; theme: EditorTheme; outline
     ? configuredOutline as OutlineMode
     : 'both';
   const table: TableMode = configuration.get<string>('table', 'rich') === 'source' ? 'source' : 'rich';
+  const tableStyle: TableStyle = configuration.get<string>('tableStyle', 'grid') === 'ruled' ? 'ruled' : 'grid';
   return {
     syncDelay: configuration.get('syncDelay', 180),
     theme,
     outline,
     table,
+    tableStyle,
+    keyboardEditing: configuration.get('keyboardEditing', false),
   };
 }
 
@@ -308,11 +311,14 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
 <body>
   <div id="workspace">
     <main id="editor" aria-label="Markdown editor"></main>
+    <button id="outline-fab" type="button" title="Show outline" aria-label="Show outline" aria-controls="outline" aria-expanded="false">
+      <span class="outline-fab-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
     <aside id="outline" aria-label="Document outline">
       <header class="outline-header">
         <span class="outline-title">Outline</span>
-        <button id="outline-toggle" type="button" title="Collapse outline" aria-label="Collapse outline" aria-expanded="true">
-          <span class="outline-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+        <button id="outline-toggle" type="button" title="Hide outline" aria-label="Hide outline" aria-controls="outline" aria-expanded="true">
+          <span class="outline-toggle-icon" aria-hidden="true"></span>
         </button>
       </header>
       <nav class="outline-nav" aria-label="Headings">

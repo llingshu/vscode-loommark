@@ -21,7 +21,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Obsidian-style `[[wiki links]]` and `[[target|label]]` without conversion to standard links.
 - Workspace Markdown file completion inside `[[...]]`.
 - Ctrl/Cmd + click navigation for relative Markdown links and wiki links.
-- In-editor and native Explorer outlines generated from source text.
+- An in-editor outline drawer that opens from a floating control, plus a native Explorer outline,
+  both generated from source text.
 - Minimal VS Code `WorkspaceEdit` synchronization with stale-update protection.
 - Built-in diagnostics command for inspecting the Webview, synchronization state, links, completion,
   and code-block decorations.
@@ -68,6 +69,8 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.openByDefault` | `true` | Associate `*.md` and `*.markdown` with LoomMark at user scope. |
 | `loommark.theme` | `vscode` | Select `vscode`, `crepe`, `frame`, or `nord`. |
 | `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
+| `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
+| `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
 

@@ -8,7 +8,7 @@ import {
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { EditorState, type Range, StateEffect, StateField } from '@codemirror/state';
+import { EditorState, type Range, RangeSet, RangeValue, StateEffect, StateField } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -43,7 +43,7 @@ import {
   MathWidget,
   TableWidget,
 } from './widgets';
-import type { EditorTheme, HostToWebview, OutlineMode, TableMode, WebviewToHost } from '../src/protocol';
+import type { EditorConfiguration, HostToWebview, TableMode, TableStyle, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
   postMessage(message: WebviewToHost): void;
@@ -68,12 +68,15 @@ const outline = required<HTMLElement>('#outline');
 const outlineList = required<HTMLOListElement>('#outline-list');
 const outlineEmpty = required<HTMLElement>('#outline-empty');
 const outlineToggle = required<HTMLButtonElement>('#outline-toggle');
+const outlineFab = required<HTMLButtonElement>('#outline-fab');
 const savedState = vscode.getState();
 
 let sourceText = savedState?.text ?? '';
 let documentRevision = savedState?.documentRevision ?? 0;
 let resourceBase = '';
 let tableMode: TableMode = 'rich';
+let tableStyle: TableStyle = 'grid';
+let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
 let timer: number | undefined;
@@ -86,8 +89,7 @@ let lastHostLinkResult: Record<string, unknown> | undefined;
 let editorInitializationError: string | undefined;
 let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
-let outlineCollapsed = savedState?.outlineCollapsed
-  ?? window.matchMedia('(max-width: 700px)').matches;
+let outlineCollapsed = savedState?.outlineCollapsed ?? true;
 
 const headingDecorations = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
@@ -307,6 +309,40 @@ const quoteField = selectionAwareField((state) => {
   }
   return Decoration.set(ranges, true);
 });
+
+// Marks rendered images, tables, and math as atomic so keyboard cursor motion skips over them
+// instead of stepping in to reveal source. The set mirrors whatever those fields currently render,
+// so a range stops being atomic exactly when its widget yields to source (e.g. after a click).
+// Enabling keyboard editing empties the set, letting the cursor enter and edit with the keyboard.
+class AtomicMarker extends RangeValue {}
+const atomicMarker = new AtomicMarker();
+
+function buildAtomicRanges(state: EditorState): RangeSet<AtomicMarker> {
+  if (keyboardEditing) return RangeSet.empty;
+  const ranges: Range<AtomicMarker>[] = [];
+  for (const field of [tableField, imageField, mathField]) {
+    for (const iter = state.field(field).iter(); iter.value; iter.next()) {
+      ranges.push(atomicMarker.range(iter.from, iter.to));
+    }
+  }
+  return RangeSet.of(ranges, true);
+}
+
+const atomicRangesField = StateField.define<RangeSet<AtomicMarker>>({
+  create: buildAtomicRanges,
+  update(value, transaction) {
+    if (transaction.docChanged || transaction.selection
+      || transaction.effects.some((effect) => effect.is(decorationsRefresh))) {
+      return buildAtomicRanges(transaction.state);
+    }
+    return value.map(transaction.changes);
+  },
+});
+
+const keyboardAtomicRanges = [
+  atomicRangesField,
+  EditorView.atomicRanges.of((view) => view.state.field(atomicRangesField)),
+];
 
 function buildCodeToolbarDecorations(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
@@ -528,6 +564,7 @@ function createEditor(text: string): void {
         listField,
         quoteField,
         mathField,
+        keyboardAtomicRanges,
         codeCursorAttributes,
         linkDecorations,
         syntaxHighlighting(markdownHighlightStyle),
@@ -663,29 +700,41 @@ function refreshOutline(): void {
 
 function setOutlineCollapsed(collapsed: boolean): void {
   outlineCollapsed = collapsed;
-  outline.classList.toggle('collapsed', collapsed);
   document.body.classList.toggle('outline-collapsed', collapsed);
+  outline.setAttribute('aria-hidden', String(collapsed));
   outlineToggle.ariaExpanded = String(!collapsed);
-  outlineToggle.ariaLabel = collapsed ? 'Expand outline' : 'Collapse outline';
-  outlineToggle.title = collapsed ? 'Expand outline' : 'Collapse outline';
+  outlineFab.ariaExpanded = String(!collapsed);
   saveState();
 }
 
-function applyConfiguration(
-  nextSyncDelay: number,
-  theme: EditorTheme,
-  outlineMode: OutlineMode,
-  nextTableMode: TableMode,
-): void {
-  syncDelay = nextSyncDelay;
-  document.body.dataset.loommarkTheme = theme;
-  document.body.classList.toggle('editor-outline-disabled', outlineMode === 'explorer' || outlineMode === 'off');
-  const tableModeChanged = tableMode !== nextTableMode;
-  tableMode = nextTableMode;
-  if (tableModeChanged) editor?.dispatch({ effects: decorationsRefresh.of(null) });
+function applyConfiguration(config: EditorConfiguration): void {
+  syncDelay = config.syncDelay;
+  document.body.dataset.loommarkTheme = config.theme;
+  document.body.classList.toggle(
+    'editor-outline-disabled',
+    config.outline === 'explorer' || config.outline === 'off',
+  );
+  document.body.classList.toggle('loommark-table-ruled', config.tableStyle === 'ruled');
+  const needsRefresh = tableMode !== config.table
+    || tableStyle !== config.tableStyle
+    || keyboardEditing !== config.keyboardEditing;
+  tableMode = config.table;
+  tableStyle = config.tableStyle;
+  keyboardEditing = config.keyboardEditing;
+  if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 
-outlineToggle.addEventListener('click', () => setOutlineCollapsed(!outlineCollapsed));
+outlineToggle.addEventListener('click', () => {
+  setOutlineCollapsed(true);
+  outlineFab.focus();
+});
+outlineFab.addEventListener('click', () => {
+  setOutlineCollapsed(false);
+  outlineToggle.focus();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !outlineCollapsed) setOutlineCollapsed(true);
+});
 setOutlineCollapsed(outlineCollapsed);
 
 window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
@@ -695,12 +744,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
     documentRevision = message.revision;
     resourceBase = message.resourceBase;
     wikiFiles = message.wikiFiles;
-    applyConfiguration(message.syncDelay, message.theme, message.outline, message.table);
+    applyConfiguration(message);
     createEditor(message.text);
     status.textContent = '';
     saveState();
   } else if (message.type === 'configuration') {
-    applyConfiguration(message.syncDelay, message.theme, message.outline, message.table);
+    applyConfiguration(message);
   } else if (message.type === 'ack') {
     documentRevision = message.documentRevision;
     const sentGeneration = pendingEdits.get(message.clientRevision);

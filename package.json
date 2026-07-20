@@ -139,6 +139,24 @@
           "default": "rich",
           "description": "How GFM tables are edited inside the LoomMark editor."
         },
+        "loommark.tableStyle": {
+          "type": "string",
+          "enum": [
+            "grid",
+            "ruled"
+          ],
+          "enumDescriptions": [
+            "Bordered grid with lines around every cell.",
+            "Booktabs-style three-line table: heavy top and bottom rules, a header rule, and light row separators, with no vertical lines."
+          ],
+          "default": "grid",
+          "description": "Visual style used when rendering GFM tables."
+        },
+        "loommark.keyboardEditing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the text cursor to enter rendered images, tables, and math with the keyboard so they can be edited without a mouse. When disabled, the cursor skips over them and editing starts on click."
+        },
         "loommark.outline": {
           "type": "string",
           "enum": [

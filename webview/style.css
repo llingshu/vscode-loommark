@@ -16,21 +16,12 @@ body {
 }
 
 #workspace {
-  display: grid;
+  position: relative;
   min-height: 100vh;
-  grid-template-columns: minmax(0, 1fr) 248px;
 }
 
-body.outline-collapsed #workspace {
-  grid-template-columns: minmax(0, 1fr) 42px;
-}
-
-body.editor-outline-disabled #workspace,
-body.editor-outline-disabled.outline-collapsed #workspace {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body.editor-outline-disabled #outline {
+body.editor-outline-disabled #outline,
+body.editor-outline-disabled #outline-fab {
   display: none;
 }
 
@@ -40,15 +31,78 @@ body.editor-outline-disabled #outline {
   margin: 0 auto;
 }
 
+/* Floating control that opens the outline. It never occupies layout space, so the
+   editor stays full width until the reader asks for the outline. */
+#outline-fab {
+  position: fixed;
+  z-index: 25;
+  top: 12px;
+  right: 16px;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--vscode-widget-border, transparent);
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-foreground);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+#outline-fab:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-editorWidget-background));
+  opacity: 1;
+}
+
+#outline-fab:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+body:not(.outline-collapsed) #outline-fab {
+  display: none;
+}
+
+.outline-fab-icon {
+  display: grid;
+  width: 14px;
+  gap: 3px;
+}
+
+.outline-fab-icon i {
+  display: block;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.outline-fab-icon i:nth-child(2) { width: 10px; }
+.outline-fab-icon i:nth-child(3) { width: 6px; }
+
 #outline {
-  position: sticky;
+  position: fixed;
+  z-index: 26;
   top: 0;
+  right: 0;
   box-sizing: border-box;
+  width: min(84vw, 280px);
   height: 100vh;
   overflow: hidden;
   border-left: 1px solid var(--vscode-sideBar-border, var(--vscode-widget-border));
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   color: var(--vscode-sideBar-foreground, var(--vscode-editor-foreground));
+  box-shadow: -6px 0 20px rgb(0 0 0 / 22%);
+  transition: transform 0.18s ease;
+}
+
+body.outline-collapsed #outline {
+  transform: translateX(100%);
+  box-shadow: none;
 }
 
 .outline-header {
@@ -95,23 +149,29 @@ body.editor-outline-disabled #outline {
 }
 
 .outline-toggle-icon {
-  display: grid;
-  width: 14px;
-  gap: 3px;
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
-.outline-toggle-icon i {
-  display: block;
-  height: 1px;
+.outline-toggle-icon::before,
+.outline-toggle-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 12px;
+  height: 1.5px;
   background: currentColor;
 }
 
-.outline-toggle-icon i:nth-child(2) {
-  width: 10px;
+.outline-toggle-icon::before {
+  transform: rotate(45deg);
 }
 
-.outline-toggle-icon i:nth-child(3) {
-  width: 6px;
+.outline-toggle-icon::after {
+  transform: rotate(-45deg);
 }
 
 .outline-nav {
@@ -172,17 +232,6 @@ body.editor-outline-disabled #outline {
   margin: 12px 14px;
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
-}
-
-#outline.collapsed .outline-title,
-#outline.collapsed .outline-nav {
-  display: none;
-}
-
-#outline.collapsed .outline-header {
-  justify-content: center;
-  padding: 0;
-  border-bottom: 0;
 }
 
 /* Source-backed block editor. Inactive blocks are rendered views; only the
@@ -730,6 +779,39 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
   font-weight: 400;
 }
 
+/* Ruled (booktabs) table style: heavy top/bottom rules, a header rule, and light
+   separators between data rows, with no vertical lines. */
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table th,
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table td {
+  padding: 5px 20px 5px 0;
+  border: 0;
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--vscode-widget-border, #888888);
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table thead {
+  border-top: 2px solid var(--vscode-foreground, #cccccc);
+  border-bottom: 2px solid var(--vscode-foreground, #cccccc);
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table tbody {
+  border-bottom: 2px solid var(--vscode-foreground, #cccccc);
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table th {
+  background: transparent;
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table td:hover {
+  background: transparent;
+}
+
+body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
 #editor > .cm-editor .cm-loommark-image img {
   max-width: 100%;
   max-height: 480px;
@@ -799,26 +881,7 @@ body[data-loommark-theme="nord"].vscode-dark { background: #1b1c1d; color: #f8f9
 }
 
 @media (max-width: 700px) {
-  #workspace,
-  body.outline-collapsed #workspace {
-    display: block;
-  }
-
   #editor {
     width: calc(100% - 24px);
   }
-
-  #outline {
-    position: fixed;
-    z-index: 20;
-    right: 0;
-    width: min(82vw, 280px);
-    box-shadow: -4px 0 16px rgb(0 0 0 / 20%);
-  }
-
-  #outline.collapsed {
-    width: 42px;
-    box-shadow: none;
-  }
-
 }

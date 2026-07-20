@@ -10,6 +10,17 @@ All notable changes to LoomMark are documented here. This project follows
 
 - KaTeX-rendered math: inline `$...$` and display `$$...$$` blocks follow the same
   render-outside/edit-inside model as other progressive syntax. Currency-like text stays plain.
+- `loommark.keyboardEditing` lets the text cursor enter rendered images, tables, and math with the
+  keyboard for mouse-free editing. Disabled by default, so these render as atomic click-to-edit
+  regions.
+- `loommark.tableStyle` adds a booktabs-style `ruled` three-line table appearance alongside the
+  default bordered `grid`.
+
+### Changed
+
+- The in-editor outline is now an overlay drawer opened from a floating control in the top-right
+  corner. It no longer reserves a column, so the editor uses the full width until the outline is
+  opened. Escape closes it.
 
 ### Fixed
 
