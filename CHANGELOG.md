@@ -6,6 +6,8 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-20
+
 ### Added
 
 - KaTeX-rendered math: inline `$...$` and display `$$...$$` blocks follow the same
@@ -64,6 +66,7 @@ All notable changes to LoomMark are documented here. This project follows
 - Configurable default-editor association and synchronization delay.
 - Source-editor command in the custom editor title bar.
 
-[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/llingshu/vscode-loommark/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/llingshu/vscode-loommark/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/llingshu/vscode-loommark/releases/tag/v0.1.0
