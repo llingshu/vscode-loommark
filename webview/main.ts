@@ -119,12 +119,12 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: [tags.keyword, tags.operatorKeyword, tags.controlKeyword], color: '#ff7ab2' },
-  { tag: [tags.string, tags.special(tags.string)], color: '#a8cc8c' },
-  { tag: [tags.number, tags.bool, tags.null], color: '#d2a6ff' },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: '#82d2ce' },
-  { tag: [tags.typeName, tags.className], color: '#ffc66d' },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: '#8b8e98', fontStyle: 'italic' },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.controlKeyword], color: '#c678dd' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#98c379' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#d19a66' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: '#61afef' },
+  { tag: [tags.typeName, tags.className], color: '#e5c07b' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: '#5c6370', fontStyle: 'italic' },
 ]);
 
 const linkDecorations = ViewPlugin.fromClass(class {

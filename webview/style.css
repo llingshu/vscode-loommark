@@ -412,34 +412,34 @@ body.editor-outline-disabled #outline {
 /* Code blocks invert the editor theme: an obsidian slab in a light room,
    a paper card in a dark room. All surfaces derive from these variables. */
 body {
-  --loommark-code-surface: #14161b;
-  --loommark-code-surface-edge: #2c2f36;
-  --loommark-code-ink: #e8e9ec;
-  --loommark-code-gutter-ink: #575b66;
-  --loommark-code-gutter-edge: #22242b;
-  --loommark-code-selection: rgb(122 162 255 / 28%);
-  --loommark-code-titlebar: linear-gradient(#f7f8fa, #e9ebef);
-  --loommark-code-titlebar-ink: #3c3f45;
-  --loommark-code-titlebar-gloss: rgb(255 255 255 / 55%);
-  --loommark-code-titlebar-edge: #2c2f36;
-  --loommark-code-button-edge: #c3c6cc;
-  --loommark-code-button-surface: rgb(255 255 255 / 65%);
+  --loommark-code-surface: #282c34;
+  --loommark-code-surface-edge: #181a1f;
+  --loommark-code-ink: #abb2bf;
+  --loommark-code-gutter-ink: #4b5263;
+  --loommark-code-gutter-edge: #21252b;
+  --loommark-code-selection: #3e4451;
+  --loommark-code-titlebar: linear-gradient(#32363e, #2c3038);
+  --loommark-code-titlebar-ink: #9da5b4;
+  --loommark-code-titlebar-gloss: rgb(255 255 255 / 5%);
+  --loommark-code-titlebar-edge: #181a1f;
+  --loommark-code-button-edge: #4a4f59;
+  --loommark-code-button-surface: rgb(255 255 255 / 8%);
   --loommark-code-shadow: 0 18px 28px -20px rgb(14 16 22 / 60%);
 }
 
 body.vscode-dark {
-  --loommark-code-surface: #f6f6f4;
-  --loommark-code-surface-edge: #c7c9ce;
-  --loommark-code-ink: #1d1f24;
-  --loommark-code-gutter-ink: #9a9da6;
-  --loommark-code-gutter-edge: #e5e5e2;
-  --loommark-code-selection: rgb(46 96 204 / 20%);
-  --loommark-code-titlebar: linear-gradient(#2c2e34, #24262b);
-  --loommark-code-titlebar-ink: #d7d9de;
-  --loommark-code-titlebar-gloss: rgb(255 255 255 / 7%);
-  --loommark-code-titlebar-edge: #c7c9ce;
-  --loommark-code-button-edge: #4c4f57;
-  --loommark-code-button-surface: rgb(255 255 255 / 9%);
+  --loommark-code-surface: #fafafa;
+  --loommark-code-surface-edge: #cfd2d8;
+  --loommark-code-ink: #383a42;
+  --loommark-code-gutter-ink: #9d9d9f;
+  --loommark-code-gutter-edge: #ececed;
+  --loommark-code-selection: #e5e5e6;
+  --loommark-code-titlebar: linear-gradient(#f4f4f5, #e9e9ea);
+  --loommark-code-titlebar-ink: #696c77;
+  --loommark-code-titlebar-gloss: rgb(255 255 255 / 70%);
+  --loommark-code-titlebar-edge: #cfd2d8;
+  --loommark-code-button-edge: #c9cbd0;
+  --loommark-code-button-surface: rgb(255 255 255 / 80%);
   --loommark-code-shadow: 0 18px 30px -18px rgb(0 0 0 / 65%);
 }
 
@@ -501,23 +501,40 @@ body.vscode-dark {
 }
 
 .cm-loommark-code-chrome i {
+  position: relative;
   display: block;
   box-sizing: border-box;
-  width: 10px;
-  height: 10px;
-  border: 1px solid color-mix(in srgb, currentcolor 30%, transparent);
+  width: 11px;
+  height: 11px;
+  border: 1px solid rgb(0 0 0 / 15%);
   border-radius: 50%;
-  background: color-mix(in srgb, currentcolor 10%, transparent);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 35%);
 }
 
-.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i {
-  border-color: rgb(0 0 0 / 15%);
-  box-shadow: inset 0 1px 1px rgb(255 255 255 / 40%);
+.cm-loommark-code-chrome i:nth-child(1) { background: #ff5f57; }
+.cm-loommark-code-chrome i:nth-child(2) { background: #febc2e; }
+.cm-loommark-code-chrome i:nth-child(3) { background: #28c840; }
+
+.cm-loommark-code-chrome i::before {
+  content: "\00d7";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(0 0 0 / 55%);
+  font-family: var(--vscode-font-family);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
 }
 
-.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(1) { background: #ff5f57; }
-.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(2) { background: #febc2e; }
-.cm-loommark-code-toolbar.is-terminal .cm-loommark-code-chrome i:nth-child(3) { background: #28c840; }
+.cm-loommark-code-chrome i:nth-child(2)::before { content: "\2212"; }
+.cm-loommark-code-chrome i:nth-child(3)::before { content: "+"; }
+
+.cm-loommark-code-toolbar:hover .cm-loommark-code-chrome i::before {
+  opacity: 1;
+}
 
 .cm-loommark-code-language {
   min-width: 0;
@@ -528,15 +545,14 @@ body.vscode-dark {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 10.5px;
+  font-family: var(--vscode-font-family);
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.02em;
   opacity: 0.85;
   outline: none;
   text-align: center;
   text-align-last: center;
-  text-transform: uppercase;
 }
 
 .cm-loommark-code-language:hover {
@@ -594,37 +610,38 @@ body.vscode-dark {
   box-shadow: var(--loommark-code-shadow);
 }
 
+/* Token palettes: One Dark on the dark slab, One Light on the paper card. */
 body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
-  color: #ff7ab2;
+  color: #c678dd;
 }
 
 body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line .tok-string {
-  color: #a8cc8c;
+  color: #98c379;
 }
 
 body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
-  color: #d2a6ff;
+  color: #d19a66;
 }
 
 body.vscode-light #editor > .cm-editor .cm-loommark-code-block-line .tok-comment {
-  color: #8b8e98;
+  color: #5c6370;
   font-style: italic;
 }
 
 body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
-  color: #a3215b;
+  color: #a626a4;
 }
 
 body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line .tok-string {
-  color: #326b17;
+  color: #50a14f;
 }
 
 body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
-  color: #7040a0;
+  color: #986801;
 }
 
 body.vscode-dark #editor > .cm-editor .cm-loommark-code-block-line .tok-comment {
-  color: #686b72;
+  color: #a0a1a7;
   font-style: italic;
 }
 

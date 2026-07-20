@@ -7,6 +7,32 @@ export const codeLanguages = [
   'html', 'css', 'scss', 'sql', 'yaml', 'markdown', 'java', 'c', 'cpp', 'rust', 'go',
 ];
 
+const codeLanguageLabels: Record<string, string> = {
+  '': 'Plain Text',
+  bash: 'Bash',
+  shell: 'Shell',
+  powershell: 'PowerShell',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  json: 'JSON',
+  python: 'Python',
+  html: 'HTML',
+  css: 'CSS',
+  scss: 'SCSS',
+  sql: 'SQL',
+  yaml: 'YAML',
+  markdown: 'Markdown',
+  java: 'Java',
+  c: 'C',
+  cpp: 'C++',
+  rust: 'Rust',
+  go: 'Go',
+};
+
+export function languageDisplayName(language: string): string {
+  return codeLanguageLabels[language.toLowerCase()] ?? language;
+}
+
 export function isTerminalLanguage(language: string): boolean {
   return ['bash', 'sh', 'shell', 'zsh', 'fish', 'powershell', 'pwsh', 'console', 'terminal'].includes(
     language.toLowerCase(),
@@ -42,7 +68,7 @@ export class CodeToolbarWidget extends WidgetType {
     for (const language of options) {
       const option = document.createElement('option');
       option.value = language;
-      option.textContent = language || 'Plain text';
+      option.textContent = languageDisplayName(language);
       option.selected = language === current;
       select.append(option);
     }
