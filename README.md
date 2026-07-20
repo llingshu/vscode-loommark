@@ -67,6 +67,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | --- | --- | --- |
 | `loommark.openByDefault` | `true` | Associate `*.md` and `*.markdown` with LoomMark at user scope. |
 | `loommark.theme` | `vscode` | Select `vscode`, `crepe`, `frame`, or `nord`. |
+| `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
 
@@ -134,7 +135,6 @@ Detailed documentation:
   overlapping edits from another editor are not rebased.
 - Progressive rendering intentionally covers a defined Markdown subset. Unimplemented syntax stays
   visible and editable rather than being discarded.
-- Image decoration and preview are not yet implemented in the current CodeMirror editor core.
 - Only one LoomMark custom editor is supported per text document.
 - The complete language-data bundle increases the Webview bundle size; language splitting remains
   future optimization work.

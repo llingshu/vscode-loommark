@@ -136,9 +136,9 @@ Relative links are resolved against the current document URI with `vscode.Uri.jo
 first because that can turn them into incorrect root-level file URIs.
 
 Wiki links without an extension resolve to `.md`. HTTP, HTTPS, and mail links are opened externally.
-The Webview receives a resource base rooted at the document directory for future image decoration.
-Image preview is not yet implemented in the current editor core. Any future implementation remains
-restricted by `localResourceRoots` and the Webview CSP.
+The Webview receives a resource base rooted at the document directory and resolves relative image
+sources against it for inline and block image preview. Remote `http(s):` and `data:` sources are
+used as-is. Image loading remains restricted by `localResourceRoots` and the Webview CSP.
 
 ## Security
 
