@@ -891,19 +891,37 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   background: var(--vscode-widget-border, #666666);
 }
 
-/* CodeMirror's built-in find/replace panel (@codemirror/search), restyled to match the
-   VS Code find widget instead of its plain default appearance. */
+/* CodeMirror's built-in find/replace panel (@codemirror/search), restyled as a floating
+   card anchored to the editor's top-right corner, matching VS Code's native find widget
+   instead of a full-width bar. `.cm-editor` is `position: relative !important` in
+   CodeMirror's own base theme, so it anchors this without extra positioning setup.
+   `top` must carry `!important`: CodeMirror sets it as an inline style via JS. */
+#editor > .cm-editor .cm-panels.cm-panels-top {
+  position: absolute;
+  top: 10px !important;
+  right: 10px;
+  left: auto;
+  z-index: 40;
+  width: auto;
+  max-width: calc(100% - 20px);
+  background: transparent;
+}
+
 #editor > .cm-editor .cm-panel.cm-search {
   position: relative;
   box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
+  width: max-content;
+  max-width: 100%;
   gap: 4px 8px;
   align-items: center;
-  padding: 6px 34px 6px 10px;
-  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border));
+  padding: 8px 34px 8px 10px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border));
+  border-radius: 6px;
   background: var(--vscode-editorWidget-background);
   color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
   font-family: var(--vscode-font-family);
   font-size: 12px;
 }
@@ -914,6 +932,7 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 }
 
 #editor > .cm-editor .cm-panel.cm-search .cm-textfield {
+  width: 170px;
   height: 24px;
   padding: 0 6px;
   border: 1px solid var(--vscode-input-border, transparent);

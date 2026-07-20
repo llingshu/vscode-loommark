@@ -21,7 +21,8 @@ All notable changes to LoomMark are documented here. This project follows
   meaning. Heading markers, mid-word hashes, and numeric references like `#123` are not treated
   as tags.
 - Find and replace inside the editor (Ctrl/Cmd+F), backed by CodeMirror's search panel and styled
-  to match the VS Code find widget.
+  as a floating card anchored to the editor's top-right corner, matching VS Code's native find
+  widget instead of a full-width bar clipped to the editor column.
 
 ### Changed
 

@@ -18,6 +18,13 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Progressive rendering for headings, emphasis, strong text, strikethrough, links, and inline code.
 - Fenced code blocks with language-aware highlighting, line numbers, copy controls, and language
   selection.
+- GFM tables that render as real tables, editable in place or as expand-to-source widgets, in a
+  bordered grid or a booktabs-style three-line layout.
+- Inline and block image preview, including images in a sibling folder or wrapped in `<...>`.
+- Inline and display math rendered with KaTeX.
+- Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
+- `#tag` chips that stay part of the editable text.
+- Find and replace inside the editor (Ctrl/Cmd+F), styled like VS Code's native find widget.
 - Obsidian-style `[[wiki links]]` and `[[target|label]]` without conversion to standard links.
 - Workspace Markdown file completion inside `[[...]]`.
 - Ctrl/Cmd + click navigation for relative Markdown links and wiki links.
@@ -101,6 +108,54 @@ The code-block UI is a view layer. Copy does not include fences. Changing the la
 an explicit, undoable edit to the opening fence only. Terminal-like languages receive restrained
 window chrome; other languages use neutral controls.
 
+## Rendered Widgets
+
+Tables, images, and math render as widgets rather than plain decorated text. By default the text
+cursor skips over them and they are edited by clicking into them; enable `loommark.keyboardEditing`
+to let the cursor step in with the keyboard instead, for mouse-free editing.
+
+## Tables
+
+GFM tables render as real `<table>` elements. `loommark.table` controls how cells are edited:
+
+- `rich` (default) — click a cell to edit its raw Markdown in place. Enter or clicking elsewhere
+  commits the change, Escape cancels, and Tab/Shift+Tab moves to the next/previous cell.
+- `source` — the whole table expands to Markdown source when the cursor enters it, matching the
+  edit style used for headings and emphasis.
+
+`loommark.tableStyle` switches the visual style between a bordered `grid` (default) and a
+booktabs-style three-line `ruled` table (heavy top/bottom rules, a header rule, light row
+separators, no vertical lines) — useful for reference tables like a CLI command list.
+
+## Images
+
+`![alt](path)` renders inline or, on its own line, as a block image. Relative paths resolve
+against the document's own directory and may climb into a sibling folder (`../assets/x.png`) as
+long as the target stays inside the document's workspace folder; documents opened outside any
+workspace can only reach their own directory. Paths with spaces or special characters can be
+wrapped in angle brackets: `![alt](<../My Assets/figure 1.png>)`. Remote `http(s):` and `data:`
+sources are used as-is. An image that fails to load shows a placeholder instead of breaking the
+line. Click an image to edit its Markdown source.
+
+## Math
+
+Math is rendered locally with [KaTeX](https://katex.org/) — no network request is made. Inline
+math uses `$...$` and display math uses `$$...$$` (including multi-line blocks). Currency-like
+text (`$5`, `$10`) is left as plain text. Invalid LaTeX shows KaTeX's inline error instead of
+breaking the editor.
+
+## Tags
+
+A standalone `#word` or `#nested/tag` renders as a pill. The `#` stays part of the editable text
+since it carries meaning, unlike heading or emphasis markers. Heading markers (`# Heading`),
+hashes in the middle of a word (`foo#bar`), and numeric references (`#123`) are not treated as
+tags.
+
+## Search And Replace
+
+Ctrl/Cmd+F opens a find panel inside the editor with case-sensitive, regular-expression, and
+whole-word toggles, plus replace and replace-all. Escape closes it.
+
 ## Privacy
 
 LoomMark processes documents locally inside VS Code. It includes no analytics, advertising,
@@ -145,7 +200,8 @@ Detailed documentation:
 ## Acknowledgements
 
 LoomMark is built with [CodeMirror 6](https://codemirror.net/),
-[Lezer](https://lezer.codemirror.net/), [mdast](https://github.com/syntax-tree/mdast), and the
+[Lezer](https://lezer.codemirror.net/), [mdast](https://github.com/syntax-tree/mdast),
+[KaTeX](https://katex.org/), and the
 [Visual Studio Code Extension API](https://code.visualstudio.com/api). See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt)
 for dependency license information.

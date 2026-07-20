@@ -60,8 +60,12 @@ outline navigation and commands.
 - local source state and synchronization generations;
 - Markdown and GFM language support;
 - syntax highlighting and language-data loading;
-- heading, emphasis, link, inline-code, and fenced-code decorations;
-- wiki-link completion;
+- heading, emphasis, link, tag, inline-code, and fenced-code decorations;
+- the table, image, list/task, math, and blockquote/rule `StateField`s (built from
+  [`webview/markdown-ranges.ts`](../webview/markdown-ranges.ts) and rendered by
+  [`webview/widgets.ts`](../webview/widgets.ts));
+- keyboard-atomic ranges for rendered widgets, controlled by `loommark.keyboardEditing`;
+- wiki-link completion and the in-editor find/replace panel;
 - code-block controls;
 - in-editor outline rendering;
 - runtime diagnostics collection.
@@ -115,6 +119,14 @@ Decorations are presentation and must never dispatch source changes.
 - Inline code hides matching backticks and excludes its content from other scanners.
 - Fenced code adds line attributes, language parsing, a toolbar widget, line numbers, and a code
   cursor state.
+- Tables, images, and math replace their source range with a block or inline widget outside the
+  caret; `loommark.table` and `loommark.keyboardEditing` change how and whether the caret can
+  re-enter them. Link and image destination text is excluded from emphasis scanning so filenames
+  and titles are never partially hidden as italics.
+- Tags render as a mark decoration (a pill) without hiding the `#`, since unlike other markers it
+  carries meaning.
+- List markers, blockquote markers, and horizontal rules follow the same hide-outside/reveal-inside
+  model as emphasis.
 
 Decoration ranges must be sorted with `Decoration.set(ranges, true)`. Unsorted ranges cause a
 CodeMirror plugin failure. Block widgets cannot be returned from a ViewPlugin; the code toolbar is

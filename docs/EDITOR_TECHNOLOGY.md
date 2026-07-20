@@ -21,7 +21,23 @@ top and can be removed without changing the document.
 - `@lezer/highlight`: semantic syntax tags.
 - `@codemirror/language-data`: language descriptions loaded from fenced-code language names.
 - `@codemirror/autocomplete`: wiki-link file completion.
+- `@codemirror/search`: the in-editor find/replace panel, restyled to match VS Code's native
+  find widget.
+- `katex`: local rendering of inline and display math; no network request is made.
 - `mdast-util-from-markdown`: source-derived outline extraction.
+
+## Module Layout
+
+The Webview is split by responsibility so each file stays reasoned-about-able in isolation:
+
+- `webview/markdown-ranges.ts`: pure source scanners (no DOM). Every progressive-syntax range —
+  fenced/inline code, tables, images, lists, math, quotes, tags, link destinations — is a plain
+  function from source string to offsets, which is what `test/markdown-ranges.test.mjs` exercises
+  directly through a Node-runnable esbuild bundle (`scripts/build-test-bundle.mjs`).
+- `webview/widgets.ts`: every `WidgetType` (code toolbar, table, image, math, checkbox, bullet,
+  horizontal rule) and their DOM construction/event wiring.
+- `webview/main.ts`: editor assembly, the `StateField`/`ViewPlugin` decorations that call into the
+  two modules above, the host synchronization protocol, and the outline.
 
 ## Decoration Types
 
