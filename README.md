@@ -136,7 +136,8 @@ long as the target stays inside the document's workspace folder; documents opene
 workspace can only reach their own directory. Paths with spaces or special characters can be
 wrapped in angle brackets: `![alt](<../My Assets/figure 1.png>)`. Remote `http(s):` and `data:`
 sources are used as-is. An image that fails to load shows a placeholder instead of breaking the
-line. Click an image to edit its Markdown source.
+line. Click an image to edit its Markdown source; Ctrl/Cmd + click opens it instead, whether the
+image is rendered or shown as source.
 
 ## Math
 

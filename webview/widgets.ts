@@ -274,6 +274,9 @@ export class ImageWidget extends WidgetType {
     const container = document.createElement(this.block ? 'div' : 'span');
     container.className = `cm-loommark-image${this.block ? ' is-block' : ''}`;
     container.contentEditable = 'false';
+    // Ctrl/Cmd + click is handled by the same global `[data-loommark-href]` listener that
+    // opens Markdown links, so it opens whether the image is rendered or shown as source.
+    container.dataset.loommarkHref = this.image.src;
     const img = document.createElement('img');
     img.src = resolveImageSource(this.image.src, this.resourceBase);
     img.alt = this.image.alt;

@@ -34,6 +34,8 @@ All notable changes to LoomMark are documented here. This project follows
 - Local resources for images and links now resolve within the document's whole workspace folder,
   not just its own directory, so relative paths that climb to a sibling folder (`../assets/x.png`)
   load correctly.
+- Ctrl/Cmd + click on an image now opens it, the same way it already does for links. This works
+  whether the image is rendered or shown as Markdown source (cursor inside it).
 
 ### Fixed
 

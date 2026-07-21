@@ -258,13 +258,25 @@ const imageField = selectionAwareField((state) => {
   for (const image of imageRanges(source)) {
     if (image.ownLine) {
       const line = state.doc.lineAt(image.from);
-      if (cursor >= line.from && cursor <= line.to) continue;
+      if (cursor >= line.from && cursor <= line.to) {
+        // Cursor-inside (source) state: no widget, but Ctrl/Cmd + click should still open the
+        // image, so mark the raw text with the same attribute the global click handler expects.
+        ranges.push(Decoration.mark({
+          attributes: { 'data-loommark-href': image.src },
+        }).range(image.from, image.to));
+        continue;
+      }
       ranges.push(Decoration.replace({
         widget: new ImageWidget(image, resourceBase, true),
         block: true,
       }).range(line.from, line.to));
     } else {
-      if (cursor >= image.from && cursor <= image.to) continue;
+      if (cursor >= image.from && cursor <= image.to) {
+        ranges.push(Decoration.mark({
+          attributes: { 'data-loommark-href': image.src },
+        }).range(image.from, image.to));
+        continue;
+      }
       ranges.push(Decoration.replace({
         widget: new ImageWidget(image, resourceBase, false),
       }).range(image.from, image.to));
