@@ -33,9 +33,14 @@ The Webview is split by responsibility so each file stays reasoned-about-able in
 - `webview/markdown-ranges.ts`: pure source scanners (no DOM). Every progressive-syntax range —
   fenced/inline code, tables, images, lists, math, quotes, tags, link destinations — is a plain
   function from source string to offsets, which is what `test/markdown-ranges.test.mjs` exercises
-  directly through a Node-runnable esbuild bundle (`scripts/build-test-bundle.mjs`).
+  directly through a Node-runnable esbuild bundle (`scripts/build-test-bundle.mjs`). Nested ordered
+  list numbering (`loommark.orderedListStyle`) is computed here too, from `ListItemRange.level`
+  alone, not the literal number in the source: a per-level counter increments while consecutive
+  items stay the same `ordered` type, and resets on a real (non-blank) line between list items or
+  a type change at that level — mirroring how nested `<ol>` numbering works in HTML, since there is
+  no live DOM tree to lean on.
 - `webview/widgets.ts`: every `WidgetType` (code toolbar, table, image, math, checkbox, bullet,
-  horizontal rule) and their DOM construction/event wiring.
+  ordered-list label, horizontal rule) and their DOM construction/event wiring.
 - `webview/main.ts`: editor assembly, the `StateField`/`ViewPlugin` decorations that call into the
   two modules above, the host synchronization protocol, and the outline.
 

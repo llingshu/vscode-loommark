@@ -1,3 +1,5 @@
+import type { OrderedListStyle } from '../src/protocol';
+
 export type SourceRange = { from: number; to: number };
 export type InlineCodeRange = SourceRange & { markerLength: number };
 
@@ -321,6 +323,85 @@ export function listItemRanges(source: string): ListItemRange[] {
     offset += line.length + 1;
   }
   return results;
+}
+
+const ROMAN_VALUES: ReadonlyArray<readonly [number, string]> = [
+  [1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'],
+  [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'],
+  [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i'],
+];
+
+function toRomanNumeral(value: number): string {
+  let remaining = value;
+  let result = '';
+  for (const [amount, symbol] of ROMAN_VALUES) {
+    while (remaining >= amount) {
+      result += symbol;
+      remaining -= amount;
+    }
+  }
+  return result;
+}
+
+// Base-26 "spreadsheet column" letters: a, b, ..., z, aa, ab, ...
+function toLetters(value: number): string {
+  let remaining = value;
+  let result = '';
+  while (remaining > 0) {
+    const remainder = (remaining - 1) % 26;
+    result = String.fromCharCode(97 + remainder) + result;
+    remaining = Math.floor((remaining - 1) / 26);
+  }
+  return result;
+}
+
+function cycleNumeral(value: number, level: number): string {
+  const scheme = level % 3;
+  if (scheme === 0) return String(value);
+  if (scheme === 1) return toLetters(value);
+  return toRomanNumeral(value);
+}
+
+// True when the source between two consecutive list items contains a real, non-list line
+// (a paragraph, a heading, ...) rather than only blank lines — a genuine CommonMark list
+// break, after which numbering restarts rather than continuing.
+function isListInterrupted(source: string, from: number, to: number): boolean {
+  return source.slice(from, to).split('\n').some((line) => line.trim().length > 0);
+}
+
+// Computes a display label for each ordered item, keyed by its markerFrom offset. Mirrors
+// how nested <ol> numbering works in HTML: a counter per nesting level, reset whenever a
+// shallower item is seen, the list is interrupted by non-list content, or the item type at
+// that level switches between ordered and unordered.
+export function orderedListLabels(
+  source: string,
+  items: ListItemRange[],
+  style: OrderedListStyle,
+): Map<number, string> {
+  const labels = new Map<number, string>();
+  const counters: number[] = [];
+  const lastOrderedAtLevel: boolean[] = [];
+  let previous: ListItemRange | undefined;
+  for (const item of items) {
+    if (previous && isListInterrupted(source, previous.lineTo, item.lineFrom)) {
+      counters.length = 0;
+      lastOrderedAtLevel.length = 0;
+    }
+    previous = item;
+    if (lastOrderedAtLevel[item.level] !== undefined && lastOrderedAtLevel[item.level] !== item.ordered) {
+      counters[item.level] = 0;
+    }
+    counters.length = item.level + 1;
+    lastOrderedAtLevel.length = item.level + 1;
+    lastOrderedAtLevel[item.level] = item.ordered;
+    if (!item.ordered) continue;
+    counters[item.level] = (counters[item.level] ?? 0) + 1;
+    const label = style === 'decimal'
+      ? counters.slice(0, item.level + 1).join('.')
+      : cycleNumeral(counters[item.level], item.level);
+    labels.set(item.markerFrom, label);
+  }
+  return labels;
 }
 
 export type MathRange = { from: number; to: number; tex: string; display: boolean };

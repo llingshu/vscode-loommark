@@ -4,6 +4,7 @@ export type EditorConfiguration = {
   outline: OutlineMode;
   table: TableMode;
   tableStyle: TableStyle;
+  orderedListStyle: OrderedListStyle;
   keyboardEditing: boolean;
 };
 
@@ -27,6 +28,7 @@ export type EditorTheme = 'vscode' | 'crepe' | 'frame' | 'nord';
 export type OutlineMode = 'both' | 'editor' | 'explorer' | 'off';
 export type TableMode = 'rich' | 'source';
 export type TableStyle = 'grid' | 'ruled';
+export type OrderedListStyle = 'decimal' | 'cycle';
 
 export function isWebviewMessage(value: unknown): value is WebviewToHost {
   if (!value || typeof value !== 'object') return false;

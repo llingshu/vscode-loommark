@@ -23,7 +23,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Inline and block image preview, including images in a sibling folder or wrapped in `<...>`.
 - Inline and display math rendered with KaTeX.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
-- Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list.
+- Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list. Nested
+  ordered lists renumber automatically (`1, 2, 2.1, 2.2` by default).
 - `#tag` chips that stay part of the editable text.
 - Backslash escapes (`\*`, `\#`, `\!`, ...) turn off Markdown syntax for a single character.
 - Find and replace inside the editor (Ctrl/Cmd+F), styled like VS Code's native find widget.
@@ -80,6 +81,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.theme` | `vscode` | Select `vscode`, `crepe`, `frame`, or `nord`. |
 | `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
+| `loommark.orderedListStyle` | `decimal` | Number nested ordered lists `1, 2, 2.1, 2.2` (`decimal`) or cycle arabic/letters/roman numerals per level (`cycle`). |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |

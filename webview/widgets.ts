@@ -164,6 +164,30 @@ export class BulletWidget extends WidgetType {
   }
 }
 
+export class OrderedLabelWidget extends WidgetType {
+  constructor(
+    private readonly label: string,
+    private readonly delimiter: string,
+  ) {
+    super();
+  }
+
+  eq(other: OrderedLabelWidget): boolean {
+    return this.label === other.label && this.delimiter === other.delimiter;
+  }
+
+  toDOM(): HTMLElement {
+    const marker = document.createElement('span');
+    marker.className = 'cm-loommark-ordered-label';
+    marker.textContent = `${this.label}${this.delimiter}`;
+    return marker;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 export class CheckboxWidget extends WidgetType {
   constructor(
     private readonly checked: boolean,

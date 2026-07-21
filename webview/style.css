@@ -854,6 +854,13 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   color: var(--vscode-descriptionForeground);
 }
 
+#editor > .cm-editor .cm-loommark-ordered-label {
+  display: inline-block;
+  min-width: 1.6ch;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
 #editor > .cm-editor .cm-loommark-checkbox {
   margin: 0 2px 2px 0;
   vertical-align: middle;

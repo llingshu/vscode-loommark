@@ -11,6 +11,7 @@ import {
   linkDestinationRanges,
   listItemRanges,
   mathRanges,
+  orderedListLabels,
   quoteLineRanges,
   tableRanges,
   tagRanges,
@@ -217,6 +218,62 @@ test('parses ordered and task items', () => {
 test('does not treat horizontal rules or code as list items', () => {
   const source = '- - -\n```\n- in code\n```';
   assert.equal(listItemRanges(source).length, 0);
+});
+
+test('decimal style labels a flat ordered list 1, 2, 3', () => {
+  const source = '1. a\n2. b\n3. c';
+  const items = listItemRanges(source);
+  const labels = orderedListLabels(source, items, 'decimal');
+  assert.deepEqual(items.map((item) => labels.get(item.markerFrom)), ['1', '2', '3']);
+});
+
+test('decimal style nests as 2.1, 2.2, then 2.2.1', () => {
+  const source = [
+    '1. a',
+    '2. b',
+    '  1. nested b1',
+    '  2. nested b2',
+    '    1. nested b2a',
+    '3. c',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const labels = orderedListLabels(source, items, 'decimal');
+  assert.deepEqual(items.map((item) => labels.get(item.markerFrom)), [
+    '1', '2', '2.1', '2.2', '2.2.1', '3',
+  ]);
+});
+
+test('decimal style restarts after a paragraph interrupts the list', () => {
+  const source = '1. a\n2. b\n\nSome paragraph text.\n\n1. x\n2. y';
+  const items = listItemRanges(source);
+  const labels = orderedListLabels(source, items, 'decimal');
+  assert.deepEqual(items.map((item) => labels.get(item.markerFrom)), ['1', '2', '1', '2']);
+});
+
+test('cycle style alternates arabic, letters, roman numerals per level', () => {
+  const source = [
+    '1. a',
+    '2. b',
+    '  1. nested b1',
+    '  2. nested b2',
+    '    1. nested b2a',
+    '    2. nested b2b',
+    '      1. nested b2b1',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const labels = orderedListLabels(source, items, 'cycle');
+  assert.deepEqual(items.map((item) => labels.get(item.markerFrom)), [
+    '1', '2', 'a', 'b', 'i', 'ii', '1',
+  ]);
+});
+
+test('unordered items do not receive labels but still reset deeper counters', () => {
+  const source = '1. a\n2. b\n- bullet\n1. restarts at 1';
+  const items = listItemRanges(source);
+  const labels = orderedListLabels(source, items, 'decimal');
+  assert.deepEqual(items.map((item) => labels.get(item.markerFrom) ?? null), [
+    '1', '2', null, '1',
+  ]);
 });
 
 test('parses quote lines with depth and marker offsets', () => {

@@ -16,6 +16,9 @@ All notable changes to LoomMark are documented here. This project follows
   session (closing and reopening the editor tab, or a VS Code reload).
 - Tab and Shift+Tab indent and outdent the current line (or all selected lines), which is how a
   list item becomes a nested sub-list.
+- `loommark.orderedListStyle` renumbers nested ordered lists for display: hierarchical decimal
+  (`1, 2, 2.1, 2.2, 2.2.1`, the default) or a cycling `1, a, i` style that repeats every three
+  levels. The source keeps whatever number was typed; only the rendered label changes.
 
 ### Changed
 

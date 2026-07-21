@@ -21,7 +21,12 @@ Inline ![icon](./missing.png) placeholder demo.
   - Nested bullet
     - Deep bullet
 
-1. Ordered stays numeric
+1. Top level one
+2. Top level two
+  1. Nested under two (decimal: 2.1, cycle: a)
+  2. Nested under two (decimal: 2.2, cycle: b)
+    1. Doubly nested (decimal: 2.2.1, cycle: i)
+3. Top level three
 
 ## Math
 

@@ -152,6 +152,19 @@
           "default": "grid",
           "description": "Visual style used when rendering GFM tables."
         },
+        "loommark.orderedListStyle": {
+          "type": "string",
+          "enum": [
+            "decimal",
+            "cycle"
+          ],
+          "enumDescriptions": [
+            "Hierarchical decimal numbering: 1, 2, 2.1, 2.2, 2.2.1.",
+            "Alternates arabic numerals, letters, and lowercase roman numerals per nesting level (1, a, i), then repeats."
+          ],
+          "default": "decimal",
+          "description": "How nested ordered list markers are numbered when rendered."
+        },
         "loommark.keyboardEditing": {
           "type": "boolean",
           "default": false,

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
-import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle } from './protocol';
+import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle } from './protocol';
 import { isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
 
@@ -83,12 +83,16 @@ function editorConfiguration(): EditorConfiguration {
     : 'both';
   const table: TableMode = configuration.get<string>('table', 'rich') === 'source' ? 'source' : 'rich';
   const tableStyle: TableStyle = configuration.get<string>('tableStyle', 'grid') === 'ruled' ? 'ruled' : 'grid';
+  const orderedListStyle: OrderedListStyle = configuration.get<string>('orderedListStyle', 'decimal') === 'cycle'
+    ? 'cycle'
+    : 'decimal';
   return {
     syncDelay: configuration.get('syncDelay', 180),
     theme,
     outline,
     table,
     tableStyle,
+    orderedListStyle,
     keyboardEditing: configuration.get('keyboardEditing', false),
   };
 }

@@ -35,6 +35,7 @@ import {
   linkDestinationRanges,
   listItemRanges,
   mathRanges,
+  orderedListLabels,
   quoteLineRanges,
   tableRanges,
   tagRanges,
@@ -46,9 +47,17 @@ import {
   HorizontalRuleWidget,
   ImageWidget,
   MathWidget,
+  OrderedLabelWidget,
   TableWidget,
 } from './widgets';
-import type { EditorConfiguration, HostToWebview, TableMode, TableStyle, WebviewToHost } from '../src/protocol';
+import type {
+  EditorConfiguration,
+  HostToWebview,
+  OrderedListStyle,
+  TableMode,
+  TableStyle,
+  WebviewToHost,
+} from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
   postMessage(message: WebviewToHost): void;
@@ -81,6 +90,7 @@ let documentRevision = savedState?.documentRevision ?? 0;
 let resourceBase = '';
 let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
+let orderedListStyle: OrderedListStyle = 'decimal';
 let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
@@ -299,7 +309,9 @@ const listField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
   const cursor = state.selection.main.head;
   const source = state.doc.toString();
-  for (const item of listItemRanges(source)) {
+  const items = listItemRanges(source);
+  const orderedLabels = orderedListLabels(source, items, orderedListStyle);
+  for (const item of items) {
     if (item.task?.checked) {
       ranges.push(Decoration.line({
         attributes: { class: 'cm-loommark-task-done' },
@@ -309,6 +321,13 @@ const listField = selectionAwareField((state) => {
     if (!item.ordered) {
       ranges.push(Decoration.replace({ widget: new BulletWidget(item.level) })
         .range(item.markerFrom, item.markerTo));
+    } else {
+      const label = orderedLabels.get(item.markerFrom);
+      if (label) {
+        const delimiter = source[item.markerTo - 1];
+        ranges.push(Decoration.replace({ widget: new OrderedLabelWidget(label, delimiter) })
+          .range(item.markerFrom, item.markerTo));
+      }
     }
     if (item.task) {
       ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
@@ -835,9 +854,11 @@ function applyConfiguration(config: EditorConfiguration): void {
   document.body.classList.toggle('loommark-table-ruled', config.tableStyle === 'ruled');
   const needsRefresh = tableMode !== config.table
     || tableStyle !== config.tableStyle
+    || orderedListStyle !== config.orderedListStyle
     || keyboardEditing !== config.keyboardEditing;
   tableMode = config.table;
   tableStyle = config.tableStyle;
+  orderedListStyle = config.orderedListStyle;
   keyboardEditing = config.keyboardEditing;
   if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
