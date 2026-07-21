@@ -6,6 +6,24 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-20
+
+### Added
+
+- Backslash escapes (`\*`, `\_`, `\#`, `\!`, and other CommonMark-escapable punctuation) hide the
+  backslash and leave the character as plain text instead of live Markdown syntax.
+
+### Changed
+
+- Ctrl/Cmd + click on an image now opens it, the same way it already does for links. This works
+  whether the image is rendered or shown as Markdown source (cursor inside it).
+
+### Fixed
+
+- A backslash-escaped delimiter (`\*`, `\#`, `\![`) is no longer treated as live Markdown syntax;
+  previously an escaped marker could still trigger emphasis, tag, image, or link rendering, or
+  incorrectly pair with unrelated real syntax later in the same line.
+
 ## [0.3.0] - 2026-07-20
 
 ### Added
@@ -23,8 +41,6 @@ All notable changes to LoomMark are documented here. This project follows
 - Find and replace inside the editor (Ctrl/Cmd+F), backed by CodeMirror's search panel and styled
   as a floating card anchored to the editor's top-right corner, matching VS Code's native find
   widget instead of a full-width bar clipped to the editor column.
-- Backslash escapes (`\*`, `\_`, `\#`, `\!`, and other CommonMark-escapable punctuation) hide the
-  backslash and leave the character as plain text instead of live Markdown syntax.
 
 ### Changed
 
@@ -34,8 +50,6 @@ All notable changes to LoomMark are documented here. This project follows
 - Local resources for images and links now resolve within the document's whole workspace folder,
   not just its own directory, so relative paths that climb to a sibling folder (`../assets/x.png`)
   load correctly.
-- Ctrl/Cmd + click on an image now opens it, the same way it already does for links. This works
-  whether the image is rendered or shown as Markdown source (cursor inside it).
 
 ### Fixed
 
@@ -49,9 +63,6 @@ All notable changes to LoomMark are documented here. This project follows
   markers like longer spans; previously the markers stayed visible permanently.
 - The packaged VSIX no longer includes the Node test bundle output (`out/test/`), which was
   unintentionally shipped because `.vscodeignore` never excluded it.
-- A backslash-escaped delimiter (`\*`, `\#`, `\![`) is no longer treated as live Markdown syntax;
-  previously an escaped marker could still trigger emphasis, tag, image, or link rendering, or
-  incorrectly pair with unrelated real syntax later in the same line.
 
 ## [0.2.0] - 2026-07-19
 
@@ -90,7 +101,8 @@ All notable changes to LoomMark are documented here. This project follows
 - Configurable default-editor association and synchronization delay.
 - Source-editor command in the custom editor title bar.
 
-[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/llingshu/vscode-loommark/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/llingshu/vscode-loommark/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/llingshu/vscode-loommark/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/llingshu/vscode-loommark/releases/tag/v0.1.0
