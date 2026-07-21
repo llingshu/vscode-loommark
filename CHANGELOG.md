@@ -12,17 +12,25 @@ All notable changes to LoomMark are documented here. This project follows
 
 - Backslash escapes (`\*`, `\_`, `\#`, `\!`, and other CommonMark-escapable punctuation) hide the
   backslash and leave the character as plain text instead of live Markdown syntax.
+- The cursor position is remembered and restored when a document is reopened in the same Webview
+  session (closing and reopening the editor tab, or a VS Code reload).
 
 ### Changed
 
 - Ctrl/Cmd + click on an image now opens it, the same way it already does for links. This works
   whether the image is rendered or shown as Markdown source (cursor inside it).
+- An image's raw Markdown source (cursor inside it) now gets a highlighted background, with its
+  destination colored like a link, so it stays easy to find after clicking into it.
 
 ### Fixed
 
 - A backslash-escaped delimiter (`\*`, `\#`, `\![`) is no longer treated as live Markdown syntax;
   previously an escaped marker could still trigger emphasis, tag, image, or link rendering, or
   incorrectly pair with unrelated real syntax later in the same line.
+- Clicking Next/Previous in find and replace no longer breaks the search panel when the match is
+  inside a table, image, or math block. `loommark.keyboardEditing`'s atomic ranges were also being
+  applied to those blocks' already-revealed source text, not just their widgets, which could put
+  the cursor somewhere CodeMirror considered simultaneously selected and unenterable.
 
 ## [0.3.0] - 2026-07-20
 

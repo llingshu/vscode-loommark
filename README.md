@@ -32,6 +32,7 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - An in-editor outline drawer that opens from a floating control, plus a native Explorer outline,
   both generated from source text.
 - Minimal VS Code `WorkspaceEdit` synchronization with stale-update protection.
+- Cursor position is remembered and restored when reopening a document.
 - Built-in diagnostics command for inspecting the Webview, synchronization state, links, completion,
   and code-block decorations.
 
@@ -137,7 +138,8 @@ workspace can only reach their own directory. Paths with spaces or special chara
 wrapped in angle brackets: `![alt](<../My Assets/figure 1.png>)`. Remote `http(s):` and `data:`
 sources are used as-is. An image that fails to load shows a placeholder instead of breaking the
 line. Click an image to edit its Markdown source; Ctrl/Cmd + click opens it instead, whether the
-image is rendered or shown as source.
+image is rendered or shown as source. The raw source gets a highlighted background and a
+link-colored destination while the cursor is inside it, so it stays easy to find.
 
 ## Math
 

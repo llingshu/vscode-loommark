@@ -62,6 +62,15 @@ Widgets provide non-source controls. The fenced-code toolbar is a block widget c
 and copy controls. CodeMirror requires block widgets to be supplied synchronously through a
 `StateField`; ViewPlugin-provided block widgets throw a runtime `RangeError`.
 
+The table, image, and math `StateField`s each emit both `Decoration.replace` (the widget, cursor
+outside) and plain `Decoration.mark` (cursor-inside source text, e.g. the `data-loommark-href`
+attribute images carry so Ctrl/Cmd + click still opens them as source). `loommark.keyboardEditing`'s
+atomic-range builder only walks `.spec.widget`-bearing entries. Marking a mark decoration atomic
+too would make the cursor-inside range simultaneously "here" and "cannot be entered here" the
+moment a direct selection assignment (find/replace's Next button, `revealHeading`) lands inside
+it — CodeMirror does not expect that combination, and one observed symptom was the search panel
+appearing to vanish after clicking Next.
+
 ## Progressive Syntax
 
 The implementation uses two complementary mechanisms:

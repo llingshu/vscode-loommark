@@ -840,6 +840,14 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   font-size: 0.9em;
 }
 
+/* Raw Markdown source of an image the cursor is currently inside. A background highlight
+   makes the whole span easy to spot after clicking an image; the nested .cm-loommark-link
+   mark (below) additionally colors just the destination, like a real link. */
+#editor > .cm-editor .cm-loommark-image-source {
+  border-radius: 3px;
+  background: var(--vscode-editor-findMatchHighlightBackground, rgb(234 92 0 / 22%));
+}
+
 #editor > .cm-editor .cm-loommark-bullet {
   display: inline-block;
   width: 1ch;

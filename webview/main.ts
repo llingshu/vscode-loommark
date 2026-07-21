@@ -56,7 +56,7 @@ declare function acquireVsCodeApi<State>(): {
   setState(state: State): void;
 };
 
-type SavedState = { text: string; documentRevision: number; outlineCollapsed?: boolean };
+type SavedState = { text: string; documentRevision: number; outlineCollapsed?: boolean; cursor?: number };
 type Heading = { label: string; level: number; offset: number };
 type MdastNode = {
   type?: string;
@@ -95,6 +95,7 @@ let editorInitializationError: string | undefined;
 let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
 let outlineCollapsed = savedState?.outlineCollapsed ?? true;
+let initialCursorRestored = false;
 
 const headingDecorations = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
@@ -255,15 +256,26 @@ const imageField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
   const cursor = state.selection.main.head;
   const source = state.doc.toString();
+  const destinations = linkDestinationRanges(source);
+  const markSource = (image: { from: number; to: number; src: string }): void => {
+    // Cursor-inside (source) state: no widget, but the raw text should still be easy to
+    // spot (a highlighted background) and Ctrl/Cmd + click should still open the image,
+    // so mark it with the same attribute the global click handler expects.
+    ranges.push(Decoration.mark({
+      attributes: { class: 'cm-loommark-image-source', 'data-loommark-href': image.src },
+    }).range(image.from, image.to));
+    const destination = destinations.find((range) => range.from >= image.from && range.to <= image.to);
+    if (destination) {
+      ranges.push(Decoration.mark({
+        attributes: { class: 'cm-loommark-link' },
+      }).range(destination.from, destination.to));
+    }
+  };
   for (const image of imageRanges(source)) {
     if (image.ownLine) {
       const line = state.doc.lineAt(image.from);
       if (cursor >= line.from && cursor <= line.to) {
-        // Cursor-inside (source) state: no widget, but Ctrl/Cmd + click should still open the
-        // image, so mark the raw text with the same attribute the global click handler expects.
-        ranges.push(Decoration.mark({
-          attributes: { 'data-loommark-href': image.src },
-        }).range(image.from, image.to));
+        markSource(image);
         continue;
       }
       ranges.push(Decoration.replace({
@@ -272,9 +284,7 @@ const imageField = selectionAwareField((state) => {
       }).range(line.from, line.to));
     } else {
       if (cursor >= image.from && cursor <= image.to) {
-        ranges.push(Decoration.mark({
-          attributes: { 'data-loommark-href': image.src },
-        }).range(image.from, image.to));
+        markSource(image);
         continue;
       }
       ranges.push(Decoration.replace({
@@ -367,6 +377,13 @@ function buildAtomicRanges(state: EditorState): RangeSet<AtomicMarker> {
   const ranges: Range<AtomicMarker>[] = [];
   for (const field of [tableField, imageField, mathField]) {
     for (const iter = state.field(field).iter(); iter.value; iter.next()) {
+      // Only ranges actually replaced by a widget should block cursor motion. These
+      // fields also emit plain Decoration.mark entries (e.g. the click-to-open attribute
+      // on an image shown as source, cursor already inside); marking those atomic too
+      // creates a range that is simultaneously "selected here" and "cursor can't enter",
+      // which a direct selection assignment (like the search panel's Next button) can
+      // land on, confusing CodeMirror's own selection handling.
+      if (!iter.value.spec.widget) continue;
       ranges.push(atomicMarker.range(iter.from, iter.to));
     }
   }
@@ -596,7 +613,12 @@ function required<T extends Element>(selector: string): T {
 }
 
 function saveState(): void {
-  vscode.setState({ text: sourceText, documentRevision, outlineCollapsed });
+  vscode.setState({
+    text: sourceText,
+    documentRevision,
+    outlineCollapsed,
+    cursor: editor?.state.selection.main.head,
+  });
 }
 
 function scheduleSync(): void {
@@ -649,16 +671,25 @@ function createEditor(text: string): void {
         escapedCharDecorations,
         syntaxHighlighting(markdownHighlightStyle),
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged || applyingHostUpdate) return;
-          sourceText = update.state.doc.toString();
-          localGeneration++;
-          saveState();
-          scheduleSync();
-          refreshOutline();
+          if (applyingHostUpdate) return;
+          if (update.docChanged) {
+            sourceText = update.state.doc.toString();
+            localGeneration++;
+            scheduleSync();
+            refreshOutline();
+          }
+          if (update.docChanged || update.selectionSet) saveState();
         }),
       ],
       }),
     });
+    if (!initialCursorRestored && savedState?.cursor !== undefined) {
+      editor.dispatch({
+        selection: { anchor: Math.min(savedState.cursor, text.length) },
+        scrollIntoView: true,
+      });
+    }
+    initialCursorRestored = true;
   } catch (error: unknown) {
     editor = undefined;
     editorInitializationError = error instanceof Error
