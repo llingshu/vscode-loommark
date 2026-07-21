@@ -94,9 +94,14 @@ pairing, since these scanners do not resolve delimiter runs the way a full Commo
 
 ## Wiki-Link Completion
 
-The extension host finds `*.md` and `*.markdown` files, excludes generated/vendor directories, and
-sends paths relative to the active document. The Webview completion source activates only after an
-unclosed `[[`. Workspace create/delete/rename events refresh candidates without reopening the file.
+The extension host finds every workspace file (`**/*`, excluding `.git`, `node_modules`, and
+`.vscode-test`) and sends paths relative to the active document. Markdown files drop their
+`.md`/`.markdown` extension, following the Obsidian convention that a bare wiki-link target is a
+note; every other file keeps its extension, both because that is what identifies the file type in
+the completion list and because `openLink` only appends `.md` to an extensionless target — a
+target that already has one opens exactly as named. The Webview completion source activates only
+after an unclosed `[[`. Workspace create/delete/rename events refresh candidates without reopening
+the file.
 
 Selecting a completion inserts a relative target and adds `]]` only when it is absent. Completion is
 a normal CodeMirror transaction and therefore participates in undo history.

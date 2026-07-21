@@ -250,16 +250,14 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       if (!ready) return;
       await post({ type: 'wikiFilesChanged', wikiFiles: await findWikiFiles(document) });
     };
-    const createFilesSubscription = vscode.workspace.onDidCreateFiles((event) => {
-      if (event.files.some(isMarkdownUri)) void refreshWikiFiles();
+    const createFilesSubscription = vscode.workspace.onDidCreateFiles(() => {
+      void refreshWikiFiles();
     });
-    const deleteFilesSubscription = vscode.workspace.onDidDeleteFiles((event) => {
-      if (event.files.some(isMarkdownUri)) void refreshWikiFiles();
+    const deleteFilesSubscription = vscode.workspace.onDidDeleteFiles(() => {
+      void refreshWikiFiles();
     });
-    const renameFilesSubscription = vscode.workspace.onDidRenameFiles((event) => {
-      if (event.files.some((file) => isMarkdownUri(file.oldUri) || isMarkdownUri(file.newUri))) {
-        void refreshWikiFiles();
-      }
+    const renameFilesSubscription = vscode.workspace.onDidRenameFiles(() => {
+      void refreshWikiFiles();
     });
 
     panel.onDidChangeViewState((event) => {
@@ -396,19 +394,21 @@ function ensureTrailingSlash(uri: string): string {
 
 async function findWikiFiles(document: vscode.TextDocument): Promise<string[]> {
   const files = await vscode.workspace.findFiles(
-    '**/*.{md,markdown}',
+    '**/*',
     '**/{.git,node_modules,.vscode-test}/**',
     3000,
   );
   const directory = path.posix.dirname(document.uri.path);
   return files
     .filter((uri) => uri.toString() !== document.uri.toString())
-    .map((uri) => path.posix.relative(directory, uri.path).replace(/\.(?:md|markdown)$/i, ''))
+    .map((uri) => {
+      const relative = path.posix.relative(directory, uri.path);
+      // Only Markdown files follow the Obsidian-style extensionless convention; every
+      // other file (a script, a config, an image) keeps its extension, since that is
+      // what tells a reader what kind of file the link points to.
+      return /\.(?:md|markdown)$/i.test(relative) ? relative.replace(/\.(?:md|markdown)$/i, '') : relative;
+    })
     .sort((left, right) => left.localeCompare(right));
-}
-
-function isMarkdownUri(uri: vscode.Uri): boolean {
-  return /\.(?:md|markdown)$/i.test(uri.path);
 }
 
 export function deactivate(): void {}

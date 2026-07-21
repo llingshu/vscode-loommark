@@ -14,6 +14,8 @@ All notable changes to LoomMark are documented here. This project follows
   backslash and leave the character as plain text instead of live Markdown syntax.
 - The cursor position is remembered and restored when a document is reopened in the same Webview
   session (closing and reopening the editor tab, or a VS Code reload).
+- Tab and Shift+Tab indent and outdent the current line (or all selected lines), which is how a
+  list item becomes a nested sub-list.
 
 ### Changed
 
@@ -21,6 +23,10 @@ All notable changes to LoomMark are documented here. This project follows
   whether the image is rendered or shown as Markdown source (cursor inside it).
 - An image's raw Markdown source (cursor inside it) now gets a highlighted background, with its
   destination colored like a link, so it stays easy to find after clicking into it.
+- `[[wiki link]]` completion and navigation now cover every workspace file, not only Markdown —
+  scripts, configs, images, and so on. Markdown files still omit their extension in the completion
+  list; other files keep theirs, since it identifies the file type and is required for `openLink`
+  to resolve them as-is instead of assuming `.md`.
 
 ### Fixed
 

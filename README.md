@@ -23,11 +23,12 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Inline and block image preview, including images in a sibling folder or wrapped in `<...>`.
 - Inline and display math rendered with KaTeX.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
+- Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list.
 - `#tag` chips that stay part of the editable text.
 - Backslash escapes (`\*`, `\#`, `\!`, ...) turn off Markdown syntax for a single character.
 - Find and replace inside the editor (Ctrl/Cmd+F), styled like VS Code's native find widget.
 - Obsidian-style `[[wiki links]]` and `[[target|label]]` without conversion to standard links.
-- Workspace Markdown file completion inside `[[...]]`.
+- Workspace-wide file completion inside `[[...]]` — any file, not just Markdown.
 - Ctrl/Cmd + click navigation for relative Markdown links and wiki links.
 - An in-editor outline drawer that opens from a floating control, plus a native Explorer outline,
   both generated from source text.
@@ -92,9 +93,11 @@ LoomMark preserves and renders both common wiki-link forms:
 [[notes/project|Project notes]]
 ```
 
-Typing `[[` opens completion for Markdown files in the workspace. Candidates are relative to the
-current document and omit `.md` or `.markdown`. The list refreshes when files are created, deleted,
-or renamed. Ctrl/Cmd + click opens a target; an extensionless wiki link first resolves as `.md`.
+Typing `[[` opens completion for **any file in the workspace**, not just Markdown — scripts,
+configs, images, and so on. Candidates are relative to the current document; Markdown files omit
+their `.md`/`.markdown` extension (Obsidian-style), other files keep theirs since it identifies
+the file type. The list refreshes when files are created, deleted, or renamed. Ctrl/Cmd + click
+opens a target; an extensionless wiki link resolves as `.md`, one with an extension opens as-is.
 
 ## Code Blocks
 

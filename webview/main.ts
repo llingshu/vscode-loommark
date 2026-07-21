@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import {
   autocompletion,
   completionStatus,
@@ -652,7 +652,7 @@ function createEditor(text: string): void {
         markdown({ extensions: [GFM], codeLanguages: languages }),
         autocompletion({ override: [wikiLinkCompletions] }),
         search({ top: true }),
-        keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
+        keymap.of([indentWithTab, ...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         headingDecorations,
         inlineDecorations,
@@ -729,6 +729,13 @@ root.addEventListener('mousedown', (event) => {
   });
 }, true);
 
+function wikiFileDetail(target: string): string {
+  // Extensionless targets follow the Obsidian-style Markdown convention used by
+  // findWikiFiles; everything else keeps its extension, which becomes the detail label.
+  const extension = /\.([^./]+)$/.exec(target)?.[1];
+  return extension ? `${extension} file` : 'Markdown file';
+}
+
 function wikiLinkCompletions(context: CompletionContext): CompletionResult | null {
   const match = context.matchBefore(/\[\[[^\]\n|]*/);
   if (!match) return null;
@@ -736,7 +743,7 @@ function wikiLinkCompletions(context: CompletionContext): CompletionResult | nul
     from: match.from + 2,
     options: wikiFiles.map((target) => ({
       label: target,
-      detail: 'Markdown file',
+      detail: wikiFileDetail(target),
       type: 'file',
       apply(view, _completion, from, to) {
         const suffix = view.state.doc.sliceString(to, to + 2) === ']]' ? '' : ']]';
