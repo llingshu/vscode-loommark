@@ -40,9 +40,29 @@ The Webview is split by responsibility so each file stays reasoned-about-able in
   a type change at that level — mirroring how nested `<ol>` numbering works in HTML, since there is
   no live DOM tree to lean on.
 - `webview/widgets.ts`: every `WidgetType` (code toolbar, table, image, math, checkbox, bullet,
-  ordered-list label, horizontal rule) and their DOM construction/event wiring.
+  ordered-list label, list guide rail, horizontal rule) and their DOM construction/event wiring.
 - `webview/main.ts`: editor assembly, the `StateField`/`ViewPlugin` decorations that call into the
   two modules above, the host synchronization protocol, and the outline.
+
+## List Guide Connectors
+
+`listGuideSegments()` (`webview/markdown-ranges.ts`) computes one vertical-connector segment per
+list item that has content below its own line — nested children and/or a lazily-indented
+continuation (a paragraph, blockquote, or fenced code block). It walks the document with a stack
+of currently open ancestor items, closing an item when a shallower-or-equal item appears or a
+line drops below that item's required continuation indent (its own indent plus one level), and
+records a segment only if something closed later than the item's own line — a leaf with nothing
+under it needs no connector. Because ancestor levels are always a contiguous run starting at 0, a
+line's active levels are exactly the union of every segment containing it, with no gap-filling
+needed for well-formed nesting.
+
+`webview/main.ts`'s `listGuideField` renders this as a `ListGuideWidget` per qualifying line,
+replacing that line's entire leading whitespace with one fixed-width rail per active level (rather
+than trying to align with the source's actual indentation, which cannot be measured reliably in a
+proportional UI font). Rail *position* in the DOM equals its nesting level, so CSS colors the
+rainbow cycle with `:nth-child` alone — no per-rail inline color is computed in JS. The line the
+cursor is on is used to find which segments contain the cursor position; those levels render in
+color, everything else stays the muted default.
 
 ## Decoration Types
 

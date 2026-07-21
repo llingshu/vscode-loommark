@@ -188,6 +188,41 @@ export class OrderedLabelWidget extends WidgetType {
   }
 }
 
+// Replaces a line's leading whitespace with a fixed-width rail per active ancestor level,
+// so alignment stays consistent whether the source has exactly the expected indent (a list
+// item line) or a differently-sized one (a continuation paragraph/code block/quote). Rail
+// position in the DOM equals its nesting level: ancestor levels are always a contiguous
+// chain from 0, so CSS can color by :nth-child without the widget computing colors itself.
+export class ListGuideWidget extends WidgetType {
+  constructor(
+    private readonly levelCount: number,
+    private readonly activeLevels: ReadonlySet<number>,
+  ) {
+    super();
+  }
+
+  eq(other: ListGuideWidget): boolean {
+    return this.levelCount === other.levelCount
+      && this.activeLevels.size === other.activeLevels.size
+      && [...this.activeLevels].every((level) => other.activeLevels.has(level));
+  }
+
+  toDOM(): HTMLElement {
+    const container = document.createElement('span');
+    container.className = 'cm-loommark-list-guide';
+    for (let level = 0; level < this.levelCount; level++) {
+      const rail = document.createElement('span');
+      rail.className = `cm-loommark-list-guide-rail${this.activeLevels.has(level) ? ' is-active' : ''}`;
+      container.append(rail);
+    }
+    return container;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 export class CheckboxWidget extends WidgetType {
   constructor(
     private readonly checked: boolean,

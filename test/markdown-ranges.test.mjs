@@ -9,6 +9,7 @@ import {
   imageRanges,
   isEscaped,
   linkDestinationRanges,
+  listGuideSegments,
   listItemRanges,
   mathRanges,
   orderedListLabels,
@@ -274,6 +275,76 @@ test('unordered items do not receive labels but still reset deeper counters', ()
   assert.deepEqual(items.map((item) => labels.get(item.markerFrom) ?? null), [
     '1', '2', null, '1',
   ]);
+});
+
+test('a flat list with no nesting produces no guide segments', () => {
+  const source = '1. a\n2. b\n3. c';
+  const items = listItemRanges(source);
+  assert.deepEqual(listGuideSegments(source, items), []);
+});
+
+test('a parent with two children gets one guide segment spanning both', () => {
+  const source = [
+    '1. a',
+    '2. b',
+    '  1. nested b1',
+    '  2. nested b2',
+    '3. c',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const [segment] = listGuideSegments(source, items);
+  const nestedB1 = items[2];
+  const nestedB2 = items[3];
+  assert.equal(segment.level, 0);
+  assert.equal(segment.from, nestedB1.lineFrom);
+  assert.equal(segment.to, nestedB2.lineTo);
+});
+
+test('three levels of nesting each get their own guide segment', () => {
+  const source = [
+    '1. a',
+    '  1. nested a1',
+    '    1. nested a1a',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const segments = listGuideSegments(source, items);
+  assert.deepEqual(segments.map((segment) => segment.level).sort(), [0, 1]);
+});
+
+test('an indented continuation paragraph extends the guide segment', () => {
+  const source = [
+    '- item',
+    '',
+    '  A continuation paragraph indented under the item.',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const [segment] = listGuideSegments(source, items);
+  assert.equal(segment.level, 0);
+  assert.equal(segment.to, source.length);
+  assert.ok(source.slice(segment.from, segment.to).includes('A continuation paragraph'));
+});
+
+test('an unindented paragraph after a blank line ends the list, no segment', () => {
+  const source = [
+    '- item',
+    '',
+    'An unrelated paragraph, not indented.',
+  ].join('\n');
+  const items = listItemRanges(source);
+  assert.deepEqual(listGuideSegments(source, items), []);
+});
+
+test('an indented fenced code block extends the guide segment', () => {
+  const source = [
+    '- item',
+    '  ```js',
+    '  code line',
+    '  ```',
+  ].join('\n');
+  const items = listItemRanges(source);
+  const [segment] = listGuideSegments(source, items);
+  assert.equal(segment.level, 0);
+  assert.equal(source.slice(segment.to - 3, segment.to), '```');
 });
 
 test('parses quote lines with depth and marker offsets', () => {

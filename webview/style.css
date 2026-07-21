@@ -485,6 +485,12 @@ body {
   --loommark-code-button-edge: #4a4f59;
   --loommark-code-button-surface: rgb(255 255 255 / 8%);
   --loommark-code-shadow: 0 18px 28px -20px rgb(14 16 22 / 60%);
+  --loommark-guide-0: #c678dd;
+  --loommark-guide-1: #61afef;
+  --loommark-guide-2: #98c379;
+  --loommark-guide-3: #e5c07b;
+  --loommark-guide-4: #d19a66;
+  --loommark-guide-5: #56b6c2;
 }
 
 body.vscode-dark {
@@ -501,6 +507,12 @@ body.vscode-dark {
   --loommark-code-button-edge: #c9cbd0;
   --loommark-code-button-surface: rgb(255 255 255 / 80%);
   --loommark-code-shadow: 0 18px 30px -18px rgb(0 0 0 / 65%);
+  --loommark-guide-0: #a626a4;
+  --loommark-guide-1: #4078f2;
+  --loommark-guide-2: #50a14f;
+  --loommark-guide-3: #c18401;
+  --loommark-guide-4: #986801;
+  --loommark-guide-5: #0184bc;
 }
 
 #editor > .cm-editor .cm-loommark-code-block-line {
@@ -871,6 +883,35 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 #editor > .cm-editor .cm-loommark-task-done {
   opacity: 0.65;
 }
+
+/* Outline connector rails: one per ancestor level, replacing a list item's or continuation
+   line's leading whitespace. Gray by default; the cursor's ancestor chain lights up in a
+   per-level color (rail position always equals its level, since ancestors are always a
+   contiguous run from 0, so :nth-child cycling needs no JS-computed color). */
+#editor > .cm-editor .cm-loommark-list-guide {
+  display: inline-flex;
+  vertical-align: bottom;
+}
+
+#editor > .cm-editor .cm-loommark-list-guide-rail {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 1.4em;
+  border-left: 1.5px solid var(--vscode-descriptionForeground, #8a8a8a);
+  opacity: 0.35;
+}
+
+#editor > .cm-editor .cm-loommark-list-guide-rail.is-active {
+  opacity: 0.9;
+}
+
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+1).is-active { border-left-color: var(--loommark-guide-0); }
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+2).is-active { border-left-color: var(--loommark-guide-1); }
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+3).is-active { border-left-color: var(--loommark-guide-2); }
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+4).is-active { border-left-color: var(--loommark-guide-3); }
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+5).is-active { border-left-color: var(--loommark-guide-4); }
+#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+6).is-active { border-left-color: var(--loommark-guide-5); }
 
 #editor > .cm-editor .cm-loommark-quote {
   border-left: 3px solid var(--vscode-textBlockQuote-border, #888888);

@@ -165,6 +165,11 @@
           "default": "decimal",
           "description": "How nested ordered list markers are numbered when rendered."
         },
+        "loommark.listGuides": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show connector lines between nested list items and their continuation content (indented paragraphs, quotes, code blocks). The line the cursor is on lights up its full ancestor chain."
+        },
         "loommark.keyboardEditing": {
           "type": "boolean",
           "default": false,

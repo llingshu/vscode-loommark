@@ -33,6 +33,7 @@ import {
   imageRanges,
   isEscaped,
   linkDestinationRanges,
+  listGuideSegments,
   listItemRanges,
   mathRanges,
   orderedListLabels,
@@ -46,6 +47,7 @@ import {
   CodeToolbarWidget,
   HorizontalRuleWidget,
   ImageWidget,
+  ListGuideWidget,
   MathWidget,
   OrderedLabelWidget,
   TableWidget,
@@ -91,6 +93,7 @@ let resourceBase = '';
 let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
 let orderedListStyle: OrderedListStyle = 'decimal';
+let listGuidesEnabled = true;
 let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
@@ -333,6 +336,54 @@ const listField = selectionAwareField((state) => {
       ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
         .range(item.task.boxFrom, item.task.boxTo));
     }
+  }
+  return Decoration.set(ranges, true);
+});
+
+const listGuideField = selectionAwareField((state) => {
+  const ranges: Range<Decoration>[] = [];
+  if (!listGuidesEnabled) return Decoration.set(ranges);
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  const items = listItemRanges(source);
+  const segments = listGuideSegments(source, items);
+  if (!segments.length) return Decoration.set(ranges);
+
+  const activeLevels = new Set<number>();
+  for (const segment of segments) {
+    if (cursor >= segment.from && cursor <= segment.to) activeLevels.add(segment.level);
+  }
+
+  const itemByLineFrom = new Map(items.map((item) => [item.lineFrom, item] as const));
+  // A line's rendered rails are exactly the ancestor levels of every segment that covers it;
+  // an item's own segment (if any) starts on the line *after* it, so this never includes the
+  // item's own level on its own line, only on lines belonging to its descendants/continuation.
+  const lineLevels = new Map<number, Set<number>>();
+  for (const segment of segments) {
+    let position = segment.from;
+    while (position <= segment.to) {
+      const line = state.doc.lineAt(position);
+      let levels = lineLevels.get(line.from);
+      if (!levels) {
+        levels = new Set();
+        lineLevels.set(line.from, levels);
+      }
+      levels.add(segment.level);
+      position = line.to + 1;
+    }
+  }
+
+  for (const [lineFrom, levels] of lineLevels) {
+    const line = state.doc.lineAt(lineFrom);
+    if (cursor >= line.from && cursor <= line.to) continue;
+    const item = itemByLineFrom.get(lineFrom);
+    const replaceTo = item
+      ? item.markerFrom
+      : line.from + (line.text.match(/^[ \t]*/)?.[0].length ?? 0);
+    if (replaceTo <= line.from) continue;
+    ranges.push(Decoration.replace({
+      widget: new ListGuideWidget(Math.max(...levels) + 1, activeLevels),
+    }).range(line.from, replaceTo));
   }
   return Decoration.set(ranges, true);
 });
@@ -681,6 +732,7 @@ function createEditor(text: string): void {
         tableField,
         imageField,
         listField,
+        listGuideField,
         quoteField,
         mathField,
         keyboardAtomicRanges,
@@ -855,11 +907,13 @@ function applyConfiguration(config: EditorConfiguration): void {
   const needsRefresh = tableMode !== config.table
     || tableStyle !== config.tableStyle
     || orderedListStyle !== config.orderedListStyle
-    || keyboardEditing !== config.keyboardEditing;
+    || keyboardEditing !== config.keyboardEditing
+    || listGuidesEnabled !== config.listGuides;
   tableMode = config.table;
   tableStyle = config.tableStyle;
   orderedListStyle = config.orderedListStyle;
   keyboardEditing = config.keyboardEditing;
+  listGuidesEnabled = config.listGuides;
   if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 

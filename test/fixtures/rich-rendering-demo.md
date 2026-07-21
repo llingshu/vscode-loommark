@@ -28,6 +28,16 @@ Inline ![icon](./missing.png) placeholder demo.
     1. Doubly nested (decimal: 2.2.1, cycle: i)
 3. Top level three
 
+## List Guides
+
+- Parent item
+  - Child A
+
+    A continuation paragraph under Child A, still connected to it.
+  - Child B
+    - Grandchild B1
+    - Grandchild B2
+
 ## Math
 
 Euler's identity $e^{i\pi} + 1 = 0$ inline, and a display block:

@@ -94,6 +94,7 @@ function editorConfiguration(): EditorConfiguration {
     tableStyle,
     orderedListStyle,
     keyboardEditing: configuration.get('keyboardEditing', false),
+    listGuides: configuration.get('listGuides', true),
   };
 }
 

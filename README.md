@@ -25,6 +25,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
 - Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list. Nested
   ordered lists renumber automatically (`1, 2, 2.1, 2.2` by default).
+- Outline connector lines between nested list items, with the cursor's ancestor chain lit up
+  in color.
 - `#tag` chips that stay part of the editable text.
 - Backslash escapes (`\*`, `\#`, `\!`, ...) turn off Markdown syntax for a single character.
 - Find and replace inside the editor (Ctrl/Cmd+F), styled like VS Code's native find widget.
@@ -82,6 +84,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
 | `loommark.orderedListStyle` | `decimal` | Number nested ordered lists `1, 2, 2.1, 2.2` (`decimal`) or cycle arabic/letters/roman numerals per level (`cycle`). |
+| `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
@@ -152,6 +155,21 @@ Math is rendered locally with [KaTeX](https://katex.org/) — no network request
 math uses `$...$` and display math uses `$$...$$` (including multi-line blocks). Currency-like
 text (`$5`, `$10`) is left as plain text. Invalid LaTeX shows KaTeX's inline error instead of
 breaking the editor.
+
+## Lists
+
+Tab and Shift+Tab indent/outdent the current line (or every selected line), which is how a list
+item becomes a nested sub-list — nesting is purely indentation, the same as CommonMark.
+
+Nested ordered lists are renumbered for display only; the source keeps whatever number was typed.
+`loommark.orderedListStyle` chooses `decimal` (default: `1, 2, 2.1, 2.2, 2.2.1`) or `cycle`
+(arabic, then letters, then lowercase roman numerals per level — `1, a, i` — repeating every
+three levels).
+
+`loommark.listGuides` (default on) draws a connector line between a list item, its nested
+children, and any indented continuation content underneath it (a paragraph, blockquote, or code
+block). Guides are gray by default; the line the cursor is on lights up its full ancestor chain,
+one color per level.
 
 ## Tags
 

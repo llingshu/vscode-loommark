@@ -404,6 +404,70 @@ export function orderedListLabels(
   return labels;
 }
 
+export type ListGuideSegment = { level: number; from: number; to: number };
+
+function lineIndent(line: string): number {
+  return (line.match(/^[ \t]*/)?.[0] ?? '').replace(/\t/g, '  ').length;
+}
+
+// Computes one vertical connector segment per list item that has content below its own
+// line — nested child items, and/or a continuation (a lazily-indented paragraph, blockquote,
+// or fenced code block belonging to the item). A segment spans from the line right after the
+// item's own line through the last line still considered part of it, mirroring how nested
+// <ol>/<li> numbering "stays open" until a shallower sibling, an insufficiently indented
+// line, or the end of the document closes it. Leaf items with nothing below them produce no
+// segment: there is nothing to connect.
+export function listGuideSegments(source: string, items: ListItemRange[]): ListGuideSegment[] {
+  const lines = source.split('\n');
+  const lineOffsets: number[] = [];
+  let cursor = 0;
+  for (const line of lines) {
+    lineOffsets.push(cursor);
+    cursor += line.length + 1;
+  }
+  const itemByLineIndex = new Map<number, ListItemRange>();
+  for (const item of items) {
+    const lineIndex = lineOffsets.indexOf(item.lineFrom);
+    if (lineIndex >= 0) itemByLineIndex.set(lineIndex, item);
+  }
+
+  const segments: ListGuideSegment[] = [];
+  const stack: Array<{ item: ListItemRange; ownLineIndex: number; requiredIndent: number }> = [];
+  let lastContentLineIndex = -1;
+
+  const closeThrough = (predicate: (top: { item: ListItemRange; ownLineIndex: number; requiredIndent: number }) => boolean) => {
+    while (stack.length && predicate(stack[stack.length - 1])) {
+      const closed = stack.pop();
+      if (!closed) break;
+      if (closed.ownLineIndex < lastContentLineIndex) {
+        segments.push({
+          level: closed.item.level,
+          from: lineOffsets[closed.ownLineIndex + 1],
+          to: lineOffsets[lastContentLineIndex] + lines[lastContentLineIndex].length,
+        });
+      }
+    }
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const item = itemByLineIndex.get(lineIndex);
+    if (item) {
+      closeThrough((top) => top.item.level >= item.level);
+      const requiredIndent = (item.markerFrom - item.lineFrom) + 2;
+      stack.push({ item, ownLineIndex: lineIndex, requiredIndent });
+      lastContentLineIndex = lineIndex;
+      continue;
+    }
+    const line = lines[lineIndex];
+    if (!line.trim()) continue;
+    const indent = lineIndent(line);
+    closeThrough((top) => top.requiredIndent > indent);
+    lastContentLineIndex = lineIndex;
+  }
+  closeThrough(() => true);
+  return segments;
+}
+
 export type MathRange = { from: number; to: number; tex: string; display: boolean };
 
 const displayMathPattern = /\$\$([\s\S]+?)\$\$/g;

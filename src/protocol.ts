@@ -6,6 +6,7 @@ export type EditorConfiguration = {
   tableStyle: TableStyle;
   orderedListStyle: OrderedListStyle;
   keyboardEditing: boolean;
+  listGuides: boolean;
 };
 
 export type HostToWebview =
