@@ -68,10 +68,19 @@ outline navigation and commands.
 - wiki-link completion and the in-editor find/replace panel;
 - code-block controls;
 - in-editor outline rendering;
+- list guide connectors and heading card mode (`loommark.listGuides`, `loommark.cardMode`);
 - runtime diagnostics collection.
 
 [`webview/style.css`](../webview/style.css) owns presentation. CSS must not be used to encode
 document state or cause source edits.
+
+VS Code refocuses the Webview container itself when its tab or the whole window regains focus,
+but has no way to know which inner element should receive it back, so it lands on `<body>` —
+`main.ts` listens for `window`'s `focus` event and `document`'s `visibilitychange` (both are
+registered since it is not guaranteed which one a given VS Code Webview host actually dispatches)
+and calls `editor.focus()`, but only when nothing else already holds it (`document.activeElement`
+is `<body>` or absent). A browser never draws a text caret in a non-focused editable region, so
+skipping this leaves the cursor invisible until the user clicks back into the editor.
 
 ## Synchronization Protocol
 

@@ -557,3 +557,47 @@ export function inlineCodeRanges(
   }
   return ranges;
 }
+
+export type HeadingRange = { lineFrom: number; lineTo: number; level: number };
+
+// Matches the heading-detection regex already used for the heading marker/hide decorations
+// (main.ts's buildHeadingDecorations) so the two never disagree about what counts as a heading.
+const headingPattern = /^( {0,3})(#{1,6})(\s+)/;
+
+export function headingRanges(source: string): HeadingRange[] {
+  const lines = source.split('\n');
+  const results: HeadingRange[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    const match = line.match(headingPattern);
+    if (match) results.push({ lineFrom: offset, lineTo: offset + line.length, level: match[2].length });
+    offset += line.length + 1;
+  }
+  return results;
+}
+
+export type HeadingSection = { level: number; from: number; to: number };
+
+// One section per heading: from its own line (the heading acts as the card's title, inside
+// the card, not floating above it) through the last line still "under" it — everything until
+// a heading of the same or shallower level appears, or the document ends. A same-or-shallower
+// heading closes every deeper section still open at once, the same way nested <ol>/<li> or the
+// list-guide segments close on a shallower sibling.
+export function headingSections(source: string, headings: HeadingRange[]): HeadingSection[] {
+  const sections: HeadingSection[] = [];
+  const stack: HeadingRange[] = [];
+  for (const heading of headings) {
+    while (stack.length && stack[stack.length - 1].level >= heading.level) {
+      const closed = stack.pop();
+      if (!closed) break;
+      sections.push({ level: closed.level, from: closed.lineFrom, to: heading.lineFrom - 1 });
+    }
+    stack.push(heading);
+  }
+  while (stack.length) {
+    const closed = stack.pop();
+    if (!closed) break;
+    sections.push({ level: closed.level, from: closed.lineFrom, to: source.length });
+  }
+  return sections;
+}

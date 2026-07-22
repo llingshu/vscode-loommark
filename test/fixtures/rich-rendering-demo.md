@@ -68,4 +68,23 @@ Literal characters: \*not bold\*, \_not italic\_, \#not a tag, \![not an image](
 
 ---
 
+## Card Mode
+
+This whole document is already one Card-mode example (every `##` section here is its own
+nested card under the top `#` heading), but here is a deeper chain to see more levels stack:
+
+### Level three
+
+Body text at level three.
+
+#### Level four
+
+Body text at level four, nested inside level three, inside Card Mode, inside the document title.
+
+##### Level five
+
+The outermost card (level one, the document title) keeps its full rounded border everywhere;
+deeper levels get their own background tint and a plain side-border line rather than
+independent rounding, since one line can only round one border.
+
 Done.

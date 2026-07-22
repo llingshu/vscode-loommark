@@ -16,6 +16,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 
 - Continuous editing with normal cursor movement, selection, undo, IME composition, and fast input.
 - Progressive rendering for headings, emphasis, strong text, strikethrough, links, and inline code.
+- Card mode: each heading's section renders as a colored, nested card, so it is visually obvious
+  which heading you're under. On by default; toggle from the editor title bar.
 - Fenced code blocks with language-aware highlighting, line numbers, copy controls, and language
   selection.
 - GFM tables that render as real tables, editable in place or as expand-to-source widgets, in a
@@ -74,6 +76,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `LoomMark: Open Source Editor` | Reopen the current document in VS Code's default text editor. |
 | `LoomMark: Focus Markdown Outline` | Open Explorer and focus LoomMark's native outline. |
 | `LoomMark: Copy Editor Diagnostics` | Copy structured runtime diagnostics for bug reports. |
+| `LoomMark: Toggle Heading Card Mode` | Turn `loommark.cardMode` on or off. Also in the editor title bar. |
 
 ## Settings
 
@@ -85,6 +88,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
 | `loommark.orderedListStyle` | `cycle` | Number nested ordered lists by cycling arabic/letters/roman numerals per level (`cycle`) or `1, 2, 2.1, 2.2` (`decimal`). |
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
+| `loommark.cardMode` | `true` | Wrap each heading's section in a nested, colored card. Also toggled from the editor title bar. |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
@@ -117,6 +121,20 @@ const message: string = "hello";
 The code-block UI is a view layer. Copy does not include fences. Changing the language selector is
 an explicit, undoable edit to the opening fence only. Terminal-like languages receive restrained
 window chrome; other languages use neutral controls.
+
+## Card Mode
+
+`loommark.cardMode` (default on) wraps each heading's section — the heading itself plus
+everything under it, up to the next heading of the same or shallower level — in a colored,
+rounded card. A sub-heading's card nests inside its parent's, so a deeply nested section reads
+as several cards layered inside each other, one per ancestor heading. Colors cycle through six
+hues per level (matching the same palette used by list guides) and never touch the document
+text — this is presentation only, the same as every other progressive-rendering feature. Toggle
+it from the `$(layers)` button in the editor title bar, or `LoomMark: Toggle Heading Card Mode`.
+
+Because a single line can only have one rounded border, only the shallowest (outermost) heading
+active on a given line gets the fully rounded card edge; a deeper heading's section closing on
+that same line gets a plain straight-sided color band instead of its own independent rounding.
 
 ## Rendered Widgets
 

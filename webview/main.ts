@@ -29,6 +29,8 @@ import {
   fencedCodeRanges,
   inlineCodeRanges,
   escapedCharRanges,
+  headingRanges,
+  headingSections,
   horizontalRuleRanges,
   imageRanges,
   isEscaped,
@@ -95,6 +97,7 @@ let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
 let orderedListStyle: OrderedListStyle = 'cycle';
 let listGuidesEnabled = true;
+let cardModeEnabled = true;
 let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
@@ -399,6 +402,101 @@ const listGuideField = selectionAwareField((state) => {
     }).range(line.from, replaceTo));
   }
   return Decoration.set(ranges, true);
+});
+
+const HEADING_CARD_INSET_STEP = 10;
+
+function headingLevelColorVar(level: number): string {
+  return `var(--loommark-guide-${(level - 1) % 6})`;
+}
+
+// One StateField, not a selectionAwareField: which lines are inside which heading's card
+// depends only on document structure, never on where the cursor is.
+function buildHeadingCardDecorations(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  if (!cardModeEnabled) return Decoration.set(ranges);
+  const source = state.doc.toString();
+  const headings = headingRanges(source);
+  if (!headings.length) return Decoration.set(ranges);
+  const sections = headingSections(source, headings);
+
+  // A line can be inside several nested sections at once (an H3 body line is also inside its
+  // H2 and H1 ancestors' sections). Group by line first so each line is styled exactly once.
+  const lineSections = new Map<number, typeof sections>();
+  for (const section of sections) {
+    let position = section.from;
+    while (position <= section.to) {
+      const line = state.doc.lineAt(position);
+      let list = lineSections.get(line.from);
+      if (!list) {
+        list = [];
+        lineSections.set(line.from, list);
+      }
+      list.push(section);
+      position = line.to + 1;
+    }
+  }
+
+  for (const [lineFrom, sectionsForLine] of lineSections) {
+    const line = state.doc.lineAt(lineFrom);
+    // The shallowest heading active on this line gets the real, rounded card border; a single
+    // DOM element only has one border-radius, so deeper levels nested on the same line use a
+    // plain (unrounded) inset box-shadow line instead — see docs/EDITOR_TECHNOLOGY.md.
+    const outer = sectionsForLine.reduce((a, b) => (a.level <= b.level ? a : b));
+    const outerInset = (outer.level - 1) * HEADING_CARD_INSET_STEP;
+    const isOuterFirst = line.from === outer.from;
+    const isOuterLast = line.to >= outer.to;
+
+    const backgroundImages: string[] = [];
+    const backgroundPositions: string[] = [];
+    const backgroundSizes: string[] = [];
+    const innerBoxShadows: string[] = [];
+    // Deepest first: CSS paints the first-listed background layer on top, so the narrowest
+    // (innermost) band needs to come first to sit visually above the wider ancestor bands.
+    const deepestFirst = [...sectionsForLine].sort((a, b) => b.level - a.level);
+    for (const section of deepestFirst) {
+      const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+      const colorVar = headingLevelColorVar(section.level);
+      backgroundImages.push(`linear-gradient(${colorVar}, ${colorVar})`);
+      backgroundPositions.push(`${relativeInset}px 0`);
+      backgroundSizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
+      if (section.level !== outer.level) {
+        innerBoxShadows.push(`inset ${relativeInset}px 0 0 0 ${colorVar}`);
+        innerBoxShadows.push(`inset -${relativeInset}px 0 0 0 ${colorVar}`);
+      }
+    }
+
+    const classes = ['cm-loommark-heading-card'];
+    if (isOuterFirst) classes.push('cm-loommark-heading-card-first');
+    if (isOuterLast) classes.push('cm-loommark-heading-card-last');
+
+    const style = [
+      `--loommark-heading-card-color: ${headingLevelColorVar(outer.level)}`,
+      `margin-left: ${outerInset}px`,
+      `margin-right: ${outerInset}px`,
+      `background-image: ${backgroundImages.join(', ')}`,
+      `background-position: ${backgroundPositions.join(', ')}`,
+      `background-size: ${backgroundSizes.join(', ')}`,
+      'background-repeat: no-repeat',
+      innerBoxShadows.length > 0 ? `box-shadow: ${innerBoxShadows.join(', ')}` : '',
+    ].filter((declaration) => declaration.length > 0).join('; ');
+
+    ranges.push(Decoration.line({
+      attributes: { class: classes.join(' '), style },
+    }).range(line.from));
+  }
+  return Decoration.set(ranges, true);
+}
+
+const headingCardField = StateField.define<DecorationSet>({
+  create: buildHeadingCardDecorations,
+  update(value, transaction) {
+    if (transaction.docChanged || transaction.effects.some((effect) => effect.is(decorationsRefresh))) {
+      return buildHeadingCardDecorations(transaction.state);
+    }
+    return value.map(transaction.changes);
+  },
+  provide: (field) => EditorView.decorations.from(field),
 });
 
 const mathField = selectionAwareField((state) => {
@@ -741,6 +839,7 @@ function createEditor(text: string): void {
         keymap.of([indentWithTab, ...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         headingDecorations,
+        headingCardField,
         inlineDecorations,
         inlineCodeDecorations,
         fencedCodeDecorations,
@@ -924,12 +1023,14 @@ function applyConfiguration(config: EditorConfiguration): void {
     || tableStyle !== config.tableStyle
     || orderedListStyle !== config.orderedListStyle
     || keyboardEditing !== config.keyboardEditing
-    || listGuidesEnabled !== config.listGuides;
+    || listGuidesEnabled !== config.listGuides
+    || cardModeEnabled !== config.cardMode;
   tableMode = config.table;
   tableStyle = config.tableStyle;
   orderedListStyle = config.orderedListStyle;
   keyboardEditing = config.keyboardEditing;
   listGuidesEnabled = config.listGuides;
+  cardModeEnabled = config.cardMode;
   if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 
@@ -1035,6 +1136,22 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
     }, null, 2);
     vscode.postMessage({ type: 'diagnostics', report });
   }
+});
+
+// When the VS Code window (or this webview's tab) regains focus, VS Code focuses the webview
+// container itself but has no way to know which inner element should get it back — Chromium
+// then leaves document.activeElement on <body>, and a browser never draws a caret in a
+// non-focused editable region, so the cursor simply doesn't render until something is clicked.
+// Restore it automatically, but only when nothing else (an outline button, a table cell) has
+// already legitimately reclaimed focus. Both events are registered since it is not guaranteed
+// which one a given VS Code webview host actually dispatches on tab/window reactivation.
+function restoreEditorFocusIfIdle(): void {
+  const active = document.activeElement;
+  if (editor && (!active || active === document.body)) editor.focus();
+}
+window.addEventListener('focus', restoreEditorFocusIfIdle);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') restoreEditorFocusIfIdle();
 });
 
 window.addEventListener('beforeunload', () => {

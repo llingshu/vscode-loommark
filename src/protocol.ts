@@ -7,6 +7,7 @@ export type EditorConfiguration = {
   orderedListStyle: OrderedListStyle;
   keyboardEditing: boolean;
   listGuides: boolean;
+  cardMode: boolean;
 };
 
 export type HostToWebview =

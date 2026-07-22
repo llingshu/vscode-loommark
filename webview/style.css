@@ -407,6 +407,34 @@ body.outline-collapsed #outline {
 #editor > .cm-editor .cm-loommark-h5::before { content: "H5"; }
 #editor > .cm-editor .cm-loommark-h6::before { content: "H6"; }
 
+/* Card mode (loommark.cardMode): every line under a heading gets stacked background tints
+   and side borders per active nesting level, computed and set inline per line in main.ts
+   (buildHeadingCardDecorations) since the exact colors/insets vary line to line. Only the
+   shallowest (outermost) active level on a line gets a real, rounded CSS border — one element
+   has one border-radius, so a deeper level closing on the same line uses a plain inset
+   box-shadow line instead of trying to round independently. See docs/EDITOR_TECHNOLOGY.md. */
+#editor > .cm-editor .cm-loommark-heading-card {
+  box-sizing: border-box;
+  border-right: 1.5px solid var(--loommark-heading-card-color);
+  border-left: 1.5px solid var(--loommark-heading-card-color);
+}
+
+#editor > .cm-editor .cm-loommark-heading-card-first {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1.5px solid var(--loommark-heading-card-color);
+  border-top-right-radius: 8px;
+  border-top-left-radius: 8px;
+}
+
+#editor > .cm-editor .cm-loommark-heading-card-last {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--loommark-heading-card-color);
+  border-bottom-right-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
 #editor > .cm-editor .cm-loommark-strong {
   font-weight: 700;
 }

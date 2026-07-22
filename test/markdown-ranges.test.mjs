@@ -5,6 +5,8 @@ import {
   fencedCodeRanges,
   inlineCodeRanges,
   escapedCharRanges,
+  headingRanges,
+  headingSections,
   horizontalRuleRanges,
   imageRanges,
   isEscaped,
@@ -388,4 +390,51 @@ test('does not treat currency as math', () => {
 test('ignores math inside code', () => {
   const source = '```\n$x+y$\n```\nand `$a$` too';
   assert.equal(mathRanges(source).length, 0);
+});
+
+test('parses heading levels and line offsets', () => {
+  const source = '# H1\ntext\n## H2\nmore\n### H3';
+  const headings = headingRanges(source);
+  assert.deepEqual(headings.map((h) => h.level), [1, 2, 3]);
+  assert.equal(source.slice(headings[1].lineFrom, headings[1].lineTo), '## H2');
+});
+
+test('a lone top-level heading spans to the end of the document', () => {
+  const source = '# Title\nbody line one\nbody line two';
+  const headings = headingRanges(source);
+  const [section] = headingSections(source, headings);
+  assert.equal(section.level, 1);
+  assert.equal(section.from, headings[0].lineFrom);
+  assert.equal(section.to, source.length);
+});
+
+test('a shallower heading closes the previous section right before it', () => {
+  const source = '# One\nbody\n# Two\nbody';
+  const headings = headingRanges(source);
+  const sections = headingSections(source, headings);
+  const first = sections.find((s) => source.slice(s.from, s.from + 5) === '# One');
+  assert.equal(source.slice(first.from, first.to), '# One\nbody');
+});
+
+test('nested headings each get their own section, parent spans the whole subtree', () => {
+  // Once inside a level-3 section, only a heading of level <= 3 can end it — plain body text
+  // can never "return" to a shallower section on its own, so "more three text" stays part of
+  // Three's section, and Three's section stays part of Two's, and so on up to One's.
+  const source = '# One\nintro\n## Two\nbody two\n### Three\nbody three\nmore three text';
+  const headings = headingRanges(source);
+  const sections = headingSections(source, headings);
+  assert.equal(sections.length, 3);
+  const byLevel = Object.fromEntries(sections.map((s) => [s.level, s]));
+  assert.equal(source.slice(byLevel[3].from, byLevel[3].to), '### Three\nbody three\nmore three text');
+  assert.equal(source.slice(byLevel[2].from, byLevel[2].to), source.slice(byLevel[2].from));
+  assert.equal(source.slice(byLevel[1].from, byLevel[1].to), source);
+});
+
+test('a same-level heading closes all deeper open sections at once', () => {
+  const source = '# One\n## Two\n### Three\n# Four';
+  const headings = headingRanges(source);
+  const sections = headingSections(source, headings);
+  assert.equal(sections.length, 4);
+  const closedBeforeFour = sections.filter((s) => s.to === source.indexOf('# Four') - 1);
+  assert.equal(closedBeforeFour.length, 3);
 });

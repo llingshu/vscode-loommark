@@ -28,6 +28,10 @@ All notable changes to LoomMark are documented here. This project follows
   source syntax to reveal there, only blank space). Gray by default; the cursor's own line and
   each of its direct ancestor items' lines light up in color, one per nesting level — sibling
   branches and unrelated content sharing part of the same connector stay gray.
+- Card mode (`loommark.cardMode`, default on): each heading's section renders as a colored,
+  rounded card, nested one inside another for sub-headings, so it is visually clear which
+  heading a given line is under. Colors cycle through the same six-hue palette as list guides.
+  Toggle from the new `LoomMark: Toggle Heading Card Mode` command, also in the editor title bar.
 
 ### Changed
 
@@ -57,6 +61,12 @@ All notable changes to LoomMark are documented here. This project follows
   folded it into the parent item's paragraph instead, so there was no list left for Enter to
   continue. List nesting (Tab/Shift+Tab, rendered levels, guide lines, ordered-list numbering)
   now uses 4 spaces per level everywhere, which satisfies every realistic marker width.
+- The text cursor no longer disappears after switching away from VS Code (or this editor's tab)
+  and back. VS Code refocuses the Webview container on return, but has no way to know which
+  inner element should get focus back, so it was left on `<body>` — and a browser never draws a
+  caret in a non-focused editable region. Focus is now restored to the editor automatically,
+  unless something else inside the Webview (an outline button, a table cell) already
+  legitimately reclaimed it.
 
 ## [0.3.0] - 2026-07-20
 

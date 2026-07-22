@@ -32,6 +32,11 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showWarningMessage('Open a Markdown file in LoomMark first.');
       }
     }),
+    vscode.commands.registerCommand('loommark.toggleCardMode', async () => {
+      const configuration = vscode.workspace.getConfiguration('loommark');
+      const current = configuration.get('cardMode', true);
+      await configuration.update('cardMode', !current, vscode.ConfigurationTarget.Global);
+    }),
     vscode.window.createTreeView('loommark.outline', {
       treeDataProvider: outlineProvider,
       showCollapseAll: true,
@@ -95,6 +100,7 @@ function editorConfiguration(): EditorConfiguration {
     orderedListStyle,
     keyboardEditing: configuration.get('keyboardEditing', false),
     listGuides: configuration.get('listGuides', true),
+    cardMode: configuration.get('cardMode', true),
   };
 }
 

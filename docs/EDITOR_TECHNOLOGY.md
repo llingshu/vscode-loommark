@@ -91,6 +91,45 @@ connector's span (a sibling branch, unrelated continuation content one level up)
 default even though it is technically inside a segment covering that level — a segment marks
 where a connector visually passes, not who counts as being on the cursor's ancestor path.
 
+## Heading Card Mode
+
+`headingSections()` (`webview/markdown-ranges.ts`) is the heading equivalent of
+`listGuideSegments()`, but structurally simpler: a heading section is bounded purely by heading
+*levels*, with no indentation-threshold logic needed. It walks the document's `headingRanges()`
+with a stack, closing every open section whose level is >= the next heading's level (a same-level
+heading closes all deeper ones at once, the same as a shallower list item does for list guides),
+and records one section per heading spanning from its own line (the heading is the card's title,
+rendered inside it, not floating above) through wherever it closes or end of document.
+
+`webview/main.ts`'s `headingCardField` groups sections by the lines they cover, so a line deep in
+a heading's subtree ends up listed under every ancestor section simultaneously. It then picks the
+*shallowest* active level on that line as the "outer" one and computes everything relative to it:
+
+- Background: one `linear-gradient(color, color)` layer per active level, inset by
+  `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in
+  the CSS `background-image` list (CSS paints earlier-listed layers on top, so the narrowest band
+  needs to be in front of the wider ones behind it).
+- Side borders: the outer level gets a real CSS `border-left`/`border-right` (via the
+  `cm-loommark-heading-card` class, colored through an inline `--loommark-heading-card-color`
+  custom property); every deeper level gets a plain `inset` `box-shadow` line at its own offset
+  instead, since box-shadow doesn't participate in the element's border-radius the way a real
+  border does.
+- Rounded top/bottom edges only ever apply to the outer level, via `cm-loommark-heading-card-first`
+  / `-last` (real `border-top`/`border-bottom` + `border-radius`), applied when the line equals
+  the outer section's own `from`/`to`. A single DOM element has exactly one `border-radius`, so a
+  deeper section that happens to close on the same line (e.g. several nested headings all ending
+  right before a shallower one) cannot get its own independent rounding — it keeps a flat edge.
+  True per-level rounded nesting would need real nested DOM wrapping multiple sibling lines, which
+  CodeMirror's line-based decoration model does not support (see Module Layout above); this is the
+  practical limit of doing it with per-line CSS instead.
+- `margin-left`/`margin-right` equal to the outer level's own inset, so the whole card (all of its
+  stacked layers) sits inset from the document edge once, rather than every level separately
+  padding inward from a fixed left edge.
+
+Unlike list guides, this field is a plain `StateField` reacting only to `docChanged` (and
+`decorationsRefresh`, for the `loommark.cardMode` toggle) — which lines belong to which heading's
+card never depends on cursor position.
+
 ## Decoration Types
 
 ### Mark Decorations

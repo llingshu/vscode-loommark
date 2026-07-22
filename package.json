@@ -69,6 +69,11 @@
       {
         "command": "loommark.copyDiagnostics",
         "title": "LoomMark: Copy Editor Diagnostics"
+      },
+      {
+        "command": "loommark.toggleCardMode",
+        "title": "LoomMark: Toggle Heading Card Mode",
+        "icon": "$(layers)"
       }
     ],
     "menus": {
@@ -81,6 +86,11 @@
         {
           "command": "loommark.focusOutline",
           "when": "activeCustomEditorId == loommark.editor && (config.loommark.outline == both || config.loommark.outline == explorer)",
+          "group": "navigation"
+        },
+        {
+          "command": "loommark.toggleCardMode",
+          "when": "activeCustomEditorId == loommark.editor",
           "group": "navigation"
         }
       ]
@@ -169,6 +179,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show connector lines between nested list items and their continuation content (indented paragraphs, quotes, code blocks). The line the cursor is on lights up its full ancestor chain."
+        },
+        "loommark.cardMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Wrap each heading's section in a colored card, nested one inside another for sub-headings, so it is visually clear which heading you're under. Toggle from the editor title bar."
         },
         "loommark.keyboardEditing": {
           "type": "boolean",
