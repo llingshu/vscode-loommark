@@ -4,6 +4,14 @@ import 'katex/dist/katex.min.css';
 import type { FencedCodeRange, ImageRange, MathRange, TableCell, TableRange } from './markdown-ranges';
 import type { TableMode } from '../src/protocol';
 
+export type BlockCardPresentation = { className: string; style: string } | undefined;
+
+function applyBlockCard(element: HTMLElement, presentation: BlockCardPresentation): void {
+  if (!presentation) return;
+  element.classList.add(...presentation.className.split(' ').filter(Boolean));
+  element.setAttribute('style', presentation.style);
+}
+
 export const codeLanguages = [
   '', 'bash', 'shell', 'powershell', 'javascript', 'typescript', 'json', 'python',
   'html', 'css', 'scss', 'sql', 'yaml', 'markdown', 'java', 'c', 'cpp', 'rust', 'go',
@@ -42,14 +50,19 @@ export function isTerminalLanguage(language: string): boolean {
 }
 
 export class CodeToolbarWidget extends WidgetType {
-  constructor(private readonly block: FencedCodeRange) {
+  constructor(
+    private readonly block: FencedCodeRange,
+    private readonly card: BlockCardPresentation,
+  ) {
     super();
   }
 
   eq(other: CodeToolbarWidget): boolean {
     return this.block.openFrom === other.block.openFrom
       && this.block.language === other.block.language
-      && this.block.code === other.block.code;
+      && this.block.code === other.block.code
+      && this.card?.className === other.card?.className
+      && this.card?.style === other.card?.style;
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -98,7 +111,12 @@ export class CodeToolbarWidget extends WidgetType {
     });
 
     toolbar.append(chrome, select, copy);
-    return toolbar;
+    if (!this.card) return toolbar;
+    const shell = document.createElement('div');
+    shell.className = 'cm-loommark-block-card-shell';
+    applyBlockCard(shell, this.card);
+    shell.append(toolbar);
+    return shell;
   }
 
   ignoreEvent(): boolean {
@@ -270,6 +288,7 @@ export class MathWidget extends WidgetType {
   constructor(
     private readonly math: MathRange,
     private readonly block: boolean,
+    private readonly card?: BlockCardPresentation,
   ) {
     super();
   }
@@ -278,12 +297,14 @@ export class MathWidget extends WidgetType {
     return this.math.from === other.math.from
       && this.math.tex === other.math.tex
       && this.math.display === other.math.display
-      && this.block === other.block;
+      && this.block === other.block
+      && this.card?.style === other.card?.style;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement(this.block ? 'div' : 'span');
     container.className = `cm-loommark-math${this.block ? ' is-block' : ''}`;
+    if (this.block) applyBlockCard(container, this.card);
     container.contentEditable = 'false';
     katex.render(this.math.tex, container, {
       displayMode: this.math.display,
@@ -318,6 +339,62 @@ export class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+export class QuoteMarkerWidget extends WidgetType {
+  constructor(private readonly depth: number) {
+    super();
+  }
+
+  eq(other: QuoteMarkerWidget): boolean {
+    return this.depth === other.depth;
+  }
+
+  toDOM(): HTMLElement {
+    const marker = document.createElement('span');
+    marker.className = 'cm-loommark-quote-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < this.depth; index++) {
+      marker.append(document.createElement('i'));
+    }
+    return marker;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+export class CardBoundaryWidget extends WidgetType {
+  constructor(
+    private readonly kind: 'open' | 'close',
+    private readonly inset: number,
+    private readonly gap: number,
+    private readonly color: string,
+  ) {
+    super();
+  }
+
+  eq(other: CardBoundaryWidget): boolean {
+    return this.kind === other.kind
+      && this.inset === other.inset
+      && this.gap === other.gap
+      && this.color === other.color;
+  }
+
+  toDOM(): HTMLElement {
+    const boundary = document.createElement('span');
+    boundary.className = `cm-loommark-card-boundary is-${this.kind}`;
+    boundary.style.setProperty('--loommark-card-boundary-inset', `${this.inset}px`);
+    boundary.style.setProperty('--loommark-card-boundary-gap', `${this.gap}px`);
+    boundary.style.setProperty('--loommark-card-boundary-color', this.color);
+    boundary.setAttribute('aria-hidden', 'true');
+    return boundary;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 export function resolveImageSource(src: string, resourceBase: string): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(src) || src.startsWith('//')) return src;
   return resourceBase + src.replace(/^\.\//, '');
@@ -328,6 +405,7 @@ export class ImageWidget extends WidgetType {
     private readonly image: ImageRange,
     private readonly resourceBase: string,
     private readonly block: boolean,
+    private readonly card?: BlockCardPresentation,
   ) {
     super();
   }
@@ -336,12 +414,14 @@ export class ImageWidget extends WidgetType {
     return this.image.from === other.image.from
       && this.image.src === other.image.src
       && this.image.alt === other.image.alt
-      && this.resourceBase === other.resourceBase;
+      && this.resourceBase === other.resourceBase
+      && this.card?.style === other.card?.style;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement(this.block ? 'div' : 'span');
     container.className = `cm-loommark-image${this.block ? ' is-block' : ''}`;
+    if (this.block) applyBlockCard(container, this.card);
     container.contentEditable = 'false';
     // Ctrl/Cmd + click is handled by the same global `[data-loommark-href]` listener that
     // opens Markdown links, so it opens whether the image is rendered or shown as source.
@@ -393,6 +473,7 @@ export class TableWidget extends WidgetType {
     private readonly table: TableRange,
     private readonly source: string,
     private readonly mode: TableMode,
+    private readonly card?: BlockCardPresentation,
   ) {
     super();
     this.allRows = [this.table.header, ...this.table.rows];
@@ -401,12 +482,15 @@ export class TableWidget extends WidgetType {
   eq(other: TableWidget): boolean {
     return this.table.from === other.table.from
       && this.source === other.source
-      && this.mode === other.mode;
+      && this.mode === other.mode
+      && this.card?.className === other.card?.className
+      && this.card?.style === other.card?.style;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement('div');
     container.className = `cm-loommark-table${this.mode === 'rich' ? ' is-rich' : ''}`;
+    applyBlockCard(container, this.card);
     container.contentEditable = 'false';
     const table = document.createElement('table');
     const head = document.createElement('thead');

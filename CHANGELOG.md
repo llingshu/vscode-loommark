@@ -28,10 +28,13 @@ All notable changes to LoomMark are documented here. This project follows
   source syntax to reveal there, only blank space). Gray by default; the cursor's own line and
   each of its direct ancestor items' lines light up in color, one per nesting level — sibling
   branches and unrelated content sharing part of the same connector stay gray.
-- Card mode (`loommark.cardMode`, default on): each heading's section renders as a colored,
-  rounded card, nested one inside another for sub-headings, so it is visually clear which
-  heading a given line is under. Colors cycle through the same six-hue palette as list guides.
-  Toggle from the new `LoomMark: Toggle Heading Card Mode` command, also in the editor title bar.
+- Card mode (`loommark.cardMode`, default `card`): visually sets apart each heading's section,
+  nested one inside another for sub-headings, so it is clear which heading a given line is under.
+  Three styles — `tint` (soft background wash), `accent` (colored left border bar), `card`
+  (bordered, rounded box with content padded inward from its own border) — plus `off`, cycled with
+  the new `LoomMark: Toggle Heading Card Mode` command, also in the editor title bar. Colors cycle
+  through the same six-hue palette as list guides by default, or a custom list via the new
+  `loommark.cardColors` setting.
 
 ### Changed
 

@@ -46,6 +46,7 @@ import {
 } from './markdown-ranges';
 import {
   BulletWidget,
+  CardBoundaryWidget,
   CheckboxWidget,
   CodeToolbarWidget,
   HorizontalRuleWidget,
@@ -53,9 +54,12 @@ import {
   ListGuideWidget,
   MathWidget,
   OrderedLabelWidget,
+  QuoteMarkerWidget,
   TableWidget,
+  type BlockCardPresentation,
 } from './widgets';
 import type {
+  CardMode,
   EditorConfiguration,
   HostToWebview,
   OrderedListStyle,
@@ -97,7 +101,8 @@ let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
 let orderedListStyle: OrderedListStyle = 'cycle';
 let listGuidesEnabled = true;
-let cardModeEnabled = true;
+let cardMode: CardMode = 'card';
+let cardColors: string[] = [];
 let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
@@ -233,7 +238,10 @@ const codeToolbarField = StateField.define<DecorationSet>({
     return buildCodeToolbarDecorations(state);
   },
   update(value, transaction) {
-    if (transaction.docChanged) return buildCodeToolbarDecorations(transaction.state);
+    if (transaction.docChanged
+      || transaction.effects.some((effect) => effect.is(decorationsRefresh))) {
+      return buildCodeToolbarDecorations(transaction.state);
+    }
     return value.map(transaction.changes);
   },
   provide: (field) => EditorView.decorations.from(field),
@@ -262,7 +270,12 @@ const tableField = selectionAwareField((state) => {
   for (const table of tableRanges(source)) {
     if (tableMode === 'source' && cursor >= table.from && cursor <= table.to) continue;
     ranges.push(Decoration.replace({
-      widget: new TableWidget(table, source.slice(table.from, table.to), tableMode),
+      widget: new TableWidget(
+        table,
+        source.slice(table.from, table.to),
+        tableMode,
+        blockCardPresentation(source, table.from),
+      ),
       block: true,
     }).range(table.from, table.to));
   }
@@ -296,7 +309,7 @@ const imageField = selectionAwareField((state) => {
         continue;
       }
       ranges.push(Decoration.replace({
-        widget: new ImageWidget(image, resourceBase, true),
+        widget: new ImageWidget(image, resourceBase, true, blockCardPresentation(source, image.from)),
         block: true,
       }).range(line.from, line.to));
     } else {
@@ -405,20 +418,94 @@ const listGuideField = selectionAwareField((state) => {
 });
 
 const HEADING_CARD_INSET_STEP = 10;
+// Keep Card geometry on whole CSS pixels. Fractional borders land on different device-pixel
+// boundaries after VS Code zoom/DPR scaling, making independently rendered CodeMirror lines
+// appear horizontally offset even when their numeric positions are identical.
+const HEADING_CARD_BORDER_WIDTH = 2;
+const CODE_BLOCK_BORDER_WIDTH = 1;
+// Extra room between the innermost border/rail and real content (text, or a nested code
+// block's own border), on top of the geometric per-level inset — the whole point being that
+// card content must never sit flush against the card's own edge.
+const HEADING_CARD_CONTENT_PADDING = 12;
 
-function headingLevelColorVar(level: number): string {
+function blockCardPresentation(source: string, position: number): BlockCardPresentation {
+  if (cardMode === 'off') return undefined;
+  const active = headingSections(source, headingRanges(source))
+    .filter((section) => position >= section.from && position <= section.to);
+  if (!active.length) return undefined;
+  const outer = active.reduce((a, b) => (a.level <= b.level ? a : b));
+  const deepest = active.reduce((a, b) => (a.level >= b.level ? a : b));
+  const outerInset = (outer.level - 1) * HEADING_CARD_INSET_STEP;
+  const contentPadding = (deepest.level - outer.level) * HEADING_CARD_INSET_STEP
+    + HEADING_CARD_CONTENT_PADDING;
+  const deepestFirst = [...active].sort((a, b) => b.level - a.level);
+  const style = [`--loommark-heading-card-color: ${headingLevelColor(outer.level)}`];
+
+  if (cardMode === 'tint') {
+    const layers = deepestFirst.map((section) => {
+      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+      return `linear-gradient(${headingBackgroundTint(section.level)}, ${headingBackgroundTint(section.level)}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`;
+    });
+    style.push(`margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`, `background: ${layers.join(', ')}`);
+  } else if (cardMode === 'accent') {
+    const shadows = active.map((section) => {
+      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+      return `inset ${inset}px 0 0 0 ${headingLevelColor(section.level)}`;
+    });
+    style.push(`margin-left: ${outerInset}px`, `padding-left: ${contentPadding}px`, `box-shadow: ${shadows.join(', ')}`);
+  } else {
+    const tintLayers = deepestFirst.map((section) => {
+      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+      return `linear-gradient(${headingBackgroundTint(section.level)}, ${headingBackgroundTint(section.level)}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`;
+    });
+    const borderLayers = active.filter((section) => section.level !== outer.level).flatMap((section) => {
+      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+      const color = headingLevelColor(section.level);
+      return [
+        `linear-gradient(${color}, ${color}) ${inset}px 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
+        `linear-gradient(${color}, ${color}) calc(100% - ${inset}px - ${HEADING_CARD_BORDER_WIDTH}px) 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
+      ];
+    });
+    style.push(
+      `margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`,
+      `padding-left: ${contentPadding}px`, `padding-right: ${contentPadding}px`,
+      `background: ${[...borderLayers, ...tintLayers].join(', ')}`,
+    );
+  }
+  return {
+    className: `cm-loommark-heading-card cm-loommark-heading-card-${cardMode}`,
+    style: style.filter(Boolean).join('; '),
+  };
+}
+
+// loommark.cardColors overrides the built-in six-hue palette when non-empty, cycling by level.
+function headingLevelColor(level: number): string {
+  if (cardColors.length > 0) return cardColors[(level - 1) % cardColors.length];
   return `var(--loommark-guide-${(level - 1) % 6})`;
+}
+
+// Border/rail lines stay close to full color so they read clearly; background fills use a very
+// light tint instead — a background wash strong enough to read as a "color" behind body text
+// makes the text itself harder to read, which is the opposite of what this feature is for.
+function headingBackgroundTint(level: number): string {
+  return `color-mix(in srgb, ${headingLevelColor(level)} 7%, transparent)`;
 }
 
 // One StateField, not a selectionAwareField: which lines are inside which heading's card
 // depends only on document structure, never on where the cursor is.
 function buildHeadingCardDecorations(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  if (!cardModeEnabled) return Decoration.set(ranges);
+  if (cardMode === 'off') return Decoration.set(ranges);
   const source = state.doc.toString();
   const headings = headingRanges(source);
   if (!headings.length) return Decoration.set(ranges);
   const sections = headingSections(source, headings);
+  const fencedCodeLineStarts = new Set<number>();
+  for (const block of detailedFencedCodeRanges(source)) {
+    for (let lineNumber = block.contentStartLine; lineNumber <= block.contentEndLine; lineNumber++) {
+      fencedCodeLineStarts.add(state.doc.line(lineNumber).from);
+    }
+  }
 
   // A line can be inside several nested sections at once (an H3 body line is also inside its
   // H2 and H1 ancestors' sections). Group by line first so each line is styled exactly once.
@@ -439,50 +526,138 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
 
   for (const [lineFrom, sectionsForLine] of lineSections) {
     const line = state.doc.lineAt(lineFrom);
-    // The shallowest heading active on this line gets the real, rounded card border; a single
-    // DOM element only has one border-radius, so deeper levels nested on the same line use a
-    // plain (unrounded) inset box-shadow line instead — see docs/EDITOR_TECHNOLOGY.md.
+    // The shallowest heading active on this line gets the real, rounded card border (card mode
+    // only); a single DOM element only has one border-radius, so deeper levels nested on the
+    // same line fall back to a plain (unrounded) inset line — see docs/EDITOR_TECHNOLOGY.md.
     const outer = sectionsForLine.reduce((a, b) => (a.level <= b.level ? a : b));
+    const deepest = sectionsForLine.reduce((a, b) => (a.level >= b.level ? a : b));
     const outerInset = (outer.level - 1) * HEADING_CARD_INSET_STEP;
     const isOuterFirst = line.from === outer.from;
     const isOuterLast = line.to >= outer.to;
-
-    const backgroundImages: string[] = [];
-    const backgroundPositions: string[] = [];
-    const backgroundSizes: string[] = [];
-    const innerBoxShadows: string[] = [];
+    const contentPadding = (deepest.level - outer.level) * HEADING_CARD_INSET_STEP
+      + HEADING_CARD_CONTENT_PADDING;
     // Deepest first: CSS paints the first-listed background layer on top, so the narrowest
     // (innermost) band needs to come first to sit visually above the wider ancestor bands.
     const deepestFirst = [...sectionsForLine].sort((a, b) => b.level - a.level);
-    for (const section of deepestFirst) {
-      const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      const colorVar = headingLevelColorVar(section.level);
-      backgroundImages.push(`linear-gradient(${colorVar}, ${colorVar})`);
-      backgroundPositions.push(`${relativeInset}px 0`);
-      backgroundSizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
-      if (section.level !== outer.level) {
-        innerBoxShadows.push(`inset ${relativeInset}px 0 0 0 ${colorVar}`);
-        innerBoxShadows.push(`inset -${relativeInset}px 0 0 0 ${colorVar}`);
+
+    const classes = ['cm-loommark-heading-card', `cm-loommark-heading-card-${cardMode}`];
+    const styleParts: string[] = [`--loommark-heading-card-color: ${headingLevelColor(outer.level)}`];
+
+    if (cardMode === 'tint') {
+      const images: string[] = [];
+      const positions: string[] = [];
+      const sizes: string[] = [];
+      for (const section of deepestFirst) {
+        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+        const tint = headingBackgroundTint(section.level);
+        images.push(`linear-gradient(${tint}, ${tint})`);
+        positions.push(`${relativeInset}px 0`);
+        sizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
+      }
+      styleParts.push(
+        `margin-left: ${outerInset}px`,
+        `margin-right: ${outerInset}px`,
+        `background-image: ${images.join(', ')}`,
+        `background-position: ${positions.join(', ')}`,
+        `background-size: ${sizes.join(', ')}`,
+        'background-repeat: no-repeat',
+      );
+    } else if (cardMode === 'accent') {
+      const shadows = sectionsForLine.map((section) => {
+        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+        return `inset ${relativeInset}px 0 0 0 ${headingLevelColor(section.level)}`;
+      });
+      styleParts.push(
+        `margin-left: ${outerInset}px`,
+        `padding-left: ${contentPadding}px`,
+        `box-shadow: ${shadows.join(', ')}`,
+      );
+    } else {
+      const images: string[] = [];
+      const positions: string[] = [];
+      const sizes: string[] = [];
+      const borderImages: string[] = [];
+      const borderPositions: string[] = [];
+      const borderSizes: string[] = [];
+      let closingBottomGap = 0;
+      const boundaryWidgets: Range<Decoration>[] = [];
+      for (const section of deepestFirst) {
+        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+        const tint = headingBackgroundTint(section.level);
+        images.push(`linear-gradient(${tint}, ${tint})`);
+        positions.push(`${relativeInset}px 0`);
+        sizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
+        if (section.level !== outer.level) {
+          const color = headingLevelColor(section.level);
+          const closesHere = line.to >= section.to;
+          const opensHere = line.from === section.from;
+          const bottomGap = closesHere ? 8 + (section.level - outer.level - 1) * 4 : 0;
+          const cornerRadius = 6;
+          closingBottomGap = Math.max(closingBottomGap, bottomGap);
+          borderImages.push(`linear-gradient(${color}, ${color})`, `linear-gradient(${color}, ${color})`);
+          borderPositions.push(
+            `${relativeInset}px ${opensHere ? cornerRadius : 0}px`,
+            `calc(100% - ${relativeInset}px - ${HEADING_CARD_BORDER_WIDTH}px) ${opensHere ? cornerRadius : 0}px`,
+          );
+          borderSizes.push(
+            `${HEADING_CARD_BORDER_WIDTH}px calc(100% - ${opensHere ? cornerRadius : 0}px - ${closesHere ? bottomGap + cornerRadius : 0}px)`,
+            `${HEADING_CARD_BORDER_WIDTH}px calc(100% - ${opensHere ? cornerRadius : 0}px - ${closesHere ? bottomGap + cornerRadius : 0}px)`,
+          );
+          if (line.from === section.from) {
+            boundaryWidgets.push(Decoration.widget({
+              widget: new CardBoundaryWidget('open', relativeInset, 0, color),
+              side: -1,
+            }).range(line.from));
+          }
+          if (closesHere) {
+            boundaryWidgets.push(Decoration.widget({
+              widget: new CardBoundaryWidget('close', relativeInset, bottomGap, color),
+              side: 1,
+            }).range(line.to));
+          }
+        }
+      }
+      ranges.push(...boundaryWidgets);
+      images.unshift(...borderImages);
+      positions.unshift(...borderPositions);
+      sizes.unshift(...borderSizes);
+      if (isOuterFirst) classes.push('cm-loommark-heading-card-first');
+      if (isOuterLast) classes.push('cm-loommark-heading-card-last');
+      if (closingBottomGap > 0) styleParts.push(`padding-bottom: ${closingBottomGap}px`);
+      if (fencedCodeLineStarts.has(line.from)) {
+        // CodeMirror renders fenced-code content as normal .cm-line elements, unlike the
+        // separate toolbar widget. Move the actual code surface into the card's content box,
+        // then let a behind-the-line pseudo-element repaint the card layers across the vacated
+        // gutters. This preserves the code block's own background, borders, gutter and radius.
+        classes.push('cm-loommark-card-contained-code');
+        const totalInset = outerInset + contentPadding + HEADING_CARD_BORDER_WIDTH;
+        styleParts.push(
+          `margin-left: ${totalInset}px`,
+          `margin-right: ${totalInset}px`,
+          // The backdrop is absolutely positioned from the code line's padding box, one code
+          // border-width inside its visible edge. Include that 1px only in the backdrop reach;
+          // the code panel itself already aligns with the toolbar and must not move again.
+          `--loommark-card-code-gutter: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
+          `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
+          `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
+          `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,
+        );
+      } else {
+        styleParts.push(
+          `margin-left: ${outerInset}px`,
+          `margin-right: ${outerInset}px`,
+          `padding-left: ${contentPadding}px`,
+          `padding-right: ${contentPadding}px`,
+          `background-image: ${images.join(', ')}`,
+          `background-position: ${positions.join(', ')}`,
+          `background-size: ${sizes.join(', ')}`,
+          'background-repeat: no-repeat',
+        );
       }
     }
 
-    const classes = ['cm-loommark-heading-card'];
-    if (isOuterFirst) classes.push('cm-loommark-heading-card-first');
-    if (isOuterLast) classes.push('cm-loommark-heading-card-last');
-
-    const style = [
-      `--loommark-heading-card-color: ${headingLevelColorVar(outer.level)}`,
-      `margin-left: ${outerInset}px`,
-      `margin-right: ${outerInset}px`,
-      `background-image: ${backgroundImages.join(', ')}`,
-      `background-position: ${backgroundPositions.join(', ')}`,
-      `background-size: ${backgroundSizes.join(', ')}`,
-      'background-repeat: no-repeat',
-      innerBoxShadows.length > 0 ? `box-shadow: ${innerBoxShadows.join(', ')}` : '',
-    ].filter((declaration) => declaration.length > 0).join('; ');
-
     ranges.push(Decoration.line({
-      attributes: { class: classes.join(' '), style },
+      attributes: { class: classes.join(' '), style: styleParts.filter(Boolean).join('; ') },
     }).range(line.from));
   }
   return Decoration.set(ranges, true);
@@ -512,7 +687,7 @@ const mathField = selectionAwareField((state) => {
     if (math.display && ownLine) {
       if (cursor >= startLine.from && cursor <= endLine.to) continue;
       ranges.push(Decoration.replace({
-        widget: new MathWidget(math, true),
+        widget: new MathWidget(math, true, blockCardPresentation(source, math.from)),
         block: true,
       }).range(startLine.from, endLine.to));
     } else {
@@ -535,7 +710,9 @@ const quoteField = selectionAwareField((state) => {
       attributes: { class: `cm-loommark-quote cm-loommark-quote-depth-${Math.min(quote.depth, 3)}` },
     }).range(line.from));
     if (!(cursor >= line.from && cursor <= line.to)) {
-      ranges.push(Decoration.replace({}).range(quote.markerFrom, quote.markerTo));
+      ranges.push(Decoration.replace({
+        widget: new QuoteMarkerWidget(quote.depth),
+      }).range(quote.markerFrom, quote.markerTo));
     }
   }
   for (const rule of horizontalRuleRanges(source)) {
@@ -589,10 +766,11 @@ const keyboardAtomicRanges = [
 
 function buildCodeToolbarDecorations(state: EditorState): DecorationSet {
   const ranges: Range<Decoration>[] = [];
-  for (const block of detailedFencedCodeRanges(state.doc.toString())) {
+  const source = state.doc.toString();
+  for (const block of detailedFencedCodeRanges(source)) {
     const position = state.doc.line(block.contentStartLine).from;
     ranges.push(Decoration.widget({
-      widget: new CodeToolbarWidget(block),
+      widget: new CodeToolbarWidget(block, blockCardPresentation(source, block.openFrom)),
       block: true,
       side: -1,
     }).range(position));
@@ -1024,13 +1202,15 @@ function applyConfiguration(config: EditorConfiguration): void {
     || orderedListStyle !== config.orderedListStyle
     || keyboardEditing !== config.keyboardEditing
     || listGuidesEnabled !== config.listGuides
-    || cardModeEnabled !== config.cardMode;
+    || cardMode !== config.cardMode
+    || cardColors.join(' ') !== config.cardColors.join(' ');
   tableMode = config.table;
   tableStyle = config.tableStyle;
   orderedListStyle = config.orderedListStyle;
   keyboardEditing = config.keyboardEditing;
   listGuidesEnabled = config.listGuides;
-  cardModeEnabled = config.cardMode;
+  cardMode = config.cardMode;
+  cardColors = config.cardColors;
   if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 

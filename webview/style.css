@@ -408,21 +408,62 @@ body.outline-collapsed #outline {
 #editor > .cm-editor .cm-loommark-h6::before { content: "H6"; }
 
 /* Card mode (loommark.cardMode): every line under a heading gets stacked background tints
-   and side borders per active nesting level, computed and set inline per line in main.ts
-   (buildHeadingCardDecorations) since the exact colors/insets vary line to line. Only the
-   shallowest (outermost) active level on a line gets a real, rounded CSS border — one element
-   has one border-radius, so a deeper level closing on the same line uses a plain inset
-   box-shadow line instead of trying to round independently. See docs/EDITOR_TECHNOLOGY.md. */
+   and/or side borders per active nesting level, computed and set inline per line in main.ts
+   (buildHeadingCardDecorations) since the exact colors/insets vary line to line. loommark.cardMode
+   picks one of three visual styles (plus 'off'), each scoped to its own
+   cm-loommark-heading-card-{tint,accent,card} class:
+   - tint: a soft background wash only, no borders.
+   - accent: a colored left border bar per level (via box-shadow) plus a faint tint.
+   - card: a bordered box. Only the shallowest (outermost) active level on a line gets a real,
+     rounded CSS border — one element has one border-radius, so a deeper level closing on the
+     same line uses a plain inset box-shadow line instead of trying to round independently.
+   See docs/EDITOR_TECHNOLOGY.md. */
 #editor > .cm-editor .cm-loommark-heading-card {
+  position: relative;
   box-sizing: border-box;
-  border-right: 1.5px solid var(--loommark-heading-card-color);
-  border-left: 1.5px solid var(--loommark-heading-card-color);
+}
+
+#editor > .cm-editor .cm-loommark-card-boundary {
+  position: absolute;
+  z-index: 2;
+  right: auto;
+  left: var(--loommark-card-boundary-inset);
+  display: block;
+  box-sizing: border-box;
+  /* The positioned containing block includes the Card's right border in its percentage width.
+     The left origin already aligns with the gradient rail; remove that border only from the
+     derived width so the right rounded corner ends on the matching rail as well. */
+  width: calc(
+    100% - var(--loommark-card-boundary-inset) - var(--loommark-card-boundary-inset)
+    - var(--loommark-card-border-width, 2px)
+  );
+  height: 8px;
+  border-right: 2px solid var(--loommark-card-boundary-color);
+  border-left: 2px solid var(--loommark-card-boundary-color);
+  pointer-events: none;
+}
+
+#editor > .cm-editor .cm-loommark-card-boundary.is-open {
+  top: 0;
+  border-top: 2px solid var(--loommark-card-boundary-color);
+  border-radius: 8px 8px 0 0;
+}
+
+#editor > .cm-editor .cm-loommark-card-boundary.is-close {
+  bottom: var(--loommark-card-boundary-gap);
+  border-bottom: 2px solid var(--loommark-card-boundary-color);
+  border-radius: 0 0 8px 8px;
+}
+
+#editor > .cm-editor .cm-loommark-heading-card-card {
+  border-right: 2px solid var(--loommark-heading-card-color);
+  border-left: 2px solid var(--loommark-heading-card-color);
 }
 
 #editor > .cm-editor .cm-loommark-heading-card-first {
   margin-top: 10px;
   padding-top: 6px;
-  border-top: 1.5px solid var(--loommark-heading-card-color);
+  border-top: 2px solid var(--loommark-heading-card-color);
   border-top-right-radius: 8px;
   border-top-left-radius: 8px;
 }
@@ -430,7 +471,7 @@ body.outline-collapsed #outline {
 #editor > .cm-editor .cm-loommark-heading-card-last {
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1.5px solid var(--loommark-heading-card-color);
+  border-bottom: 2px solid var(--loommark-heading-card-color);
   border-bottom-right-radius: 8px;
   border-bottom-left-radius: 8px;
 }
@@ -544,6 +585,8 @@ body.vscode-dark {
 }
 
 #editor > .cm-editor .cm-loommark-code-block-line {
+  position: relative;
+  isolation: isolate;
   box-sizing: border-box;
   padding-right: 16px;
   padding-left: 58px;
@@ -557,6 +600,64 @@ body.vscode-dark {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
   line-height: 1.6;
+}
+
+/* Fenced-code lines remain editable CodeMirror lines rather than block widgets. Their panel is
+   inset to the same content boundary as the toolbar, while this layer continues the surrounding
+   heading Card behind the newly exposed gutters. */
+#editor > .cm-editor .cm-loommark-card-contained-code::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: calc(-1 * var(--loommark-card-code-gutter));
+  bottom: 0;
+  left: calc(-1 * var(--loommark-card-code-gutter));
+  border-right: 2px solid var(--loommark-heading-card-color);
+  border-left: 2px solid var(--loommark-heading-card-color);
+  background-image: var(--loommark-card-code-backdrop-image);
+  background-position: var(--loommark-card-code-backdrop-position);
+  background-size: var(--loommark-card-code-backdrop-size);
+  background-repeat: no-repeat;
+  -webkit-mask: linear-gradient(
+    to right,
+    #000 0 var(--loommark-card-code-gutter),
+    transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
+    #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+  );
+  mask: linear-gradient(
+    to right,
+    #000 0 var(--loommark-card-code-gutter),
+    transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
+    #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+  );
+  pointer-events: none;
+}
+
+#editor > .cm-editor .cm-loommark-card-contained-code.cm-loommark-heading-card-last::after {
+  border-bottom: 2px solid var(--loommark-heading-card-color);
+  border-bottom-right-radius: 8px;
+  border-bottom-left-radius: 8px;
+  -webkit-mask:
+    linear-gradient(#000, #000) 0 100% / 100% 2px no-repeat,
+    linear-gradient(
+      to right,
+      #000 0 var(--loommark-card-code-gutter),
+      transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
+      #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+    );
+  mask:
+    linear-gradient(#000, #000) 0 100% / 100% 2px no-repeat,
+    linear-gradient(
+      to right,
+      #000 0 var(--loommark-card-code-gutter),
+      transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
+      #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+    );
+}
+
+#editor > .cm-editor .cm-loommark-card-contained-code.cm-loommark-code-block-last::after {
+  bottom: -1px;
 }
 
 #editor > .cm-editor .cm-loommark-code-block-line::before {
@@ -591,6 +692,14 @@ body.vscode-dark {
   color: var(--loommark-code-titlebar-ink);
   font-family: var(--vscode-font-family);
   box-shadow: inset 0 1px 0 var(--loommark-code-titlebar-gloss);
+}
+
+#editor > .cm-editor .cm-loommark-block-card-shell {
+  box-sizing: border-box;
+}
+
+#editor > .cm-editor .cm-loommark-block-card-shell > .cm-loommark-code-toolbar {
+  width: 100%;
 }
 
 .cm-loommark-code-chrome {
@@ -949,15 +1058,31 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 #editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+6) { border-left-color: var(--loommark-guide-5); }
 
 #editor > .cm-editor .cm-loommark-quote {
-  border-left: 3px solid var(--vscode-textBlockQuote-border, #888888);
-  background: var(--vscode-textBlockQuote-background, transparent);
-  padding-left: 12px;
+  background-color: var(--vscode-textBlockQuote-background, rgb(127 127 127 / 10%));
   color: var(--vscode-descriptionForeground);
 }
 
-#editor > .cm-editor .cm-loommark-quote-depth-2 {
-  box-shadow: inset 6px 0 0 -3px var(--vscode-textBlockQuote-border, #888888);
+#editor > .cm-editor .cm-loommark-quote-marker {
+  display: inline-flex;
+  height: 1.35em;
+  align-items: stretch;
+  gap: 7px;
+  margin-right: 9px;
+  vertical-align: -0.2em;
 }
+
+#editor > .cm-editor .cm-loommark-quote-marker i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--loommark-guide-0);
+}
+
+#editor > .cm-editor .cm-loommark-quote-marker i:nth-child(6n+2) { background: var(--loommark-guide-1); }
+#editor > .cm-editor .cm-loommark-quote-marker i:nth-child(6n+3) { background: var(--loommark-guide-2); }
+#editor > .cm-editor .cm-loommark-quote-marker i:nth-child(6n+4) { background: var(--loommark-guide-3); }
+#editor > .cm-editor .cm-loommark-quote-marker i:nth-child(6n+5) { background: var(--loommark-guide-4); }
+#editor > .cm-editor .cm-loommark-quote-marker i:nth-child(6n+6) { background: var(--loommark-guide-5); }
 
 #editor > .cm-editor .cm-loommark-math {
   cursor: pointer;

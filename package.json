@@ -181,9 +181,22 @@
           "description": "Show connector lines between nested list items and their continuation content (indented paragraphs, quotes, code blocks). The line the cursor is on lights up its full ancestor chain."
         },
         "loommark.cardMode": {
-          "type": "boolean",
-          "default": true,
-          "description": "Wrap each heading's section in a colored card, nested one inside another for sub-headings, so it is visually clear which heading you're under. Toggle from the editor title bar."
+          "type": "string",
+          "enum": ["off", "tint", "accent", "card"],
+          "enumDescriptions": [
+            "No heading visualization.",
+            "A soft background color wash per heading section, no borders.",
+            "A colored left border bar per heading level, plus a faint background tint.",
+            "Each heading's section wrapped in a bordered, rounded card, nested for sub-headings."
+          ],
+          "default": "card",
+          "description": "Visually distinguish which heading a line is under. Cycle through modes from the editor title bar."
+        },
+        "loommark.cardColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Custom colors to cycle through per heading level in card mode (CSS color values, e.g. \"#ff8800\"). Leave empty to use the built-in palette."
         },
         "loommark.keyboardEditing": {
           "type": "boolean",

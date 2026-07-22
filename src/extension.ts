@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
-import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle } from './protocol';
-import { isWebviewMessage } from './protocol';
+import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
+import { CARD_MODE_ORDER, isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
 
 const viewType = 'loommark.editor';
@@ -34,8 +34,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('loommark.toggleCardMode', async () => {
       const configuration = vscode.workspace.getConfiguration('loommark');
-      const current = configuration.get('cardMode', true);
-      await configuration.update('cardMode', !current, vscode.ConfigurationTarget.Global);
+      const current = configuration.get<string>('cardMode', 'card');
+      const index = CARD_MODE_ORDER.indexOf(current as CardMode);
+      const next = CARD_MODE_ORDER[(index < 0 ? 0 : index + 1) % CARD_MODE_ORDER.length];
+      await configuration.update('cardMode', next, vscode.ConfigurationTarget.Global);
+      void vscode.window.setStatusBarMessage(`LoomMark: heading style — ${next}`, 2500);
     }),
     vscode.window.createTreeView('loommark.outline', {
       treeDataProvider: outlineProvider,
@@ -91,6 +94,10 @@ function editorConfiguration(): EditorConfiguration {
   const orderedListStyle: OrderedListStyle = configuration.get<string>('orderedListStyle', 'cycle') === 'decimal'
     ? 'decimal'
     : 'cycle';
+  const configuredCardMode = configuration.get<string>('cardMode', 'card');
+  const cardMode: CardMode = CARD_MODE_ORDER.includes(configuredCardMode as CardMode)
+    ? configuredCardMode as CardMode
+    : 'card';
   return {
     syncDelay: configuration.get('syncDelay', 180),
     theme,
@@ -100,7 +107,8 @@ function editorConfiguration(): EditorConfiguration {
     orderedListStyle,
     keyboardEditing: configuration.get('keyboardEditing', false),
     listGuides: configuration.get('listGuides', true),
-    cardMode: configuration.get('cardMode', true),
+    cardMode,
+    cardColors: configuration.get<string[]>('cardColors', []),
   };
 }
 

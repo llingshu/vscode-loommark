@@ -7,7 +7,8 @@ export type EditorConfiguration = {
   orderedListStyle: OrderedListStyle;
   keyboardEditing: boolean;
   listGuides: boolean;
-  cardMode: boolean;
+  cardMode: CardMode;
+  cardColors: string[];
 };
 
 export type HostToWebview =
@@ -31,6 +32,11 @@ export type OutlineMode = 'both' | 'editor' | 'explorer' | 'off';
 export type TableMode = 'rich' | 'source';
 export type TableStyle = 'grid' | 'ruled';
 export type OrderedListStyle = 'decimal' | 'cycle';
+// off: no heading visualization. tint: soft background wash only, no borders. accent: a colored
+// left border bar per level plus a faint tint. card: a bordered box, rounded at the outermost
+// level only (see docs/EDITOR_TECHNOLOGY.md for why deeper levels can't independently round).
+export type CardMode = 'off' | 'tint' | 'accent' | 'card';
+export const CARD_MODE_ORDER: readonly CardMode[] = ['off', 'tint', 'accent', 'card'];
 
 export function isWebviewMessage(value: unknown): value is WebviewToHost {
   if (!value || typeof value !== 'object') return false;

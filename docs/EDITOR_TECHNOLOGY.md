@@ -103,32 +103,38 @@ rendered inside it, not floating above) through wherever it closes or end of doc
 
 `webview/main.ts`'s `headingCardField` groups sections by the lines they cover, so a line deep in
 a heading's subtree ends up listed under every ancestor section simultaneously. It then picks the
-*shallowest* active level on that line as the "outer" one and computes everything relative to it:
+*shallowest* active level on that line as the "outer" one and the *deepest* as well, and computes
+everything relative to `outer`. `buildHeadingCardDecorations` early-returns for `cardMode === 'off'`
+and otherwise branches per mode; all three modes share `headingLevelColor(level)` (returns a
+`cardColors[...]` entry if the user configured any, else `var(--loommark-guide-N)`) and
+`headingBackgroundTint(level)` (`color-mix(in srgb, color 7%, transparent)` — a background *fill*
+strong enough to read as a color behind body text would hurt readability, so fills stay very
+light; border/rail lines use the full-strength color instead since a thin line at full color
+doesn't have the same effect).
 
-- Background: one `linear-gradient(color, color)` layer per active level, inset by
-  `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in
-  the CSS `background-image` list (CSS paints earlier-listed layers on top, so the narrowest band
-  needs to be in front of the wider ones behind it).
-- Side borders: the outer level gets a real CSS `border-left`/`border-right` (via the
-  `cm-loommark-heading-card` class, colored through an inline `--loommark-heading-card-color`
-  custom property); every deeper level gets a plain `inset` `box-shadow` line at its own offset
-  instead, since box-shadow doesn't participate in the element's border-radius the way a real
-  border does.
-- Rounded top/bottom edges only ever apply to the outer level, via `cm-loommark-heading-card-first`
-  / `-last` (real `border-top`/`border-bottom` + `border-radius`), applied when the line equals
-  the outer section's own `from`/`to`. A single DOM element has exactly one `border-radius`, so a
-  deeper section that happens to close on the same line (e.g. several nested headings all ending
-  right before a shallower one) cannot get its own independent rounding — it keeps a flat edge.
-  True per-level rounded nesting would need real nested DOM wrapping multiple sibling lines, which
-  CodeMirror's line-based decoration model does not support (see Module Layout above); this is the
-  practical limit of doing it with per-line CSS instead.
-- `margin-left`/`margin-right` equal to the outer level's own inset, so the whole card (all of its
-  stacked layers) sits inset from the document edge once, rather than every level separately
-  padding inward from a fixed left edge.
+- `tint`: one low-opacity `linear-gradient(tint, tint)` background layer per active level, inset by
+  `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in the
+  CSS `background-image` list (CSS paints earlier-listed layers on top, so the narrowest band needs
+  to be in front of the wider ones behind it). No borders, no content padding — a wash needs
+  neither.
+- `accent`: one `inset Npx 0 0 0 color` `box-shadow` per active level (a left-only rail, at full
+  color, the same technique `ListGuideWidget` rails use), plus `padding-left` sized to the deepest
+  level's inset plus `HEADING_CARD_CONTENT_PADDING` so content clears the innermost rail instead of
+  touching it.
+- `card`: the same stacked background-tint layers as `tint`, plus real side borders and content
+  padding. The outer level uses the line's CSS border. Deeper levels use fixed-width gradient rails
+  between dedicated `CardBoundaryWidget` instances that draw their real rounded top and bottom
+  edges. When several nested sections close together, their bottom boundaries receive progressively
+  larger offsets so the rounded edges remain individually visible. `padding-left`/`padding-right`
+  keep content — especially nested code blocks and blockquotes — clear of the innermost boundary.
+- All three modes use `margin-left`/`margin-right` equal to the outer level's own inset (`tint` and
+  `card`) or just `margin-left` (`accent`, which has no right-side element), so the whole stack
+  sits inset from the document edge once, rather than every level separately padding inward from a
+  fixed left edge.
 
 Unlike list guides, this field is a plain `StateField` reacting only to `docChanged` (and
-`decorationsRefresh`, for the `loommark.cardMode` toggle) — which lines belong to which heading's
-card never depends on cursor position.
+`decorationsRefresh`, for the `loommark.cardMode` cycle command and `loommark.cardColors` changes)
+— which lines belong to which heading's card never depends on cursor position.
 
 ## Decoration Types
 

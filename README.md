@@ -16,8 +16,9 @@ file must not format, normalize, escape, or otherwise rewrite it.
 
 - Continuous editing with normal cursor movement, selection, undo, IME composition, and fast input.
 - Progressive rendering for headings, emphasis, strong text, strikethrough, links, and inline code.
-- Card mode: each heading's section renders as a colored, nested card, so it is visually obvious
-  which heading you're under. On by default; toggle from the editor title bar.
+- Card mode: each heading's section is visually set apart — a soft tint, a colored accent bar, or
+  a nested bordered card, so it is obvious which heading you're under. Cycle styles from the
+  editor title bar; colors are customizable.
 - Fenced code blocks with language-aware highlighting, line numbers, copy controls, and language
   selection.
 - GFM tables that render as real tables, editable in place or as expand-to-source widgets, in a
@@ -76,7 +77,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `LoomMark: Open Source Editor` | Reopen the current document in VS Code's default text editor. |
 | `LoomMark: Focus Markdown Outline` | Open Explorer and focus LoomMark's native outline. |
 | `LoomMark: Copy Editor Diagnostics` | Copy structured runtime diagnostics for bug reports. |
-| `LoomMark: Toggle Heading Card Mode` | Turn `loommark.cardMode` on or off. Also in the editor title bar. |
+| `LoomMark: Toggle Heading Card Mode` | Cycle `loommark.cardMode` through off/tint/accent/card. Also in the editor title bar. |
 
 ## Settings
 
@@ -88,7 +89,8 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
 | `loommark.orderedListStyle` | `cycle` | Number nested ordered lists by cycling arabic/letters/roman numerals per level (`cycle`) or `1, 2, 2.1, 2.2` (`decimal`). |
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
-| `loommark.cardMode` | `true` | Wrap each heading's section in a nested, colored card. Also toggled from the editor title bar. |
+| `loommark.cardMode` | `card` | Heading section visualization: `off`, `tint`, `accent`, or `card`. Also cycled from the editor title bar. |
+| `loommark.cardColors` | `[]` | Custom colors to cycle per heading level in card mode. Empty uses the built-in palette. |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
@@ -124,17 +126,27 @@ window chrome; other languages use neutral controls.
 
 ## Card Mode
 
-`loommark.cardMode` (default on) wraps each heading's section — the heading itself plus
-everything under it, up to the next heading of the same or shallower level — in a colored,
-rounded card. A sub-heading's card nests inside its parent's, so a deeply nested section reads
-as several cards layered inside each other, one per ancestor heading. Colors cycle through six
-hues per level (matching the same palette used by list guides) and never touch the document
-text — this is presentation only, the same as every other progressive-rendering feature. Toggle
-it from the `$(layers)` button in the editor title bar, or `LoomMark: Toggle Heading Card Mode`.
+`loommark.cardMode` visually sets apart each heading's section — the heading itself plus
+everything under it, up to the next heading of the same or shallower level. A sub-heading's
+section nests inside its parent's, so a deeply nested section reads as several levels layered
+inside each other, one per ancestor heading. This is presentation only and never touches the
+document text, the same as every other progressive-rendering feature. Cycle through the four
+modes with the `$(layers)` button in the editor title bar, or `LoomMark: Toggle Heading Card Mode`:
 
-Because a single line can only have one rounded border, only the shallowest (outermost) heading
-active on a given line gets the fully rounded card edge; a deeper heading's section closing on
-that same line gets a plain straight-sided color band instead of its own independent rounding.
+- `off` — no heading visualization.
+- `tint` — a soft background color wash per section, no borders. The lightest-touch option.
+- `accent` — a colored left border bar per heading level, plus a faint background tint.
+- `card` (default) — each section wrapped in a bordered, rounded card. Content (paragraphs, code
+  blocks, blockquotes) is padded inward from the card's own border rather than sitting flush
+  against it, so nested code blocks and quotes keep their own visual boundary.
+
+Colors cycle through six hues per level by default (the same palette used by list guides).
+`loommark.cardColors` overrides this with your own list of CSS colors, cycling per level.
+
+Nested cards use dedicated boundary widgets for their rounded top and bottom edges, while line
+decorations draw the continuous side rails and background layers between those boundaries. Cards
+that close together receive progressively offset bottom spacing, so each heading level keeps a
+distinct rounded edge without rewriting the Markdown source.
 
 ## Rendered Widgets
 
