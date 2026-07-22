@@ -905,11 +905,12 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   width: 14px;
   height: 1.4em;
   border-left: 1.5px solid var(--vscode-descriptionForeground, #8a8a8a);
-  opacity: 0.35;
+  opacity: 0.3;
 }
 
 #editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail {
-  opacity: 0.9;
+  border-left-width: 3px;
+  opacity: 1;
 }
 
 #editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+1) { border-left-color: var(--loommark-guide-0); }
