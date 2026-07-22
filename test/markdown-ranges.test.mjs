@@ -199,7 +199,7 @@ test('ignores tags inside code and link destinations', () => {
 });
 
 test('parses bullet levels and marker offsets', () => {
-  const source = '- top\n  - nested\n    * deep';
+  const source = '- top\n    - nested\n        * deep';
   const items = listItemRanges(source);
   assert.deepEqual(items.map((item) => item.level), [0, 1, 2]);
   assert.equal(source.slice(items[1].markerFrom, items[1].markerTo), '-');
@@ -232,9 +232,9 @@ test('decimal style nests as 2.1, 2.2, then 2.2.1', () => {
   const source = [
     '1. a',
     '2. b',
-    '  1. nested b1',
-    '  2. nested b2',
-    '    1. nested b2a',
+    '    1. nested b1',
+    '    2. nested b2',
+    '        1. nested b2a',
     '3. c',
   ].join('\n');
   const items = listItemRanges(source);
@@ -255,11 +255,11 @@ test('cycle style alternates arabic, letters, roman numerals per level', () => {
   const source = [
     '1. a',
     '2. b',
-    '  1. nested b1',
-    '  2. nested b2',
-    '    1. nested b2a',
-    '    2. nested b2b',
-    '      1. nested b2b1',
+    '    1. nested b1',
+    '    2. nested b2',
+    '        1. nested b2a',
+    '        2. nested b2b',
+    '            1. nested b2b1',
   ].join('\n');
   const items = listItemRanges(source);
   const labels = orderedListLabels(source, items, 'cycle');
@@ -287,8 +287,8 @@ test('a parent with two children gets one guide segment spanning both', () => {
   const source = [
     '1. a',
     '2. b',
-    '  1. nested b1',
-    '  2. nested b2',
+    '    1. nested b1',
+    '    2. nested b2',
     '3. c',
   ].join('\n');
   const items = listItemRanges(source);
@@ -303,8 +303,8 @@ test('a parent with two children gets one guide segment spanning both', () => {
 test('three levels of nesting each get their own guide segment', () => {
   const source = [
     '1. a',
-    '  1. nested a1',
-    '    1. nested a1a',
+    '    1. nested a1',
+    '        1. nested a1a',
   ].join('\n');
   const items = listItemRanges(source);
   const segments = listGuideSegments(source, items);
@@ -315,7 +315,7 @@ test('an indented continuation paragraph extends the guide segment', () => {
   const source = [
     '- item',
     '',
-    '  A continuation paragraph indented under the item.',
+    '    A continuation paragraph indented under the item.',
   ].join('\n');
   const items = listItemRanges(source);
   const [segment] = listGuideSegments(source, items);
@@ -337,9 +337,9 @@ test('an unindented paragraph after a blank line ends the list, no segment', () 
 test('an indented fenced code block extends the guide segment', () => {
   const source = [
     '- item',
-    '  ```js',
-    '  code line',
-    '  ```',
+    '    ```js',
+    '    code line',
+    '    ```',
   ].join('\n');
   const items = listItemRanges(source);
   const [segment] = listGuideSegments(source, items);

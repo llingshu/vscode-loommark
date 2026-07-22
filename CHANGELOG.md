@@ -14,11 +14,12 @@ All notable changes to LoomMark are documented here. This project follows
   backslash and leave the character as plain text instead of live Markdown syntax.
 - The cursor position is remembered and restored when a document is reopened in the same Webview
   session (closing and reopening the editor tab, or a VS Code reload).
-- Tab and Shift+Tab indent and outdent the current line (or all selected lines), which is how a
-  list item becomes a nested sub-list.
-- `loommark.orderedListStyle` renumbers nested ordered lists for display: hierarchical decimal
-  (`1, 2, 2.1, 2.2, 2.2.1`, the default) or a cycling `1, a, i` style that repeats every three
-  levels. The source keeps whatever number was typed; only the rendered label changes.
+- Tab and Shift+Tab indent and outdent the current line (or all selected lines) by 4 spaces, which
+  is how a list item becomes a nested sub-list.
+- `loommark.orderedListStyle` renumbers nested ordered lists for display: a cycling `1, a, i`
+  style that repeats every three levels (the default), or hierarchical decimal
+  (`1, 2, 2.1, 2.2, 2.2.1`). The source keeps whatever number was typed; only the rendered label
+  changes.
 - `loommark.listGuides` (default on) draws a connector line between a list item, its nested
   children, and any indented continuation content (a paragraph, blockquote, or code block)
   underneath it. Guides are gray by default; the line the cursor is on lights up its full
@@ -44,6 +45,14 @@ All notable changes to LoomMark are documented here. This project follows
   inside a table, image, or math block. `loommark.keyboardEditing`'s atomic ranges were also being
   applied to those blocks' already-revealed source text, not just their widgets, which could put
   the cursor somewhere CodeMirror considered simultaneously selected and unenterable.
+- Pressing Enter could stop creating a new line partway through a deeply nested ordered list.
+  List nesting used a fixed 2-space-per-level indent, which satisfies bullet markers but not
+  ordered ones — CommonMark only recognizes a nested item once its content reaches its parent's
+  content column (3+ characters for `1. `, more for multi-digit numbers). Once an ordered item's
+  indent fell short, CodeMirror's Markdown parser stopped treating it as a nested list at all and
+  folded it into the parent item's paragraph instead, so there was no list left for Enter to
+  continue. List nesting (Tab/Shift+Tab, rendered levels, guide lines, ordered-list numbering)
+  now uses 4 spaces per level everywhere, which satisfies every realistic marker width.
 
 ## [0.3.0] - 2026-07-20
 

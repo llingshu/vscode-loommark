@@ -24,7 +24,7 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Inline and display math rendered with KaTeX.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
 - Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list. Nested
-  ordered lists renumber automatically (`1, 2, 2.1, 2.2` by default).
+  ordered lists renumber automatically (`1, a, i` cycling by default).
 - Outline connector lines between nested list items, with the cursor's ancestor chain lit up
   in color.
 - `#tag` chips that stay part of the editable text.
@@ -83,7 +83,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.theme` | `vscode` | Select `vscode`, `crepe`, `frame`, or `nord`. |
 | `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
-| `loommark.orderedListStyle` | `decimal` | Number nested ordered lists `1, 2, 2.1, 2.2` (`decimal`) or cycle arabic/letters/roman numerals per level (`cycle`). |
+| `loommark.orderedListStyle` | `cycle` | Number nested ordered lists by cycling arabic/letters/roman numerals per level (`cycle`) or `1, 2, 2.1, 2.2` (`decimal`). |
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
@@ -158,13 +158,19 @@ breaking the editor.
 
 ## Lists
 
-Tab and Shift+Tab indent/outdent the current line (or every selected line), which is how a list
-item becomes a nested sub-list — nesting is purely indentation, the same as CommonMark.
+Tab and Shift+Tab indent/outdent the current line (or every selected line) by 4 spaces, which is
+how a list item becomes a nested sub-list — nesting is purely indentation, the same as CommonMark.
+Four spaces, not two: CommonMark only recognizes a nested item once its content reaches its
+parent's own content column, which for an ordered marker like `1. ` is 3+ characters (more for
+`10. `, `100. `, and so on); 2 spaces satisfies bullet markers but not ordered ones, and a
+too-shallow nested ordered item is parsed as a continuation paragraph of its parent instead of a
+real sub-list — which also breaks Enter part way through typing it, since there is no list for
+Enter to continue. Use Tab rather than typing spaces by hand to always get a valid amount.
 
 Nested ordered lists are renumbered for display only; the source keeps whatever number was typed.
-`loommark.orderedListStyle` chooses `decimal` (default: `1, 2, 2.1, 2.2, 2.2.1`) or `cycle`
-(arabic, then letters, then lowercase roman numerals per level — `1, a, i` — repeating every
-three levels).
+`loommark.orderedListStyle` chooses `cycle` (default: arabic, then letters, then lowercase roman
+numerals per level — `1, a, i` — repeating every three levels) or `decimal`
+(`1, 2, 2.1, 2.2, 2.2.1`).
 
 `loommark.listGuides` (default on) draws a connector line between a list item, its nested
 children, and any indented continuation content underneath it (a paragraph, blockquote, or code

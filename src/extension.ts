@@ -83,9 +83,9 @@ function editorConfiguration(): EditorConfiguration {
     : 'both';
   const table: TableMode = configuration.get<string>('table', 'rich') === 'source' ? 'source' : 'rich';
   const tableStyle: TableStyle = configuration.get<string>('tableStyle', 'grid') === 'ruled' ? 'ruled' : 'grid';
-  const orderedListStyle: OrderedListStyle = configuration.get<string>('orderedListStyle', 'decimal') === 'cycle'
-    ? 'cycle'
-    : 'decimal';
+  const orderedListStyle: OrderedListStyle = configuration.get<string>('orderedListStyle', 'cycle') === 'decimal'
+    ? 'decimal'
+    : 'cycle';
   return {
     syncDelay: configuration.get('syncDelay', 180),
     theme,

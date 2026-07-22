@@ -18,25 +18,30 @@ Inline ![icon](./missing.png) placeholder demo.
 - [ ] Write the report
 - [x] Review the spec
 - Regular bullet
-  - Nested bullet
-    - Deep bullet
+    - Nested bullet
+        - Deep bullet
 
 1. Top level one
 2. Top level two
-  1. Nested under two (decimal: 2.1, cycle: a)
-  2. Nested under two (decimal: 2.2, cycle: b)
-    1. Doubly nested (decimal: 2.2.1, cycle: i)
+    1. Nested under two (decimal: 2.1, cycle: a)
+    2. Nested under two (decimal: 2.2, cycle: b)
+        1. Doubly nested (decimal: 2.2.1, cycle: i)
 3. Top level three
+
+Note: nesting requires indenting by 4 spaces (`loommark.orderedListStyle`'s section below has
+more) — CommonMark requires an ordered marker's content to reach its own content column (3-4+
+characters) to be recognized as nested at all; 2 spaces only ever satisfies bullet markers.
+Press Tab on a list item line to indent it correctly; it uses the right amount automatically.
 
 ## List Guides
 
 - Parent item
-  - Child A
+    - Child A
 
-    A continuation paragraph under Child A, still connected to it.
-  - Child B
-    - Grandchild B1
-    - Grandchild B2
+        A continuation paragraph under Child A, still connected to it.
+    - Child B
+        - Grandchild B1
+        - Grandchild B2
 
 ## Math
 

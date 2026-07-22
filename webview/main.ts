@@ -7,7 +7,7 @@ import {
 } from '@codemirror/autocomplete';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import { EditorState, type Range, RangeSet, RangeValue, StateEffect, StateField } from '@codemirror/state';
 import {
@@ -33,6 +33,7 @@ import {
   imageRanges,
   isEscaped,
   linkDestinationRanges,
+  LIST_INDENT_WIDTH,
   listGuideSegments,
   listItemRanges,
   mathRanges,
@@ -92,7 +93,7 @@ let documentRevision = savedState?.documentRevision ?? 0;
 let resourceBase = '';
 let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
-let orderedListStyle: OrderedListStyle = 'decimal';
+let orderedListStyle: OrderedListStyle = 'cycle';
 let listGuidesEnabled = true;
 let keyboardEditing = false;
 let clientRevision = 0;
@@ -722,6 +723,9 @@ function createEditor(text: string): void {
         markdown({ extensions: [GFM], codeLanguages: languages }),
         autocompletion({ override: [wikiLinkCompletions] }),
         search({ top: true }),
+        // Matches LIST_INDENT_WIDTH: CommonMark requires a nested ordered item's content to
+        // reach its parent's content column (3-4+ characters), which 2 spaces never satisfies.
+        indentUnit.of(' '.repeat(LIST_INDENT_WIDTH)),
         keymap.of([indentWithTab, ...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         headingDecorations,

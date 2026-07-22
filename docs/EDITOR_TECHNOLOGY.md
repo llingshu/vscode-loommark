@@ -44,6 +44,24 @@ The Webview is split by responsibility so each file stays reasoned-about-able in
 - `webview/main.ts`: editor assembly, the `StateField`/`ViewPlugin` decorations that call into the
   two modules above, the host synchronization protocol, and the outline.
 
+## List Nesting Indent Width
+
+`LIST_INDENT_WIDTH` (`webview/markdown-ranges.ts`, currently `4`) is the number of spaces one
+nesting level costs, used consistently for `ListItemRange.level`, `listGuideSegments`'s
+continuation-indent threshold, and the editor's `indentUnit` (so Tab/`indentWithTab` produces
+exactly this much). It must stay at 4, not 2: CommonMark only recognizes a list item as nested
+once its content reaches its parent's own content column — a marker's character width plus at
+least one trailing space, so 3 for `1. `, 4 for `10. ` or `1) `, and so on for more digits. A
+fixed 2-space convention satisfies bullet markers (`- ` needs exactly 2) but silently falls short
+for ordered ones. When it does, `@lezer/markdown` (which CodeMirror's smart Enter-continuation,
+`insertNewlineContinueMarkup` from `@codemirror/lang-markdown`, relies on to find the current list
+context) stops parsing that indent level as a nested `OrderedList` at all and folds it into the
+parent item's `Paragraph` node instead — there is no nested list left for Enter to continue, so it
+silently declines and no new line appears. 4 spaces is the smallest width that satisfies every
+realistic ordered marker (three-digit numbers and below) while remaining valid, if generous, for
+bullets; verified against the real parser/command pair, not just this module's own heuristics,
+before choosing it.
+
 ## List Guide Connectors
 
 `listGuideSegments()` (`webview/markdown-ranges.ts`) computes one vertical-connector segment per

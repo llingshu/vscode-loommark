@@ -162,7 +162,7 @@
             "Hierarchical decimal numbering: 1, 2, 2.1, 2.2, 2.2.1.",
             "Alternates arabic numerals, letters, and lowercase roman numerals per nesting level (1, a, i), then repeats."
           ],
-          "default": "decimal",
+          "default": "cycle",
           "description": "How nested ordered list markers are numbered when rendered."
         },
         "loommark.listGuides": {

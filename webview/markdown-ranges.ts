@@ -281,6 +281,16 @@ function splitTableRow(line: string, lineOffset: number): TableCell[] {
   return cells;
 }
 
+// CommonMark requires a nested list item's content to be indented at least as far as its
+// parent's own content column (marker width + trailing space, e.g. "1. " needs 3, "10. "
+// needs 4). A fixed 2-space-per-level convention satisfies bullet markers ("- " needs 2) but
+// not ordered ones, so Lezer's parser (which CodeMirror's smart Enter-continuation relies on)
+// silently stops recognizing an ordered item as nested and folds it into the parent's
+// paragraph instead — breaking Enter at exactly the depth where this first happens. 4 spaces
+// per level satisfies every realistic marker width (ordered lists up to 999 items deep) while
+// still being valid, if generous, for bullets.
+export const LIST_INDENT_WIDTH = 4;
+
 export type ListItemRange = {
   lineFrom: number;
   lineTo: number;
@@ -311,7 +321,7 @@ export function listItemRanges(source: string): ListItemRange[] {
         lineTo: offset + line.length,
         markerFrom,
         markerTo,
-        level: Math.min(Math.floor(indent / 2), 5),
+        level: Math.min(Math.floor(indent / LIST_INDENT_WIDTH), 5),
         ordered,
       };
       if (match[7] !== undefined) {
@@ -453,7 +463,7 @@ export function listGuideSegments(source: string, items: ListItemRange[]): ListG
     const item = itemByLineIndex.get(lineIndex);
     if (item) {
       closeThrough((top) => top.item.level >= item.level);
-      const requiredIndent = (item.markerFrom - item.lineFrom) + 2;
+      const requiredIndent = (item.markerFrom - item.lineFrom) + LIST_INDENT_WIDTH;
       stack.push({ item, ownLineIndex: lineIndex, requiredIndent });
       lastContentLineIndex = lineIndex;
       continue;
