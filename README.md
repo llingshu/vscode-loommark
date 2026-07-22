@@ -170,12 +170,18 @@ Enter to continue. Use Tab rather than typing spaces by hand to always get a val
 Nested ordered lists are renumbered for display only; the source keeps whatever number was typed.
 `loommark.orderedListStyle` chooses `cycle` (default: arabic, then letters, then lowercase roman
 numerals per level — `1, a, i` — repeating every three levels) or `decimal`
-(`1, 2, 2.1, 2.2, 2.2.1`).
+(`1, 2, 2.1, 2.2, 2.2.1`). Because the rendered number can differ from what is actually typed,
+it never reveals the literal source the way other hidden markup does — moving the cursor onto the
+line keeps showing the same label instead of swapping to a different-looking raw number. Click a
+label to edit the source number.
 
 `loommark.listGuides` (default on) draws a connector line between a list item, its nested
 children, and any indented continuation content underneath it (a paragraph, blockquote, or code
-block). Guides are gray by default; the line the cursor is on lights up its full ancestor chain,
-one color per level.
+block). Guides stay visible at all times, including on the line the cursor is on — there is no
+raw source to reveal, only blank space, so there is nothing to switch to. Guides are gray by
+default; the cursor's own line and each of its direct ancestor items' lines light up in color,
+one per level, while sibling branches and unrelated content stay gray even when they happen to
+share part of the same connector.
 
 ## Tags
 

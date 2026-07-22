@@ -78,9 +78,18 @@ needed for well-formed nesting.
 replacing that line's entire leading whitespace with one fixed-width rail per active level (rather
 than trying to align with the source's actual indentation, which cannot be measured reliably in a
 proportional UI font). Rail *position* in the DOM equals its nesting level, so CSS colors the
-rainbow cycle with `:nth-child` alone — no per-rail inline color is computed in JS. The line the
-cursor is on is used to find which segments contain the cursor position; those levels render in
-color, everything else stays the muted default.
+rainbow cycle with `:nth-child` alone — no per-rail inline color is computed in JS.
+
+Unlike every other marker-hiding decoration in this file, guides never fall back to raw source
+when the cursor lands on their line: there is no syntax being hidden, only blank space, so
+reverting would just make the indent jump and the rails disappear right where the cursor is —
+the opposite of what a "where am I" indicator is for. Each `ListGuideSegment` records its owning
+item's own line (`itemLineFrom`), which `listGuideField` uses to build a `highlightedLines` set —
+the cursor's own line, plus the owning line of every segment that contains the cursor position.
+Only lines in that set render `.is-active` (colored); every other line within the same
+connector's span (a sibling branch, unrelated continuation content one level up) stays the muted
+default even though it is technically inside a segment covering that level — a segment marks
+where a connector visually passes, not who counts as being on the cursor's ancestor path.
 
 ## Decoration Types
 

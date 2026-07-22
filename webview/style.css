@@ -870,6 +870,7 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   display: inline-block;
   min-width: 1.6ch;
   color: var(--vscode-descriptionForeground);
+  cursor: text;
   font-variant-numeric: tabular-nums;
 }
 
@@ -885,9 +886,14 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 }
 
 /* Outline connector rails: one per ancestor level, replacing a list item's or continuation
-   line's leading whitespace. Gray by default; the cursor's ancestor chain lights up in a
-   per-level color (rail position always equals its level, since ancestors are always a
-   contiguous run from 0, so :nth-child cycling needs no JS-computed color). */
+   line's leading whitespace — always, even when the cursor is on that exact line, since there
+   is no source syntax being hidden here for the cursor to reveal (only blank space), and
+   reverting to raw whitespace would just make the indent jump and the rails disappear right
+   where the cursor is. A line is `.is-active` only when it is the cursor's own line or one of
+   its direct ancestor items' own line (set in JS, see listGuideField); every rail on that line
+   colors by its position, which always equals its level (ancestors are always a contiguous run
+   from 0, so :nth-child cycling needs no JS-computed color). Other lines within the same
+   connector's span (siblings, unrelated continuation content) stay gray. */
 #editor > .cm-editor .cm-loommark-list-guide {
   display: inline-flex;
   vertical-align: bottom;
@@ -902,16 +908,16 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   opacity: 0.35;
 }
 
-#editor > .cm-editor .cm-loommark-list-guide-rail.is-active {
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail {
   opacity: 0.9;
 }
 
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+1).is-active { border-left-color: var(--loommark-guide-0); }
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+2).is-active { border-left-color: var(--loommark-guide-1); }
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+3).is-active { border-left-color: var(--loommark-guide-2); }
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+4).is-active { border-left-color: var(--loommark-guide-3); }
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+5).is-active { border-left-color: var(--loommark-guide-4); }
-#editor > .cm-editor .cm-loommark-list-guide-rail:nth-child(6n+6).is-active { border-left-color: var(--loommark-guide-5); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+1) { border-left-color: var(--loommark-guide-0); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+2) { border-left-color: var(--loommark-guide-1); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+3) { border-left-color: var(--loommark-guide-2); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+4) { border-left-color: var(--loommark-guide-3); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+5) { border-left-color: var(--loommark-guide-4); }
+#editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+6) { border-left-color: var(--loommark-guide-5); }
 
 #editor > .cm-editor .cm-loommark-quote {
   border-left: 3px solid var(--vscode-textBlockQuote-border, #888888);

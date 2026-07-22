@@ -414,7 +414,10 @@ export function orderedListLabels(
   return labels;
 }
 
-export type ListGuideSegment = { level: number; from: number; to: number };
+// itemLineFrom is the owning ancestor item's own line (where its bullet/number sits), used
+// to highlight exactly that line — not every line the connector visually passes through —
+// when it is genuinely on the current cursor's ancestor path.
+export type ListGuideSegment = { level: number; from: number; to: number; itemLineFrom: number };
 
 function lineIndent(line: string): number {
   return (line.match(/^[ \t]*/)?.[0] ?? '').replace(/\t/g, '  ').length;
@@ -454,6 +457,7 @@ export function listGuideSegments(source: string, items: ListItemRange[]): ListG
           level: closed.item.level,
           from: lineOffsets[closed.ownLineIndex + 1],
           to: lineOffsets[lastContentLineIndex] + lines[lastContentLineIndex].length,
+          itemLineFrom: closed.item.lineFrom,
         });
       }
     }

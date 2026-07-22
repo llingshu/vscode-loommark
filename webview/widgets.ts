@@ -168,18 +168,30 @@ export class OrderedLabelWidget extends WidgetType {
   constructor(
     private readonly label: string,
     private readonly delimiter: string,
+    private readonly markerTo: number,
   ) {
     super();
   }
 
   eq(other: OrderedLabelWidget): boolean {
-    return this.label === other.label && this.delimiter === other.delimiter;
+    return this.label === other.label
+      && this.delimiter === other.delimiter
+      && this.markerTo === other.markerTo;
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const marker = document.createElement('span');
     marker.className = 'cm-loommark-ordered-label';
+    marker.title = 'Click to edit the source number';
     marker.textContent = `${this.label}${this.delimiter}`;
+    // The label is a derived display value and never reveals the raw source on its own (see
+    // listField), so clicking places the cursor right after the marker — at the start of the
+    // item's real content — rather than trying to show the literal digits underneath it.
+    marker.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.markerTo }, scrollIntoView: true });
+      view.focus();
+    });
     return marker;
   }
 
@@ -196,23 +208,21 @@ export class OrderedLabelWidget extends WidgetType {
 export class ListGuideWidget extends WidgetType {
   constructor(
     private readonly levelCount: number,
-    private readonly activeLevels: ReadonlySet<number>,
+    private readonly isHighlighted: boolean,
   ) {
     super();
   }
 
   eq(other: ListGuideWidget): boolean {
-    return this.levelCount === other.levelCount
-      && this.activeLevels.size === other.activeLevels.size
-      && [...this.activeLevels].every((level) => other.activeLevels.has(level));
+    return this.levelCount === other.levelCount && this.isHighlighted === other.isHighlighted;
   }
 
   toDOM(): HTMLElement {
     const container = document.createElement('span');
-    container.className = 'cm-loommark-list-guide';
+    container.className = `cm-loommark-list-guide${this.isHighlighted ? ' is-active' : ''}`;
     for (let level = 0; level < this.levelCount; level++) {
       const rail = document.createElement('span');
-      rail.className = `cm-loommark-list-guide-rail${this.activeLevels.has(level) ? ' is-active' : ''}`;
+      rail.className = 'cm-loommark-list-guide-rail';
       container.append(rail);
     }
     return container;

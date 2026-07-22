@@ -321,19 +321,24 @@ const listField = selectionAwareField((state) => {
         attributes: { class: 'cm-loommark-task-done' },
       }).range(item.lineFrom));
     }
-    if (cursor >= item.lineFrom && cursor <= item.lineTo) continue;
-    if (!item.ordered) {
-      ranges.push(Decoration.replace({ widget: new BulletWidget(item.level) })
-        .range(item.markerFrom, item.markerTo));
-    } else {
+    const cursorOnLine = cursor >= item.lineFrom && cursor <= item.lineTo;
+    if (item.ordered) {
+      // Unlike other markers, this label is a derived display value, not the literal source
+      // text (that's the whole point of loommark.orderedListStyle) — revealing the raw number
+      // when the cursor lands on the line would show a *different* number than what was just
+      // displayed (e.g. "I." becoming "3."), which is confusing rather than informative. Always
+      // show the rendered label; click it like the other rich widgets to edit the source.
       const label = orderedLabels.get(item.markerFrom);
       if (label) {
         const delimiter = source[item.markerTo - 1];
-        ranges.push(Decoration.replace({ widget: new OrderedLabelWidget(label, delimiter) })
+        ranges.push(Decoration.replace({ widget: new OrderedLabelWidget(label, delimiter, item.markerTo) })
           .range(item.markerFrom, item.markerTo));
       }
+    } else if (!cursorOnLine) {
+      ranges.push(Decoration.replace({ widget: new BulletWidget(item.level) })
+        .range(item.markerFrom, item.markerTo));
     }
-    if (item.task) {
+    if (item.task && !cursorOnLine) {
       ranges.push(Decoration.replace({ widget: new CheckboxWidget(item.task.checked, item.task.boxFrom) })
         .range(item.task.boxFrom, item.task.boxTo));
     }
@@ -350,9 +355,13 @@ const listGuideField = selectionAwareField((state) => {
   const segments = listGuideSegments(source, items);
   if (!segments.length) return Decoration.set(ranges);
 
-  const activeLevels = new Set<number>();
+  // Highlighted lines are the cursor's own line plus each ancestor *item's own line* (where
+  // its bullet/number sits) — not every line a connector visually passes through. A sibling
+  // branch under the same shallow ancestor sits inside that ancestor's segment too, but isn't
+  // on the cursor's actual path, so it must not light up just because the level matches.
+  const highlightedLines = new Set<number>([state.doc.lineAt(cursor).from]);
   for (const segment of segments) {
-    if (cursor >= segment.from && cursor <= segment.to) activeLevels.add(segment.level);
+    if (cursor >= segment.from && cursor <= segment.to) highlightedLines.add(segment.itemLineFrom);
   }
 
   const itemByLineFrom = new Map(items.map((item) => [item.lineFrom, item] as const));
@@ -376,14 +385,17 @@ const listGuideField = selectionAwareField((state) => {
 
   for (const [lineFrom, levels] of lineLevels) {
     const line = state.doc.lineAt(lineFrom);
-    if (cursor >= line.from && cursor <= line.to) continue;
     const item = itemByLineFrom.get(lineFrom);
     const replaceTo = item
       ? item.markerFrom
       : line.from + (line.text.match(/^[ \t]*/)?.[0].length ?? 0);
     if (replaceTo <= line.from) continue;
+    // Unlike marker-hiding decorations elsewhere, guides never reveal raw whitespace when the
+    // cursor enters the line: there is no source syntax being hidden here to edit, only blank
+    // space, so reverting away from the widget would just make the indent jump around and the
+    // rails vanish right where the cursor is — the opposite of what a "where am I" guide is for.
     ranges.push(Decoration.replace({
-      widget: new ListGuideWidget(Math.max(...levels) + 1, activeLevels),
+      widget: new ListGuideWidget(Math.max(...levels) + 1, highlightedLines.has(lineFrom)),
     }).range(line.from, replaceTo));
   }
   return Decoration.set(ranges, true);

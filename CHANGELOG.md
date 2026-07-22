@@ -19,11 +19,15 @@ All notable changes to LoomMark are documented here. This project follows
 - `loommark.orderedListStyle` renumbers nested ordered lists for display: a cycling `1, a, i`
   style that repeats every three levels (the default), or hierarchical decimal
   (`1, 2, 2.1, 2.2, 2.2.1`). The source keeps whatever number was typed; only the rendered label
-  changes.
+  changes, and unlike other hidden markup it never reveals the literal number when the cursor
+  enters the line (a *different* displayed number would be confusing, not informative) — click
+  a label to edit the source number instead.
 - `loommark.listGuides` (default on) draws a connector line between a list item, its nested
   children, and any indented continuation content (a paragraph, blockquote, or code block)
-  underneath it. Guides are gray by default; the line the cursor is on lights up its full
-  ancestor chain, one color per nesting level.
+  underneath it. Guides are always visible, including on the cursor's own line (there is no
+  source syntax to reveal there, only blank space). Gray by default; the cursor's own line and
+  each of its direct ancestor items' lines light up in color, one per nesting level — sibling
+  branches and unrelated content sharing part of the same connector stay gray.
 
 ### Changed
 
