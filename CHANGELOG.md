@@ -6,15 +6,43 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-23
+
 ### Added
 
-- Optional per-Card image backgrounds with stable heading-based selection, an independent path
-  (or reuse of the global background directory), opacity, blur, saturation, and readability overlay.
+- Optional local image backgrounds behind the editor, with fixed, random-on-open, daily, or
+  per-document selection, plus independently configurable opacity, blur, saturation, and
+  theme-colored readability overlay (`loommark.background.*`).
+- Optional per-heading-section image backgrounds (`loommark.cardImage.*`) in Card mode's `card`
+  and `tint` styles, with stable heading-based selection (editing or reopening the document does
+  not reshuffle which image a section gets), an independent path or reuse of the global background
+  directory, opacity, blur, saturation, and readability overlay.
+- `loommark.cardColors` customizes the per-level color cycle Card mode uses in place of the
+  built-in six-hue palette; `loommark.cardBackgroundStrength` and `loommark.cardBorderStrength`
+  separately tune how strongly that color shows in Card backgrounds versus borders.
+
+### Changed
+
+- Card mode's rounded `card` style now draws nested sections with real per-level rounded borders
+  (previously only the outermost level got a rounded border; deeper levels closing on the same
+  line got a plain straight edge).
 
 ### Fixed
 
-- Card tint backgrounds now occupy the border's inner geometry, preventing antialiasing fringes
-  from extending beyond the right edge at fractional zoom or display scaling.
+- Card mode's background was far too dark for comfortable reading, and card content (paragraphs,
+  code blocks, blockquotes) sat flush against the card's own border. Backgrounds are now a light
+  tint mixed against the editor surface, and content is padded inward from the border on all three
+  visible styles (`tint`, `accent`, `card`).
+- The `tint` and `accent` Card mode styles did not inset content the same way `card` did: `tint`
+  let paragraphs and code blocks overhang into ancestor color bands, and `accent`'s content padding
+  overwrote a fenced code block's own line-number gutter, shifting code text on top of the gutter.
+  Fenced code blocks are now contained the same way in all three styles.
+- A fenced code block's toolbar and its code lines could be misaligned by a pixel on each side,
+  visible as a jagged edge at some zoom levels or display scales.
+- Card mode's per-heading background image could extend past its section's own border or rounded
+  corner, most noticeably where a nested section closed. Image bounds are now measured against the
+  actual rendered line elements (which carry CSS margins CodeMirror's own height map cannot see)
+  and kept inside every drawn border, rail, and closing-gap clearance.
 
 ## [0.3.1] - 2026-07-20
 
@@ -160,7 +188,8 @@ All notable changes to LoomMark are documented here. This project follows
 - Configurable default-editor association and synchronization delay.
 - Source-editor command in the custom editor title bar.
 
-[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/llingshu/vscode-loommark/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/llingshu/vscode-loommark/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/llingshu/vscode-loommark/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/llingshu/vscode-loommark/compare/v0.1.0...v0.2.0
