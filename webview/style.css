@@ -719,8 +719,6 @@ body.loommark-has-card-images {
   right: calc(-1 * var(--loommark-card-code-gutter-right));
   bottom: 0;
   left: calc(-1 * var(--loommark-card-code-gutter-left));
-  border-right: 2px solid var(--loommark-heading-card-color);
-  border-left: 2px solid var(--loommark-heading-card-color);
   background-image: var(--loommark-card-code-backdrop-image);
   background-position: var(--loommark-card-code-backdrop-position);
   background-size: var(--loommark-card-code-backdrop-size);
@@ -738,6 +736,13 @@ body.loommark-has-card-images {
     #000 calc(100% - var(--loommark-card-code-gutter-right)) 100%
   );
   pointer-events: none;
+}
+
+/* Only card mode draws real side rails on the backdrop; tint continues bare wash bands and
+   accent repaints its bars through the backdrop image variables instead. */
+#editor > .cm-editor .cm-loommark-heading-card-card.cm-loommark-card-contained-code::after {
+  border-right: 2px solid var(--loommark-heading-card-color);
+  border-left: 2px solid var(--loommark-heading-card-color);
 }
 
 #editor > .cm-editor .cm-loommark-card-contained-code.cm-loommark-heading-card-last::after {
@@ -805,11 +810,9 @@ body.loommark-has-card-images {
 }
 
 #editor > .cm-editor .cm-loommark-block-card-shell > .cm-loommark-code-toolbar {
-  /* The shell's 2px Card border puts its content origin one pixel farther inward than the code
-     line's 1px border compensation. Move only the toolbar's left edge out by that pixel, then
-     preserve the already-correct right edge with the matching width increase. */
-  width: calc(100% + 1px);
-  margin-left: -1px;
+  /* Code lines set their border box to exactly this shell's content box (margin + card border
+     + content padding), so the toolbar just fills its container — no width compensation. */
+  width: 100%;
 }
 
 .cm-loommark-code-chrome {

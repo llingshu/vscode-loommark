@@ -117,8 +117,9 @@ full-strength rainbow colors. The two roles are controlled by `cardBackgroundStr
 - `tint`: one low-opacity `linear-gradient(tint, tint)` background layer per active level, inset by
   `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in the
   CSS `background-image` list (CSS paints earlier-listed layers on top, so the narrowest band needs
-  to be in front of the wider ones behind it). No borders, no content padding — a wash needs
-  neither.
+  to be in front of the wider ones behind it). No borders, but the same
+  `padding-left`/`padding-right` content inset as `card`, so text and nested blocks sit inside
+  their own level's band instead of overhanging an ancestor's.
 - `accent`: one `inset Npx 0 0 0 color` `box-shadow` per active level (a left-only rail, at full
   color, the same technique `ListGuideWidget` rails use), plus `padding-left` sized to the deepest
   level's inset plus `HEADING_CARD_CONTENT_PADDING` so content clears the innermost rail instead of
@@ -133,6 +134,13 @@ full-strength rainbow colors. The two roles are controlled by `cardBackgroundStr
   `card`) or just `margin-left` (`accent`, which has no right-side element), so the whole stack
   sits inset from the document edge once, rather than every level separately padding inward from a
   fixed left edge.
+- Fenced-code lines cannot take the padding inset — they lay out their own 58px line-number gutter
+  with `padding-left` — so in every mode they are contained by margins instead: the whole code
+  panel (and its toolbar shell) moves inside the content box, and the
+  `cm-loommark-card-contained-code` backdrop pseudo-element repaints that mode's layers across the
+  vacated side strips (card's rails and tints as real borders plus backdrop images, tint's bare
+  wash bands, accent's bars re-expressed as gradient stripes). The margins are chosen so the
+  toolbar widget and the code lines share both edges exactly.
 
 Unlike list guides, this field is a plain `StateField` reacting only to `docChanged` (and
 `decorationsRefresh`, for the `loommark.cardMode` cycle command and `loommark.cardColors` changes)
@@ -207,12 +215,25 @@ a normal CodeMirror transaction and therefore participates in undo history.
 
 ## Card Image Layer
 
-Per-Card images use a CodeMirror layer below document content, not repeated line backgrounds. The
-host resolves every configured image through `Webview.asWebviewUri`; the Webview deterministically
-selects an image from the document URI, heading level, and heading text. Layer markers derive their
-vertical bounds from CodeMirror block geometry and their horizontal bounds from the same integer
-inset constants as Card borders. Each marker owns the image, blur, overlay, and rounded clipping,
-so code blocks and rendered widgets cannot split the image into visible strips.
+`loommark.cardImage` renders in both the `card` and `tint` `loommark.cardMode` styles (not
+`accent`, whose rails are too thin a sliver for imagery to read, and not `off`). Images use a
+CodeMirror layer below document content, not repeated line backgrounds. The host resolves every
+configured image through `Webview.asWebviewUri`; the Webview deterministically selects an image
+from the document URI, heading level, and heading text. Layer markers derive their horizontal
+bounds from the same integer inset constants as the active mode's own geometry. Vertical bounds
+come from measuring the section's boundary line elements directly whenever they are mounted in the
+rendered viewport: `card` mode's `-first`/`-last` lines carry real CSS margins, which CodeMirror's
+height map cannot see (it measures border boxes only), so `lineBlockAt` positions drift by the
+accumulated margins above them — block geometry is only a fallback for edges that are offscreen,
+where the drift cannot be seen.
+
+The two modes need different clearance, tracked by a local `bordered` flag (`cardMode === 'card'`):
+`card` stays inside every drawn edge (the 2px borders, nested rails, and the shared
+`cardClosingGap` clearance under a nested card's rounded bottom border), so the image never shows
+outside a border line or rounded corner; `tint` has no border or closing gap to begin with — its
+color bands run flush to each line's own box — so its markers use the plain per-level inset with
+no border/gap compensation. Each marker owns the image, blur, overlay, and rounded clipping, so
+code blocks and rendered widgets cannot split the image into visible strips.
 
 ## Fenced Code Blocks
 

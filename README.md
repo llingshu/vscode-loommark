@@ -19,6 +19,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Card mode: each heading's section is visually set apart — a soft tint, a colored accent bar, or
   a nested bordered card, so it is obvious which heading you're under. Cycle styles from the
   editor title bar; colors are customizable.
+- Optional background imagery: a fixed, rotating, or per-document image behind the editor, and a
+  separate stable image per heading section in tint/card mode.
 - Fenced code blocks with language-aware highlighting, line numbers, copy controls, and language
   selection.
 - GFM tables that render as real tables, editable in place or as expand-to-source widgets, in a
@@ -93,7 +95,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.cardColors` | `[]` | Custom colors to cycle per heading level in card mode. Empty uses the built-in palette. |
 | `loommark.cardBackgroundStrength` | `0.06` | Amount of heading accent mixed into the translucent Card surface. |
 | `loommark.cardBorderStrength` | `0.52` | Accent strength in Card borders; lower values are quieter and more neutral. |
-| `loommark.cardImage.enabled` | `false` | Draw an independently selected, stable image inside each heading Card. |
+| `loommark.cardImage.enabled` | `false` | Draw an independently selected, stable image inside each heading section (`card` and `tint` modes only). |
 | `loommark.cardImage.path` | `""` | Card image file or directory; empty reuses `loommark.background.path`. |
 | `loommark.cardImage.opacity` | `0.72` | Card image opacity from 0 to 1. |
 | `loommark.cardImage.blur` | `4` | Card image blur radius in pixels. |
@@ -174,11 +176,13 @@ Windows paths may use `C:\\Users\\name\\Pictures\\loommark`; network shares may 
 The extension host resolves the selected file through VS Code's Webview resource API. A separate
 theme-colored overlay keeps text legible independently of image blur, saturation, and opacity.
 
-Card images are configured separately with `loommark.cardImage.*`. Each heading Card chooses a
-stable image from the directory using the document and heading identity, so editing or reopening
-the document does not reshuffle its appearance. Leave `loommark.cardImage.path` empty to reuse the
+Card images are configured separately with `loommark.cardImage.*` and work in both the `card` and
+`tint` `loommark.cardMode` styles (not `accent` or `off`). Each heading section chooses a stable
+image from the directory using the document and heading identity, so editing or reopening the
+document does not reshuffle its appearance. Leave `loommark.cardImage.path` empty to reuse the
 global background directory. Card images use a dedicated layer below editor content and are clipped
-to the same inset geometry as Card borders rather than being repeated on individual editor lines.
+to the same inset geometry as the active mode's own borders/bands rather than being repeated on
+individual editor lines.
 
 ## Rendered Widgets
 

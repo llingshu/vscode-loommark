@@ -440,6 +440,13 @@ const CODE_BLOCK_BORDER_WIDTH = 1;
 // card content must never sit flush against the card's own edge.
 const HEADING_CARD_CONTENT_PADDING = 12;
 
+// Vertical clearance between a nested card's rounded bottom border and the bottom of its
+// closing line; deeper levels closing on the same line stack extra clearance so each border
+// stays individually visible. The outer level's border sits on the line's own bottom edge.
+function cardClosingGap(level: number, outerLevel: number): number {
+  return level === outerLevel ? 0 : 8 + (level - outerLevel - 1) * 4;
+}
+
 function blockCardPresentation(source: string, position: number): BlockCardPresentation {
   if (cardMode === 'off') return undefined;
   const active = headingSections(source, headingRanges(source))
@@ -458,7 +465,11 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
       return `linear-gradient(${headingBackgroundTint(section.level)}, ${headingBackgroundTint(section.level)}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`;
     });
-    style.push(`margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`, `background: ${layers.join(', ')}`);
+    style.push(
+      `margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`,
+      `padding-left: ${contentPadding}px`, `padding-right: ${contentPadding}px`,
+      `background: ${layers.join(', ')}`,
+    );
   } else if (cardMode === 'accent') {
     const shadows = active.map((section) => {
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
@@ -565,7 +576,11 @@ const cardImageLayer = layer({
     return changed || update.docChanged || update.viewportChanged || update.geometryChanged;
   },
   markers(view): readonly LayerMarker[] {
-    if (!cardImage.enabled || !cardImage.imageUris.length || cardMode !== 'card') return [];
+    // tint has no real border or CardBoundaryWidget closing gap to stay clear of, so its markers
+    // use a simpler geometry below; accent's rails are too thin a sliver for imagery to read.
+    if (!cardImage.enabled || !cardImage.imageUris.length
+      || (cardMode !== 'card' && cardMode !== 'tint')) return [];
+    const bordered = cardMode === 'card';
     const source = view.state.doc.toString();
     // Outer sections must draw first. A deeper Card is a new visual surface, not a translucent
     // window onto its ancestor, so its marker must sit above the ancestor marker everywhere the
@@ -581,16 +596,56 @@ const cardImageLayer = layer({
     const contentWidth = view.contentDOM.clientWidth
       - Number.parseFloat(contentStyle.paddingLeft)
       - Number.parseFloat(contentStyle.paddingRight);
-    // BlockInfo coordinates are relative to documentTop, not the scroll container. Keeping this
-    // formula independent of which lines happen to be mounted prevents Card images from jumping
-    // when a parent heading scrolls outside CodeMirror's DOM viewport.
     const documentTop = view.documentTop - baseTop;
+    // -first/-last card lines carry real CSS margins, which CodeMirror's height map cannot see
+    // (it measures border boxes only), so lineBlockAt positions drift by the accumulated
+    // margins above them. Whenever a section edge is mounted in the rendered viewport, measure
+    // its actual line element instead; the BlockInfo estimate is only a fallback for edges that
+    // are offscreen, where the drift cannot be seen.
+    const measuredLineRect = (position: number): DOMRect | null => {
+      if (position < view.viewport.from || position > view.viewport.to) return null;
+      const { node } = view.domAtPos(position);
+      let element = node instanceof HTMLElement ? node : node.parentElement;
+      while (element && element !== view.contentDOM && !element.classList.contains('cm-line')) {
+        element = element.parentElement;
+      }
+      return element && element !== view.contentDOM ? element.getBoundingClientRect() : null;
+    };
     const markers: CardImageMarker[] = [];
     for (const section of sections) {
       if (section.to < view.viewport.from || section.from > view.viewport.to) continue;
-      const start = view.lineBlockAt(section.from);
-      const end = view.lineBlockAt(section.to);
-      const inset = (section.level - 1) * HEADING_CARD_INSET_STEP + HEADING_CARD_BORDER_WIDTH;
+      // The shallowest section enclosing this one decides both the horizontal margin shift its
+      // lines get and this section's closing-gap clearance — the same "outer" the line
+      // decorations compute per line, constant across one section's span.
+      const outerSection = sections.reduce(
+        (outer, other) => (other.from <= section.from && other.to >= section.to
+          && other.level < outer.level ? other : outer),
+        section,
+      );
+      const outerLevel = outerSection.level;
+      // A nested section's closing gap is positioned from its line's padding box; when that
+      // line is also the outer card's last line, the line additionally carries the outer's real
+      // bottom border, sitting between padding box and border box. Only 'card' reserves either
+      // a gap or a border in the first place — 'tint' bands run flush to each line's own edges.
+      const closeLine = view.state.doc.lineAt(section.to);
+      const closeBorder = bordered && section !== outerSection
+        && view.state.doc.lineAt(outerSection.to).from === closeLine.from
+        ? HEADING_CARD_BORDER_WIDTH : 0;
+      // Stay inside every drawn edge: the outer card's real 2px border, plus a nested level's
+      // own 2px gradient rail, so the image never shows outside a border line or rounded corner.
+      const inset = (outerLevel - 1) * HEADING_CARD_INSET_STEP
+        + (section.level - outerLevel) * HEADING_CARD_INSET_STEP
+        + (bordered ? HEADING_CARD_BORDER_WIDTH + (section.level === outerLevel ? 0 : HEADING_CARD_BORDER_WIDTH) : 0);
+      const openRect = measuredLineRect(section.from);
+      const closeRect = measuredLineRect(section.to);
+      const top = (openRect
+        ? openRect.top - baseTop
+        : documentTop + view.lineBlockAt(section.from).top)
+        + (bordered ? HEADING_CARD_BORDER_WIDTH : 0);
+      const bottom = (closeRect
+        ? closeRect.bottom - baseTop
+        : documentTop + view.lineBlockAt(section.to).bottom)
+        - (bordered ? cardClosingGap(section.level, outerLevel) + HEADING_CARD_BORDER_WIDTH + closeBorder : 0);
       const headingLine = view.state.doc.lineAt(section.from).text;
       const uri = cardImage.imageUris[
         cardImageIndex(`${resourceBase}\0${section.level}\0${headingLine}`, cardImage.imageUris.length)
@@ -599,9 +654,9 @@ const cardImageLayer = layer({
         uri,
         `color-mix(in srgb, ${headingLevelColor(section.level)} 8%, var(--vscode-editor-background))`,
         contentLeft + inset,
-        documentTop + start.top,
+        top,
         Math.max(0, contentWidth - inset * 2),
-        Math.max(0, end.bottom - start.top),
+        Math.max(0, bottom - top),
       ));
     }
     return markers;
@@ -677,24 +732,66 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
         positions.push(`${relativeInset}px 0`);
         sizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
       }
-      styleParts.push(
-        `margin-left: ${outerInset}px`,
-        `margin-right: ${outerInset}px`,
-        `background-image: ${images.join(', ')}`,
-        `background-position: ${positions.join(', ')}`,
-        `background-size: ${sizes.join(', ')}`,
-        'background-repeat: no-repeat',
-      );
+      if (fencedCodeLineStarts.has(line.from)) {
+        // Code lines lay out their own 58px line-number gutter with padding, so content inset
+        // must come from margins that move the whole code panel; the backdrop pseudo-element
+        // then continues the tint bands across the vacated side strips.
+        classes.push('cm-loommark-card-contained-code');
+        styleParts.push(
+          `margin-left: ${outerInset + contentPadding}px`,
+          `margin-right: ${outerInset + contentPadding}px`,
+          `--loommark-card-code-gutter-left: ${contentPadding + CODE_BLOCK_BORDER_WIDTH}px`,
+          `--loommark-card-code-gutter-right: ${contentPadding + CODE_BLOCK_BORDER_WIDTH}px`,
+          `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
+          `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
+          `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,
+        );
+      } else {
+        styleParts.push(
+          `margin-left: ${outerInset}px`,
+          `margin-right: ${outerInset}px`,
+          `padding-left: ${contentPadding}px`,
+          `padding-right: ${contentPadding}px`,
+          `background-image: ${images.join(', ')}`,
+          `background-position: ${positions.join(', ')}`,
+          `background-size: ${sizes.join(', ')}`,
+          'background-repeat: no-repeat',
+        );
+      }
     } else if (cardMode === 'accent') {
-      const shadows = sectionsForLine.map((section) => {
-        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-        return `inset ${relativeInset}px 0 0 0 ${headingBorderColor(section.level)}`;
-      });
-      styleParts.push(
-        `margin-left: ${outerInset}px`,
-        `padding-left: ${contentPadding}px`,
-        `box-shadow: ${shadows.join(', ')}`,
-      );
+      if (fencedCodeLineStarts.has(line.from)) {
+        // Same containment as tint, but the backdrop repaints the accent bars: the stacked
+        // inset box-shadows resolve to one solid stripe per nested level, deepest rightmost.
+        classes.push('cm-loommark-card-contained-code');
+        const images: string[] = [];
+        const positions: string[] = [];
+        const sizes: string[] = [];
+        for (const section of sectionsForLine) {
+          if (section.level === outer.level) continue;
+          const color = headingBorderColor(section.level);
+          images.push(`linear-gradient(${color}, ${color})`);
+          positions.push(`${(section.level - outer.level - 1) * HEADING_CARD_INSET_STEP}px 0`);
+          sizes.push(`${HEADING_CARD_INSET_STEP}px 100%`);
+        }
+        styleParts.push(
+          `margin-left: ${outerInset + contentPadding}px`,
+          `--loommark-card-code-gutter-left: ${contentPadding + CODE_BLOCK_BORDER_WIDTH}px`,
+          '--loommark-card-code-gutter-right: 0px',
+          images.length > 0 ? `--loommark-card-code-backdrop-image: ${images.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-position: ${positions.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-size: ${sizes.join(', ')}` : '',
+        );
+      } else {
+        const shadows = sectionsForLine.map((section) => {
+          const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
+          return `inset ${relativeInset}px 0 0 0 ${headingBorderColor(section.level)}`;
+        });
+        styleParts.push(
+          `margin-left: ${outerInset}px`,
+          `padding-left: ${contentPadding}px`,
+          `box-shadow: ${shadows.join(', ')}`,
+        );
+      }
     } else {
       const images: string[] = [];
       const positions: string[] = [];
@@ -710,7 +807,7 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
         const nested = section.level !== outer.level;
         const opensHere = line.from === section.from;
         const closesHere = line.to >= section.to;
-        const bottomGap = nested && closesHere ? 8 + (section.level - outer.level - 1) * 4 : 0;
+        const bottomGap = nested && closesHere ? cardClosingGap(section.level, outer.level) : 0;
         const cornerRadius = 6;
         const topTrim = nested && opensHere ? cornerRadius : 0;
         const bottomTrim = nested && closesHere ? bottomGap + cornerRadius : 0;
@@ -762,19 +859,18 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
         // then let a behind-the-line pseudo-element repaint the card layers across the vacated
         // gutters. This preserves the code block's own background, borders, gutter and radius.
         classes.push('cm-loommark-card-contained-code');
-        // The toolbar shell uses the card presentation's margin and content padding. Code lines
-        // additionally draw their own 1px border inside the line box, so compensate by exactly
-        // that border width. Using the 2px heading-card border here makes the body too narrow;
-        // omitting compensation makes it one pixel wider than the toolbar on each side.
-        const totalInset = outerInset + contentPadding + CODE_BLOCK_BORDER_WIDTH;
+        // The toolbar sits in the shell's content box, which starts at margin + 2px card border
+        // + content padding. Code lines have no shell, so their border box must be given that
+        // same span directly for the toolbar and the code panel to share both edges exactly.
+        const totalInset = outerInset + contentPadding + HEADING_CARD_BORDER_WIDTH;
         styleParts.push(
-          `margin-left: ${totalInset - CODE_BLOCK_BORDER_WIDTH}px`,
+          `margin-left: ${totalInset}px`,
           `margin-right: ${totalInset}px`,
           // Absolutely positioned children use the code line's padding box as their origin,
-          // which is one pixel inside its border box. The 2px card-border width therefore gives
-          // the exact reach back to the normal card rail: 1px less retracts it, 1px more protrudes.
-          `--loommark-card-code-gutter-left: ${contentPadding + HEADING_CARD_BORDER_WIDTH - CODE_BLOCK_BORDER_WIDTH}px`,
-          `--loommark-card-code-gutter-right: ${contentPadding + HEADING_CARD_BORDER_WIDTH}px`,
+          // which is one code-border pixel inside its border box. Reaching back to the normal
+          // card rail therefore costs the content padding plus both border widths.
+          `--loommark-card-code-gutter-left: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
+          `--loommark-card-code-gutter-right: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
           `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
           `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
           `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,

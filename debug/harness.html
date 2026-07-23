@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../dist/webview.css">
+  <title>LoomMark harness</title>
+  <style>
+    /* Stand in for the VS Code theme variables the webview normally inherits. */
+    :root {
+      --vscode-font-family: sans-serif;
+      --vscode-editor-font-family: monospace;
+      --vscode-editor-font-size: 14px;
+      --vscode-editor-background: #ffffff;
+      --vscode-editor-foreground: #333333;
+      --vscode-descriptionForeground: #717171;
+      --vscode-focusBorder: #0090f1;
+      --vscode-widget-border: #c8c8c8;
+      --vscode-textLink-foreground: #006ab1;
+      --vscode-textCodeBlock-background: #f3f3f3;
+      --vscode-textPreformat-foreground: #a31515;
+    }
+  </style>
+  <script>
+    // Stub of the VS Code webview API: reply to 'ready' with a full init message, so the real
+    // dist/webview.js bundle boots exactly as it would inside VS Code, just in a plain browser
+    // tab. Query params let you switch what init sends without editing this file:
+    //   ?mode=tint|accent|card|off   (default: card)
+    //   ?images=1                    (turn on loommark.cardImage with a solid-color placeholder)
+    const TEST_DOC = [
+      '# H1 title',
+      '',
+      'intro text under h1',
+      '',
+      '## H2 sub',
+      '',
+      'text under h2',
+      '',
+      '```python',
+      'print("hello world")',
+      '```',
+      '',
+      'after code',
+      '',
+      '### H3 deep',
+      '',
+      'deep body',
+      '',
+      '#### H4 deeper',
+      '',
+      'deepest body',
+      '',
+      '## H2 second',
+      '',
+      'tail text',
+      ''
+    ].join('\n');
+
+    // 1x1 dark PNG so card images render without network access.
+    const DATA_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+    const params = new URLSearchParams(location.search);
+    const withImages = params.get('images') === '1';
+    const cardMode = params.get('mode') || 'card';
+
+    window.acquireVsCodeApi = function () {
+      return {
+        postMessage(message) {
+          if (message.type === 'ready') {
+            setTimeout(() => {
+              window.dispatchEvent(new MessageEvent('message', {
+                data: {
+                  type: 'init',
+                  text: TEST_DOC,
+                  revision: 1,
+                  resourceBase: 'https://example.invalid/doc/',
+                  wikiFiles: [],
+                  syncDelay: 180,
+                  theme: 'vscode',
+                  outline: 'off',
+                  table: 'rich',
+                  tableStyle: 'grid',
+                  orderedListStyle: 'cycle',
+                  keyboardEditing: false,
+                  listGuides: true,
+                  cardMode: cardMode,
+                  cardColors: [],
+                  cardBackgroundStrength: 0.06,
+                  cardBorderStrength: 0.52,
+                  background: {
+                    enabled: false, opacity: 0.72, blur: 14, saturation: 0.7,
+                    overlay: 0.42, status: 'disabled',
+                  },
+                  cardImage: {
+                    enabled: withImages,
+                    imageUris: withImages ? [DATA_IMAGE] : [],
+                    opacity: 0.72, blur: 4, saturation: 0.75, overlay: 0.18,
+                    status: withImages ? 'loaded' : 'disabled',
+                  },
+                },
+              }));
+            }, 0);
+          }
+          // Other message types (edit, openLink, diagnostics) are intentionally left as no-ops:
+          // there is no real host on the other end in this harness.
+        },
+        getState() { return undefined; },
+        setState() {},
+      };
+    };
+
+    // Optional measurement pass for headless/automated runs: append ?measure=1 and read the
+    // #measure-results <pre> it appends (or drive it from outside with Playwright/Puppeteer/a
+    // headless-Chromium --dump-dom call). Skipped by default so an interactive tab stays clean.
+    if (params.get('measure') === '1') {
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const round = (value) => Math.round(value * 100) / 100;
+          const report = [];
+          const rect = (el) => {
+            const r = el.getBoundingClientRect();
+            return { left: round(r.left), right: round(r.right), top: round(r.top), bottom: round(r.bottom), width: round(r.width), height: round(r.height) };
+          };
+
+          const toolbar = document.querySelector('.cm-loommark-code-toolbar');
+          if (toolbar) report.push(['toolbar', rect(toolbar)]);
+          const shell = document.querySelector('.cm-loommark-block-card-shell');
+          if (shell) report.push(['toolbar-shell', rect(shell)]);
+          document.querySelectorAll('.cm-loommark-code-block-line').forEach((line, i) => {
+            report.push([`code-line-${i}`, rect(line)]);
+          });
+          document.querySelectorAll('.cm-loommark-heading-card-first').forEach((line, i) => {
+            const cs = getComputedStyle(line);
+            report.push([`card-first-${i}`, Object.assign(rect(line), { marginTop: cs.marginTop, marginLeft: cs.marginLeft })]);
+          });
+          document.querySelectorAll('.cm-loommark-heading-card-last').forEach((line, i) => {
+            const cs = getComputedStyle(line);
+            report.push([`card-last-${i}`, Object.assign(rect(line), { marginBottom: cs.marginBottom })]);
+          });
+          document.querySelectorAll('.cm-loommark-card-boundary').forEach((el, i) => {
+            report.push([`boundary-${i}-${el.classList.contains('is-open') ? 'open' : 'close'}`, rect(el)]);
+          });
+          document.querySelectorAll('.cm-loommark-card-image').forEach((el, i) => {
+            report.push([`card-image-${i}`, rect(el)]);
+          });
+          const content = document.querySelector('.cm-content');
+          if (content) report.push(['cm-content', rect(content)]);
+
+          const pre = document.createElement('pre');
+          pre.id = 'measure-results';
+          pre.textContent = report.map(([name, data]) => `${name}: ${JSON.stringify(data)}`).join('\n');
+          document.body.append(pre);
+          document.title = 'MEASURED';
+        }, 600);
+      });
+    }
+  </script>
+</head>
+<body>
+  <div id="workspace">
+    <main id="editor" aria-label="Markdown editor"></main>
+    <button id="outline-fab" type="button" title="Show outline" aria-label="Show outline" aria-controls="outline" aria-expanded="false">
+      <span class="outline-fab-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+    <aside id="outline" aria-label="Document outline">
+      <header class="outline-header">
+        <span class="outline-title">Outline</span>
+        <button id="outline-toggle" type="button" title="Hide outline" aria-label="Hide outline" aria-controls="outline" aria-expanded="true">
+          <span class="outline-toggle-icon" aria-hidden="true"></span>
+        </button>
+      </header>
+      <nav class="outline-nav" aria-label="Headings">
+        <ol id="outline-list"></ol>
+        <p id="outline-empty">No headings</p>
+      </nav>
+    </aside>
+  </div>
+  <div id="status" role="status">Loading editor...</div>
+  <script src="../dist/webview.js"></script>
+</body>
+</html>
