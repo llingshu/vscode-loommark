@@ -105,31 +105,39 @@ rendered inside it, not floating above) through wherever it closes or end of doc
 a heading's subtree ends up listed under every ancestor section simultaneously. It then picks the
 *shallowest* active level on that line as the "outer" one and the *deepest* as well, and computes
 everything relative to `outer`. `buildHeadingCardDecorations` early-returns for `cardMode === 'off'`
-and otherwise branches per mode; all three modes share `headingLevelColor(level)` (returns a
-`cardColors[...]` entry if the user configured any, else `var(--loommark-guide-N)`) and
-`headingBackgroundTint(level)` mixes the configured accent strength into
-`--loommark-card-surface-base`, a translucent editor-colored surface. `headingBorderColor(level)`
-separately mixes the accent with the active theme foreground. This keeps Card surfaces readable
-over either a plain editor or an image while allowing borders to remain distinct without using
-full-strength rainbow colors. The two roles are controlled by `cardBackgroundStrength` and
-`cardBorderStrength`.
+and otherwise branches per mode. Background fill and border/rail color are independent:
+`cardColorAt(colors, level)` indexes `loommark.cardBackgroundColors` or `loommark.cardBorderColors`
+by level, cycling, and returns `null` if that list is empty — `null` means "no color for this
+layer," not "use a default," so `headingBackgroundTint(level)` and `headingBorderColor(level)`
+(which respectively mix the configured color into `--loommark-card-surface-base`, a translucent
+editor-colored surface, and into the active theme foreground) also return `null` in that case.
+Every call site treats `null` as "omit this layer's declarations entirely" rather than substituting
+a fallback color, so a level with no configured color draws nothing for that layer while other
+levels/layers still render normally, and `--loommark-heading-card-color` (the outer level's border
+color, referenced by the real CSS border on `-first`/`-last` lines) falls back to the literal
+keyword `transparent` when `headingBorderColor(outer.level)` is `null`, keeping the border's
+reserved width and layout in place without drawing a visible line.
 
-- `tint`: one low-opacity `linear-gradient(tint, tint)` background layer per active level, inset by
-  `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in the
-  CSS `background-image` list (CSS paints earlier-listed layers on top, so the narrowest band needs
-  to be in front of the wider ones behind it). No borders, but the same
-  `padding-left`/`padding-right` content inset as `card`, so text and nested blocks sit inside
-  their own level's band instead of overhanging an ancestor's.
-- `accent`: one `inset Npx 0 0 0 color` `box-shadow` per active level (a left-only rail, at full
-  color, the same technique `ListGuideWidget` rails use), plus `padding-left` sized to the deepest
-  level's inset plus `HEADING_CARD_CONTENT_PADDING` so content clears the innermost rail instead of
-  touching it.
+- `tint`: one low-opacity `linear-gradient(tint, tint)` background layer per active level with a
+  configured background color, inset by `(level - outer.level) * HEADING_CARD_INSET_STEP` on each
+  side, deepest level listed first in the CSS `background-image` list (CSS paints earlier-listed
+  layers on top, so the narrowest band needs to be in front of the wider ones behind it). No
+  borders, but the same `padding-left`/`padding-right` content inset as `card`, so text and nested
+  blocks sit inside their own level's band instead of overhanging an ancestor's.
+- `accent`: one `inset Npx 0 0 0 color` `box-shadow` per active level with a configured border
+  color (a left-only rail, at full color, the same technique `ListGuideWidget` rails use), plus
+  `padding-left` sized to the deepest level's inset plus `HEADING_CARD_CONTENT_PADDING` so content
+  clears the innermost rail instead of touching it.
 - `card`: the same stacked background-tint layers as `tint`, plus real side borders and content
-  padding. The outer level uses the line's CSS border. Deeper levels use fixed-width gradient rails
-  between dedicated `CardBoundaryWidget` instances that draw their real rounded top and bottom
-  edges. When several nested sections close together, their bottom boundaries receive progressively
-  larger offsets so the rounded edges remain individually visible. `padding-left`/`padding-right`
-  keep content — especially nested code blocks and blockquotes — clear of the innermost boundary.
+  padding. The outer level uses the line's CSS border. A deeper level only gets its own rounded
+  corner-trim/rail treatment (fixed-width gradient rails between `CardBoundaryWidget` instances
+  drawing real rounded top/bottom edges) when it actually has a border color configured
+  (`hasBorder` in `buildHeadingCardDecorations`); with none, its tint (if any) is just a plain band
+  occupying the same space a bordered level's fill would, with no corner trimming or extra inset.
+  When several bordered nested sections close together, their bottom boundaries receive
+  progressively larger offsets so the rounded edges remain individually visible.
+  `padding-left`/`padding-right` keep content — especially nested code blocks and blockquotes —
+  clear of the innermost boundary regardless of whether that level has a real border drawn.
 - All three modes use `margin-left`/`margin-right` equal to the outer level's own inset (`tint` and
   `card`) or just `margin-left` (`accent`, which has no right-side element), so the whole stack
   sits inset from the document edge once, rather than every level separately padding inward from a
@@ -140,11 +148,16 @@ full-strength rainbow colors. The two roles are controlled by `cardBackgroundStr
   `cm-loommark-card-contained-code` backdrop pseudo-element repaints that mode's layers across the
   vacated side strips (card's rails and tints as real borders plus backdrop images, tint's bare
   wash bands, accent's bars re-expressed as gradient stripes). The margins are chosen so the
-  toolbar widget and the code lines share both edges exactly.
+  toolbar widget and the code lines share both edges exactly. Each backdrop custom property
+  (`--loommark-card-code-backdrop-image` and its position/size siblings) is only declared when at
+  least one layer has a color to draw; an unset custom property referenced by `var()` with no
+  fallback computes to that property's initial value (`none` for `background-image`), so omitting
+  the declaration is a safe, deliberate way to draw nothing rather than an oversight.
 
 Unlike list guides, this field is a plain `StateField` reacting only to `docChanged` (and
-`decorationsRefresh`, for the `loommark.cardMode` cycle command and `loommark.cardColors` changes)
-— which lines belong to which heading's card never depends on cursor position.
+`decorationsRefresh`, for the `loommark.cardMode` cycle command and `loommark.cardBackgroundColors`
+/`loommark.cardBorderColors` changes) — which lines belong to which heading's card never depends
+on cursor position.
 
 ## Decoration Types
 

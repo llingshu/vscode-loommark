@@ -192,11 +192,17 @@
           "default": "card",
           "description": "Visually distinguish which heading a line is under. Cycle through modes from the editor title bar."
         },
-        "loommark.cardColors": {
+        "loommark.cardBackgroundColors": {
           "type": "array",
           "items": { "type": "string" },
-          "default": [],
-          "description": "Custom colors to cycle through per heading level in card mode (CSS color values, e.g. \"#ff8800\"). Leave empty to use the built-in palette."
+          "default": ["#7c3aed", "#2563eb", "#168a72", "#b46a08", "#be3455", "#087f8c"],
+          "description": "Colors to cycle through per heading level for the Card background fill (CSS color values, e.g. \"#ff8800\"). Set to an empty array to draw no background at all."
+        },
+        "loommark.cardBorderColors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["#7c3aed", "#2563eb", "#168a72", "#b46a08", "#be3455", "#087f8c"],
+          "description": "Colors to cycle through per heading level for Card/accent borders and rails (CSS color values, e.g. \"#ff8800\"). Set to an empty array to draw no border at all."
         },
         "loommark.cardBackgroundStrength": {
           "type": "number",

@@ -103,8 +103,14 @@ let tableMode: TableMode = 'rich';
 let tableStyle: TableStyle = 'grid';
 let orderedListStyle: OrderedListStyle = 'cycle';
 let listGuidesEnabled = true;
+// Shipped default for loommark.cardBackgroundColors/cardBorderColors, matching package.json.
+// An empty array (the user explicitly clearing it) means "no color" for that layer — see
+// cardColorAt — so the shipped default must be non-empty to keep the out-of-the-box look.
+const DEFAULT_CARD_COLORS = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
+
 let cardMode: CardMode = 'card';
-let cardColors: string[] = [];
+let cardBackgroundColors: string[] = DEFAULT_CARD_COLORS;
+let cardBorderColors: string[] = DEFAULT_CARD_COLORS;
 let cardBackgroundStrength = 0.06;
 let cardBorderStrength = 0.52;
 let backgroundDiagnostic: EditorConfiguration['background'] | undefined;
@@ -458,41 +464,52 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
   const contentPadding = (deepest.level - outer.level) * HEADING_CARD_INSET_STEP
     + HEADING_CARD_CONTENT_PADDING;
   const deepestFirst = [...active].sort((a, b) => b.level - a.level);
-  const style = [`--loommark-heading-card-color: ${headingBorderColor(outer.level)}`];
+  const style = [`--loommark-heading-card-color: ${headingBorderColor(outer.level) ?? 'transparent'}`];
 
   if (cardMode === 'tint') {
-    const layers = deepestFirst.map((section) => {
+    const layers = deepestFirst.flatMap((section) => {
+      const tint = headingBackgroundTint(section.level);
+      if (!tint) return [];
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      return `linear-gradient(${headingBackgroundTint(section.level)}, ${headingBackgroundTint(section.level)}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`;
+      return [`linear-gradient(${tint}, ${tint}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`];
     });
     style.push(
       `margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`,
       `padding-left: ${contentPadding}px`, `padding-right: ${contentPadding}px`,
-      `background: ${layers.join(', ')}`,
+      layers.length > 0 ? `background: ${layers.join(', ')}` : '',
     );
   } else if (cardMode === 'accent') {
-    const shadows = active.map((section) => {
+    const shadows = active.flatMap((section) => {
+      const color = headingBorderColor(section.level);
+      if (!color) return [];
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      return `inset ${inset}px 0 0 0 ${headingBorderColor(section.level)}`;
+      return [`inset ${inset}px 0 0 0 ${color}`];
     });
-    style.push(`margin-left: ${outerInset}px`, `padding-left: ${contentPadding}px`, `box-shadow: ${shadows.join(', ')}`);
+    style.push(
+      `margin-left: ${outerInset}px`, `padding-left: ${contentPadding}px`,
+      shadows.length > 0 ? `box-shadow: ${shadows.join(', ')}` : '',
+    );
   } else {
-    const tintLayers = deepestFirst.map((section) => {
+    const tintLayers = deepestFirst.flatMap((section) => {
+      const tint = headingBackgroundTint(section.level);
+      if (!tint) return [];
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      return `linear-gradient(${headingBackgroundTint(section.level)}, ${headingBackgroundTint(section.level)}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`;
+      return [`linear-gradient(${tint}, ${tint}) ${inset}px 0 / calc(100% - ${inset * 2}px) 100% no-repeat`];
     });
     const borderLayers = active.filter((section) => section.level !== outer.level).flatMap((section) => {
-      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
       const color = headingBorderColor(section.level);
+      if (!color) return [];
+      const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
       return [
         `linear-gradient(${color}, ${color}) ${inset}px 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
         `linear-gradient(${color}, ${color}) calc(100% - ${inset}px - ${HEADING_CARD_BORDER_WIDTH}px) 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
       ];
     });
+    const allLayers = [...borderLayers, ...tintLayers];
     style.push(
       `margin-left: ${outerInset}px`, `margin-right: ${outerInset}px`,
       `padding-left: ${contentPadding}px`, `padding-right: ${contentPadding}px`,
-      `background: ${[...borderLayers, ...tintLayers].join(', ')}`,
+      allLayers.length > 0 ? `background: ${allLayers.join(', ')}` : '',
     );
   }
   return {
@@ -501,23 +518,31 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
   };
 }
 
-// loommark.cardColors overrides the built-in six-hue palette when non-empty, cycling by level.
-function headingLevelColor(level: number): string {
-  if (cardColors.length > 0) return cardColors[(level - 1) % cardColors.length];
-  return `var(--loommark-guide-${(level - 1) % 6})`;
+// loommark.cardBackgroundColors/cardBorderColors cycle by level, independently, so background
+// fill and border/rail color can be customized (or disabled) separately. An empty array means
+// "no color" for that layer — the layer is not drawn at all — rather than falling back to any
+// default; the shipped setting default is DEFAULT_CARD_COLORS, not [], so out of the box both
+// still render normally.
+function cardColorAt(colors: string[], level: number): string | null {
+  if (colors.length === 0) return null;
+  return colors[(level - 1) % colors.length];
 }
 
-function headingBorderColor(level: number): string {
+function headingBorderColor(level: number): string | null {
+  const base = cardColorAt(cardBorderColors, level);
+  if (base === null) return null;
   const percentage = Math.round(cardBorderStrength * 1000) / 10;
-  return `color-mix(in oklab, ${headingLevelColor(level)} ${percentage}%, var(--vscode-editor-foreground))`;
+  return `color-mix(in oklab, ${base} ${percentage}%, var(--vscode-editor-foreground))`;
 }
 
 // Border/rail lines stay close to full color so they read clearly; background fills use a very
 // light tint instead — a background wash strong enough to read as a "color" behind body text
 // makes the text itself harder to read, which is the opposite of what this feature is for.
-function headingBackgroundTint(level: number): string {
+function headingBackgroundTint(level: number): string | null {
+  const base = cardColorAt(cardBackgroundColors, level);
+  if (base === null) return null;
   const percentage = Math.round(cardBackgroundStrength * 1000) / 10;
-  return `color-mix(in srgb, ${headingLevelColor(level)} ${percentage}%, var(--loommark-card-surface-base))`;
+  return `color-mix(in srgb, ${base} ${percentage}%, var(--loommark-card-surface-base))`;
 }
 
 function cardImageIndex(seed: string, count: number): number {
@@ -650,9 +675,12 @@ const cardImageLayer = layer({
       const uri = cardImage.imageUris[
         cardImageIndex(`${resourceBase}\0${section.level}\0${headingLine}`, cardImage.imageUris.length)
       ];
+      const surfaceAccent = cardColorAt(cardBackgroundColors, section.level);
       markers.push(new CardImageMarker(
         uri,
-        `color-mix(in srgb, ${headingLevelColor(section.level)} 8%, var(--vscode-editor-background))`,
+        surfaceAccent
+          ? `color-mix(in srgb, ${surfaceAccent} 8%, var(--vscode-editor-background))`
+          : 'var(--vscode-editor-background)',
         contentLeft + inset,
         top,
         Math.max(0, contentWidth - inset * 2),
@@ -719,15 +747,16 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
     if (sectionsForLine.some((section) => section.level !== outer.level && line.to >= section.to)) {
       classes.push('cm-loommark-heading-card-nested-last');
     }
-    const styleParts: string[] = [`--loommark-heading-card-color: ${headingBorderColor(outer.level)}`];
+    const styleParts: string[] = [`--loommark-heading-card-color: ${headingBorderColor(outer.level) ?? 'transparent'}`];
 
     if (cardMode === 'tint') {
       const images: string[] = [];
       const positions: string[] = [];
       const sizes: string[] = [];
       for (const section of deepestFirst) {
-        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
         const tint = headingBackgroundTint(section.level);
+        if (!tint) continue;
+        const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
         images.push(`linear-gradient(${tint}, ${tint})`);
         positions.push(`${relativeInset}px 0`);
         sizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
@@ -742,9 +771,9 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           `margin-right: ${outerInset + contentPadding}px`,
           `--loommark-card-code-gutter-left: ${contentPadding + CODE_BLOCK_BORDER_WIDTH}px`,
           `--loommark-card-code-gutter-right: ${contentPadding + CODE_BLOCK_BORDER_WIDTH}px`,
-          `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
-          `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
-          `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,
+          images.length > 0 ? `--loommark-card-code-backdrop-image: ${images.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-position: ${positions.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-size: ${sizes.join(', ')}` : '',
         );
       } else {
         styleParts.push(
@@ -752,10 +781,10 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           `margin-right: ${outerInset}px`,
           `padding-left: ${contentPadding}px`,
           `padding-right: ${contentPadding}px`,
-          `background-image: ${images.join(', ')}`,
-          `background-position: ${positions.join(', ')}`,
-          `background-size: ${sizes.join(', ')}`,
-          'background-repeat: no-repeat',
+          images.length > 0 ? `background-image: ${images.join(', ')}` : '',
+          images.length > 0 ? `background-position: ${positions.join(', ')}` : '',
+          images.length > 0 ? `background-size: ${sizes.join(', ')}` : '',
+          images.length > 0 ? 'background-repeat: no-repeat' : '',
         );
       }
     } else if (cardMode === 'accent') {
@@ -769,6 +798,7 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
         for (const section of sectionsForLine) {
           if (section.level === outer.level) continue;
           const color = headingBorderColor(section.level);
+          if (!color) continue;
           images.push(`linear-gradient(${color}, ${color})`);
           positions.push(`${(section.level - outer.level - 1) * HEADING_CARD_INSET_STEP}px 0`);
           sizes.push(`${HEADING_CARD_INSET_STEP}px 100%`);
@@ -782,14 +812,17 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           images.length > 0 ? `--loommark-card-code-backdrop-size: ${sizes.join(', ')}` : '',
         );
       } else {
-        const shadows = sectionsForLine.map((section) => {
+        const shadows: string[] = [];
+        for (const section of sectionsForLine) {
+          const color = headingBorderColor(section.level);
+          if (!color) continue;
           const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-          return `inset ${relativeInset}px 0 0 0 ${headingBorderColor(section.level)}`;
-        });
+          shadows.push(`inset ${relativeInset}px 0 0 0 ${color}`);
+        }
         styleParts.push(
           `margin-left: ${outerInset}px`,
           `padding-left: ${contentPadding}px`,
-          `box-shadow: ${shadows.join(', ')}`,
+          shadows.length > 0 ? `box-shadow: ${shadows.join(', ')}` : '',
         );
       }
     } else {
@@ -804,24 +837,29 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
       for (const section of deepestFirst) {
         const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
         const tint = headingBackgroundTint(section.level);
-        const nested = section.level !== outer.level;
+        // A nested level only gets its own rounded corner-trim/rail treatment when it actually
+        // has a border color configured; with none, its tint (if any) is just a plain band, the
+        // same as the outer level's own fill.
+        const color = section.level !== outer.level ? headingBorderColor(section.level) : null;
+        const hasBorder = color !== null;
         const opensHere = line.from === section.from;
         const closesHere = line.to >= section.to;
-        const bottomGap = nested && closesHere ? cardClosingGap(section.level, outer.level) : 0;
+        const bottomGap = hasBorder && closesHere ? cardClosingGap(section.level, outer.level) : 0;
         const cornerRadius = 6;
-        const topTrim = nested && opensHere ? cornerRadius : 0;
-        const bottomTrim = nested && closesHere ? bottomGap + cornerRadius : 0;
+        const topTrim = hasBorder && opensHere ? cornerRadius : 0;
+        const bottomTrim = hasBorder && closesHere ? bottomGap + cornerRadius : 0;
         // Nested fills occupy the border's inner box rather than extending under an
         // independently antialiased rail. Sharing these inner-edge coordinates prevents a
         // one-device-pixel tint fringe from appearing beyond the right border at some zooms.
-        const fillInset = relativeInset + (nested ? HEADING_CARD_BORDER_WIDTH : 0);
-        images.push(`linear-gradient(${tint}, ${tint})`);
-        positions.push(`${fillInset}px ${topTrim}px`);
-        sizes.push(
-          `calc(100% - ${fillInset * 2}px) calc(100% - ${topTrim + bottomTrim}px)`,
-        );
-        if (section.level !== outer.level) {
-          const color = headingBorderColor(section.level);
+        const fillInset = relativeInset + (hasBorder ? HEADING_CARD_BORDER_WIDTH : 0);
+        if (tint) {
+          images.push(`linear-gradient(${tint}, ${tint})`);
+          positions.push(`${fillInset}px ${topTrim}px`);
+          sizes.push(
+            `calc(100% - ${fillInset * 2}px) calc(100% - ${topTrim + bottomTrim}px)`,
+          );
+        }
+        if (hasBorder) {
           closingBottomGap = Math.max(closingBottomGap, bottomGap);
           borderImages.push(`linear-gradient(${color}, ${color})`, `linear-gradient(${color}, ${color})`);
           borderPositions.push(
@@ -832,15 +870,15 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
             `${HEADING_CARD_BORDER_WIDTH}px calc(100% - ${opensHere ? cornerRadius : 0}px - ${closesHere ? bottomGap + cornerRadius : 0}px)`,
             `${HEADING_CARD_BORDER_WIDTH}px calc(100% - ${opensHere ? cornerRadius : 0}px - ${closesHere ? bottomGap + cornerRadius : 0}px)`,
           );
-          if (line.from === section.from) {
+          if (opensHere) {
             boundaryWidgets.push(Decoration.widget({
-              widget: new CardBoundaryWidget('open', relativeInset, 0, color, tint),
+              widget: new CardBoundaryWidget('open', relativeInset, 0, color, tint ?? 'transparent'),
               side: -1,
             }).range(line.from));
           }
           if (closesHere) {
             boundaryWidgets.push(Decoration.widget({
-              widget: new CardBoundaryWidget('close', relativeInset, bottomGap, color, tint),
+              widget: new CardBoundaryWidget('close', relativeInset, bottomGap, color, tint ?? 'transparent'),
               side: 1,
             }).range(line.to));
           }
@@ -871,9 +909,9 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           // card rail therefore costs the content padding plus both border widths.
           `--loommark-card-code-gutter-left: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
           `--loommark-card-code-gutter-right: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
-          `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
-          `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
-          `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,
+          images.length > 0 ? `--loommark-card-code-backdrop-image: ${images.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-position: ${positions.join(', ')}` : '',
+          images.length > 0 ? `--loommark-card-code-backdrop-size: ${sizes.join(', ')}` : '',
         );
       } else {
         styleParts.push(
@@ -881,10 +919,10 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           `margin-right: ${outerInset}px`,
           `padding-left: ${contentPadding}px`,
           `padding-right: ${contentPadding}px`,
-          `background-image: ${images.join(', ')}`,
-          `background-position: ${positions.join(', ')}`,
-          `background-size: ${sizes.join(', ')}`,
-          'background-repeat: no-repeat',
+          images.length > 0 ? `background-image: ${images.join(', ')}` : '',
+          images.length > 0 ? `background-position: ${positions.join(', ')}` : '',
+          images.length > 0 ? `background-size: ${sizes.join(', ')}` : '',
+          images.length > 0 ? 'background-repeat: no-repeat' : '',
         );
       }
     }
@@ -1533,14 +1571,16 @@ function applyConfiguration(config: EditorConfiguration): void {
     || cardBackgroundStrength !== config.cardBackgroundStrength
     || cardBorderStrength !== config.cardBorderStrength
     || JSON.stringify(cardImage) !== JSON.stringify(nextCardImage)
-    || cardColors.join(' ') !== config.cardColors.join(' ');
+    || cardBackgroundColors.join(' ') !== config.cardBackgroundColors.join(' ')
+    || cardBorderColors.join(' ') !== config.cardBorderColors.join(' ');
   tableMode = config.table;
   tableStyle = config.tableStyle;
   orderedListStyle = config.orderedListStyle;
   keyboardEditing = config.keyboardEditing;
   listGuidesEnabled = config.listGuides;
   cardMode = config.cardMode;
-  cardColors = config.cardColors;
+  cardBackgroundColors = config.cardBackgroundColors;
+  cardBorderColors = config.cardBorderColors;
   cardBackgroundStrength = config.cardBackgroundStrength;
   cardBorderStrength = config.cardBorderStrength;
   cardImage = nextCardImage;

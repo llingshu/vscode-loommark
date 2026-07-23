@@ -62,6 +62,12 @@
     const params = new URLSearchParams(location.search);
     const withImages = params.get('images') === '1';
     const cardMode = params.get('mode') || 'card';
+    // ?bg=none / ?border=none empty out cardBackgroundColors / cardBorderColors respectively,
+    // to check the "no color" path; ?colors=a,b,c overrides both with a custom list.
+    const customColors = params.get('colors')?.split(',').filter(Boolean) ?? null;
+    const DEFAULT_CARD_COLORS = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
+    const cardBackgroundColors = params.get('bg') === 'none' ? [] : (customColors ?? DEFAULT_CARD_COLORS);
+    const cardBorderColors = params.get('border') === 'none' ? [] : (customColors ?? DEFAULT_CARD_COLORS);
 
     window.acquireVsCodeApi = function () {
       return {
@@ -84,7 +90,8 @@
                   keyboardEditing: false,
                   listGuides: true,
                   cardMode: cardMode,
-                  cardColors: [],
+                  cardBackgroundColors: cardBackgroundColors,
+                  cardBorderColors: cardBorderColors,
                   cardBackgroundStrength: 0.06,
                   cardBorderStrength: 0.52,
                   background: {

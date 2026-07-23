@@ -6,6 +6,15 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- `loommark.cardColors` is replaced by `loommark.cardBackgroundColors` and
+  `loommark.cardBorderColors`, so Card background fill and border/rail color can be customized
+  independently instead of sharing one color list. Setting either to an empty array now means no
+  color at all for that layer (no background tint, or no border/rail), rather than falling back
+  to the built-in palette; the built-in six-hue palette is instead the setting's shipped default,
+  so the out-of-the-box look is unchanged until you edit the setting.
+
 ## [0.4.0] - 2026-07-23
 
 ### Added

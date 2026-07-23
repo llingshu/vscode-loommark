@@ -7,6 +7,11 @@ import { singleSplice } from './text';
 
 const viewType = 'loommark.editor';
 
+// Shipped default for loommark.cardBackgroundColors/cardBorderColors, matching package.json and
+// webview/main.ts's own copy (kept in sync manually; there is no shared runtime module between
+// the two bundles for a six-entry constant).
+const DEFAULT_CARD_COLORS = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
+
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new LoomMarkProvider(context);
   const outlineProvider = new MarkdownOutlineTree();
@@ -111,7 +116,8 @@ function editorConfiguration(
     keyboardEditing: configuration.get('keyboardEditing', false),
     listGuides: configuration.get('listGuides', true),
     cardMode,
-    cardColors: configuration.get<string[]>('cardColors', []),
+    cardBackgroundColors: configuration.get<string[]>('cardBackgroundColors', DEFAULT_CARD_COLORS),
+    cardBorderColors: configuration.get<string[]>('cardBorderColors', DEFAULT_CARD_COLORS),
     cardBackgroundStrength: clampSetting(configuration.get('cardBackgroundStrength', 0.06), 0, 0.3),
     cardBorderStrength: clampSetting(configuration.get('cardBorderStrength', 0.52), 0.15, 1),
     background,

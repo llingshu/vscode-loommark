@@ -92,7 +92,8 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.orderedListStyle` | `cycle` | Number nested ordered lists by cycling arabic/letters/roman numerals per level (`cycle`) or `1, 2, 2.1, 2.2` (`decimal`). |
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
 | `loommark.cardMode` | `card` | Heading section visualization: `off`, `tint`, `accent`, or `card`. Also cycled from the editor title bar. |
-| `loommark.cardColors` | `[]` | Custom colors to cycle per heading level in card mode. Empty uses the built-in palette. |
+| `loommark.cardBackgroundColors` | six-hue palette | Colors to cycle per heading level for the Card background fill. Empty draws no background. |
+| `loommark.cardBorderColors` | six-hue palette | Colors to cycle per heading level for Card/accent borders and rails. Empty draws no border. |
 | `loommark.cardBackgroundStrength` | `0.06` | Amount of heading accent mixed into the translucent Card surface. |
 | `loommark.cardBorderStrength` | `0.52` | Accent strength in Card borders; lower values are quieter and more neutral. |
 | `loommark.cardImage.enabled` | `false` | Draw an independently selected, stable image inside each heading section (`card` and `tint` modes only). |
@@ -157,10 +158,14 @@ modes with the `$(layers)` button in the editor title bar, or `LoomMark: Toggle 
   blocks, blockquotes) is padded inward from the card's own border rather than sitting flush
   against it, so nested code blocks and quotes keep their own visual boundary.
 
-Colors cycle through a theme-aware six-hue palette. Each hue is treated as an accent token: Card
-surfaces mix only a small amount into a translucent editor-colored base, while borders use a
-muted accent/foreground mixture. `loommark.cardColors` replaces the accent list;
-`loommark.cardBackgroundStrength` and `loommark.cardBorderStrength` tune the two roles separately.
+Background fill and border/rail color are controlled independently: `loommark.cardBackgroundColors`
+and `loommark.cardBorderColors` each cycle their own list of colors per heading level, defaulting
+to the same built-in six-hue palette. Each hue is treated as an accent token: Card surfaces mix
+only a small amount into a translucent editor-colored base, while borders use a muted
+accent/foreground mixture — `loommark.cardBackgroundStrength` and `loommark.cardBorderStrength`
+tune how strongly each shows. Set either color list to an empty array to draw no color at all for
+that layer (a border-only or background-only Card, or neither, while keeping the same content
+inset and geometry) rather than falling back to the default palette.
 
 Nested cards use dedicated boundary widgets for their rounded top and bottom edges, while line
 decorations draw the continuous side rails and background layers between those boundaries. Cards

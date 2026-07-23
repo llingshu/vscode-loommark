@@ -8,7 +8,8 @@ export type EditorConfiguration = {
   keyboardEditing: boolean;
   listGuides: boolean;
   cardMode: CardMode;
-  cardColors: string[];
+  cardBackgroundColors: string[];
+  cardBorderColors: string[];
   cardBackgroundStrength: number;
   cardBorderStrength: number;
   background: BackgroundConfiguration;

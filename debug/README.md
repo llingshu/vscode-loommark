@@ -21,8 +21,12 @@ Query params change what the stubbed `init` message contains, without touching t
 - `?mode=tint|accent|card|off` — sets `loommark.cardMode` (default `card`).
 - `?images=1` — turns on `loommark.cardImage` with a small solid-color placeholder image, so you
   can check Card-image geometry without wiring up real files.
+- `?bg=none` / `?border=none` — empties `loommark.cardBackgroundColors` / `loommark.cardBorderColors`
+  respectively, to check the "no color" path.
+- `?colors=a,b,c` — overrides both color lists with a comma-separated custom list.
 
-Example: `debug/harness.html?mode=tint&images=1`.
+Example: `debug/harness.html?mode=tint&images=1`, or `debug/harness.html?mode=card&border=none` to
+check a background-only Card with no border.
 
 Re-run `node esbuild.mjs` after any `webview/` change and reload the tab — there's no watch mode
 wired up here, just a plain static file.
