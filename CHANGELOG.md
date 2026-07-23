@@ -6,6 +6,8 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-23
+
 ### Fixed
 
 - `loommark.keyboardEditing` had no effect: with it off (the default), arrow-key motion was meant
@@ -210,7 +212,8 @@ All notable changes to LoomMark are documented here. This project follows
 - Configurable default-editor association and synchronization delay.
 - Source-editor command in the custom editor title bar.
 
-[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/llingshu/vscode-loommark/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/llingshu/vscode-loommark/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/llingshu/vscode-loommark/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/llingshu/vscode-loommark/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/llingshu/vscode-loommark/compare/v0.3.0...v0.3.1
