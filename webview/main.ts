@@ -15,6 +15,8 @@ import {
   type DecorationSet,
   EditorView,
   keymap,
+  layer,
+  type LayerMarker,
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
@@ -103,6 +105,14 @@ let orderedListStyle: OrderedListStyle = 'cycle';
 let listGuidesEnabled = true;
 let cardMode: CardMode = 'card';
 let cardColors: string[] = [];
+let cardBackgroundStrength = 0.06;
+let cardBorderStrength = 0.52;
+let backgroundDiagnostic: EditorConfiguration['background'] | undefined;
+let cardImage: EditorConfiguration['cardImage'] = {
+  enabled: false, imageUris: [], opacity: 0.72, blur: 4, saturation: 0.75,
+  overlay: 0.18, status: 'disabled',
+};
+let cardImageRevision = 0;
 let keyboardEditing = false;
 let clientRevision = 0;
 let syncDelay = 180;
@@ -111,6 +121,7 @@ let editor: EditorView | undefined;
 let applyingHostUpdate = false;
 let wikiFiles: string[] = [];
 let lastPointerDiagnostic: Record<string, unknown> | undefined;
+let lastVisualHoverDiagnostic: Record<string, unknown> | undefined;
 let lastLinkRequest: Record<string, unknown> | undefined;
 let lastHostLinkResult: Record<string, unknown> | undefined;
 let editorInitializationError: string | undefined;
@@ -330,12 +341,13 @@ const listField = selectionAwareField((state) => {
   const cursor = state.selection.main.head;
   const source = state.doc.toString();
   const items = listItemRanges(source);
-  const orderedLabels = orderedListLabels(source, items, orderedListStyle);
-  for (const item of items) {
-    if (item.task?.checked) {
-      ranges.push(Decoration.line({
-        attributes: { class: 'cm-loommark-task-done' },
-      }).range(item.lineFrom));
+    const orderedLabels = orderedListLabels(source, items, orderedListStyle);
+    for (const item of items) {
+    if (item.task?.checked && item.task.boxTo < item.lineTo) {
+      // Do not lower opacity on the entire line: a line decoration also fades its Card tint,
+      // background image, and rails. Mark only the task's visible text after the checkbox.
+      ranges.push(Decoration.mark({ class: 'cm-loommark-task-done' })
+        .range(item.task.boxTo, item.lineTo));
     }
     const cursorOnLine = cursor >= item.lineFrom && cursor <= item.lineTo;
     if (item.ordered) {
@@ -439,7 +451,7 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
   const contentPadding = (deepest.level - outer.level) * HEADING_CARD_INSET_STEP
     + HEADING_CARD_CONTENT_PADDING;
   const deepestFirst = [...active].sort((a, b) => b.level - a.level);
-  const style = [`--loommark-heading-card-color: ${headingLevelColor(outer.level)}`];
+  const style = [`--loommark-heading-card-color: ${headingBorderColor(outer.level)}`];
 
   if (cardMode === 'tint') {
     const layers = deepestFirst.map((section) => {
@@ -450,7 +462,7 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
   } else if (cardMode === 'accent') {
     const shadows = active.map((section) => {
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      return `inset ${inset}px 0 0 0 ${headingLevelColor(section.level)}`;
+      return `inset ${inset}px 0 0 0 ${headingBorderColor(section.level)}`;
     });
     style.push(`margin-left: ${outerInset}px`, `padding-left: ${contentPadding}px`, `box-shadow: ${shadows.join(', ')}`);
   } else {
@@ -460,7 +472,7 @@ function blockCardPresentation(source: string, position: number): BlockCardPrese
     });
     const borderLayers = active.filter((section) => section.level !== outer.level).flatMap((section) => {
       const inset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-      const color = headingLevelColor(section.level);
+      const color = headingBorderColor(section.level);
       return [
         `linear-gradient(${color}, ${color}) ${inset}px 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
         `linear-gradient(${color}, ${color}) calc(100% - ${inset}px - ${HEADING_CARD_BORDER_WIDTH}px) 0 / ${HEADING_CARD_BORDER_WIDTH}px 100% no-repeat`,
@@ -484,12 +496,117 @@ function headingLevelColor(level: number): string {
   return `var(--loommark-guide-${(level - 1) % 6})`;
 }
 
+function headingBorderColor(level: number): string {
+  const percentage = Math.round(cardBorderStrength * 1000) / 10;
+  return `color-mix(in oklab, ${headingLevelColor(level)} ${percentage}%, var(--vscode-editor-foreground))`;
+}
+
 // Border/rail lines stay close to full color so they read clearly; background fills use a very
 // light tint instead — a background wash strong enough to read as a "color" behind body text
 // makes the text itself harder to read, which is the opposite of what this feature is for.
 function headingBackgroundTint(level: number): string {
-  return `color-mix(in srgb, ${headingLevelColor(level)} 7%, transparent)`;
+  const percentage = Math.round(cardBackgroundStrength * 1000) / 10;
+  return `color-mix(in srgb, ${headingLevelColor(level)} ${percentage}%, var(--loommark-card-surface-base))`;
 }
+
+function cardImageIndex(seed: string, count: number): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % count;
+}
+
+class CardImageMarker implements LayerMarker {
+  constructor(
+    private readonly uri: string,
+    private readonly surface: string,
+    private readonly left: number,
+    private readonly top: number,
+    private readonly width: number,
+    private readonly height: number,
+  ) {}
+
+  eq(other: CardImageMarker): boolean {
+    return this.uri === other.uri && this.surface === other.surface && this.left === other.left && this.top === other.top
+      && this.width === other.width && this.height === other.height;
+  }
+
+  draw(): HTMLElement {
+    const marker = document.createElement('div');
+    marker.className = 'cm-loommark-card-image';
+    marker.style.left = `${this.left}px`;
+    marker.style.top = `${this.top}px`;
+    marker.style.width = `${this.width}px`;
+    marker.style.height = `${this.height}px`;
+    marker.style.background = this.surface;
+    marker.style.setProperty('--loommark-card-image-opacity', String(cardImage.opacity));
+    marker.style.setProperty('--loommark-card-image-blur', `${cardImage.blur}px`);
+    marker.style.setProperty('--loommark-card-image-saturation', String(cardImage.saturation));
+    marker.style.setProperty('--loommark-card-image-overlay', String(cardImage.overlay));
+    const image = document.createElement('span');
+    image.className = 'cm-loommark-card-image-media';
+    image.style.backgroundImage = `url(${JSON.stringify(this.uri)})`;
+    const overlay = document.createElement('span');
+    overlay.className = 'cm-loommark-card-image-overlay';
+    marker.append(image, overlay);
+    return marker;
+  }
+}
+
+let drawnCardImageRevision = -1;
+const cardImageLayer = layer({
+  above: false,
+  class: 'cm-loommark-card-image-layer',
+  update(update) {
+    const changed = drawnCardImageRevision !== cardImageRevision;
+    drawnCardImageRevision = cardImageRevision;
+    return changed || update.docChanged || update.viewportChanged || update.geometryChanged;
+  },
+  markers(view): readonly LayerMarker[] {
+    if (!cardImage.enabled || !cardImage.imageUris.length || cardMode !== 'card') return [];
+    const source = view.state.doc.toString();
+    // Outer sections must draw first. A deeper Card is a new visual surface, not a translucent
+    // window onto its ancestor, so its marker must sit above the ancestor marker everywhere the
+    // two ranges overlap.
+    const sections = headingSections(source, headingRanges(source))
+      .sort((left, right) => left.level - right.level || left.from - right.from);
+    const scrollRect = view.scrollDOM.getBoundingClientRect();
+    const baseLeft = scrollRect.left - view.scrollDOM.scrollLeft * view.scaleX;
+    const baseTop = scrollRect.top - view.scrollDOM.scrollTop * view.scaleY;
+    const contentStyle = getComputedStyle(view.contentDOM);
+    const contentLeft = view.contentDOM.getBoundingClientRect().left - baseLeft
+      + Number.parseFloat(contentStyle.paddingLeft);
+    const contentWidth = view.contentDOM.clientWidth
+      - Number.parseFloat(contentStyle.paddingLeft)
+      - Number.parseFloat(contentStyle.paddingRight);
+    // BlockInfo coordinates are relative to documentTop, not the scroll container. Keeping this
+    // formula independent of which lines happen to be mounted prevents Card images from jumping
+    // when a parent heading scrolls outside CodeMirror's DOM viewport.
+    const documentTop = view.documentTop - baseTop;
+    const markers: CardImageMarker[] = [];
+    for (const section of sections) {
+      if (section.to < view.viewport.from || section.from > view.viewport.to) continue;
+      const start = view.lineBlockAt(section.from);
+      const end = view.lineBlockAt(section.to);
+      const inset = (section.level - 1) * HEADING_CARD_INSET_STEP + HEADING_CARD_BORDER_WIDTH;
+      const headingLine = view.state.doc.lineAt(section.from).text;
+      const uri = cardImage.imageUris[
+        cardImageIndex(`${resourceBase}\0${section.level}\0${headingLine}`, cardImage.imageUris.length)
+      ];
+      markers.push(new CardImageMarker(
+        uri,
+        `color-mix(in srgb, ${headingLevelColor(section.level)} 8%, var(--vscode-editor-background))`,
+        contentLeft + inset,
+        documentTop + start.top,
+        Math.max(0, contentWidth - inset * 2),
+        Math.max(0, end.bottom - start.top),
+      ));
+    }
+    return markers;
+  },
+});
 
 // One StateField, not a selectionAwareField: which lines are inside which heading's card
 // depends only on document structure, never on where the cursor is.
@@ -541,7 +658,13 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
     const deepestFirst = [...sectionsForLine].sort((a, b) => b.level - a.level);
 
     const classes = ['cm-loommark-heading-card', `cm-loommark-heading-card-${cardMode}`];
-    const styleParts: string[] = [`--loommark-heading-card-color: ${headingLevelColor(outer.level)}`];
+    if (sectionsForLine.some((section) => section.level !== outer.level && line.from === section.from)) {
+      classes.push('cm-loommark-heading-card-nested-first');
+    }
+    if (sectionsForLine.some((section) => section.level !== outer.level && line.to >= section.to)) {
+      classes.push('cm-loommark-heading-card-nested-last');
+    }
+    const styleParts: string[] = [`--loommark-heading-card-color: ${headingBorderColor(outer.level)}`];
 
     if (cardMode === 'tint') {
       const images: string[] = [];
@@ -565,7 +688,7 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
     } else if (cardMode === 'accent') {
       const shadows = sectionsForLine.map((section) => {
         const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
-        return `inset ${relativeInset}px 0 0 0 ${headingLevelColor(section.level)}`;
+        return `inset ${relativeInset}px 0 0 0 ${headingBorderColor(section.level)}`;
       });
       styleParts.push(
         `margin-left: ${outerInset}px`,
@@ -584,15 +707,24 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
       for (const section of deepestFirst) {
         const relativeInset = (section.level - outer.level) * HEADING_CARD_INSET_STEP;
         const tint = headingBackgroundTint(section.level);
+        const nested = section.level !== outer.level;
+        const opensHere = line.from === section.from;
+        const closesHere = line.to >= section.to;
+        const bottomGap = nested && closesHere ? 8 + (section.level - outer.level - 1) * 4 : 0;
+        const cornerRadius = 6;
+        const topTrim = nested && opensHere ? cornerRadius : 0;
+        const bottomTrim = nested && closesHere ? bottomGap + cornerRadius : 0;
+        // Nested fills occupy the border's inner box rather than extending under an
+        // independently antialiased rail. Sharing these inner-edge coordinates prevents a
+        // one-device-pixel tint fringe from appearing beyond the right border at some zooms.
+        const fillInset = relativeInset + (nested ? HEADING_CARD_BORDER_WIDTH : 0);
         images.push(`linear-gradient(${tint}, ${tint})`);
-        positions.push(`${relativeInset}px 0`);
-        sizes.push(`calc(100% - ${relativeInset * 2}px) 100%`);
+        positions.push(`${fillInset}px ${topTrim}px`);
+        sizes.push(
+          `calc(100% - ${fillInset * 2}px) calc(100% - ${topTrim + bottomTrim}px)`,
+        );
         if (section.level !== outer.level) {
-          const color = headingLevelColor(section.level);
-          const closesHere = line.to >= section.to;
-          const opensHere = line.from === section.from;
-          const bottomGap = closesHere ? 8 + (section.level - outer.level - 1) * 4 : 0;
-          const cornerRadius = 6;
+          const color = headingBorderColor(section.level);
           closingBottomGap = Math.max(closingBottomGap, bottomGap);
           borderImages.push(`linear-gradient(${color}, ${color})`, `linear-gradient(${color}, ${color})`);
           borderPositions.push(
@@ -605,13 +737,13 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
           );
           if (line.from === section.from) {
             boundaryWidgets.push(Decoration.widget({
-              widget: new CardBoundaryWidget('open', relativeInset, 0, color),
+              widget: new CardBoundaryWidget('open', relativeInset, 0, color, tint),
               side: -1,
             }).range(line.from));
           }
           if (closesHere) {
             boundaryWidgets.push(Decoration.widget({
-              widget: new CardBoundaryWidget('close', relativeInset, bottomGap, color),
+              widget: new CardBoundaryWidget('close', relativeInset, bottomGap, color, tint),
               side: 1,
             }).range(line.to));
           }
@@ -630,14 +762,19 @@ function buildHeadingCardDecorations(state: EditorState): DecorationSet {
         // then let a behind-the-line pseudo-element repaint the card layers across the vacated
         // gutters. This preserves the code block's own background, borders, gutter and radius.
         classes.push('cm-loommark-card-contained-code');
-        const totalInset = outerInset + contentPadding + HEADING_CARD_BORDER_WIDTH;
+        // The toolbar shell uses the card presentation's margin and content padding. Code lines
+        // additionally draw their own 1px border inside the line box, so compensate by exactly
+        // that border width. Using the 2px heading-card border here makes the body too narrow;
+        // omitting compensation makes it one pixel wider than the toolbar on each side.
+        const totalInset = outerInset + contentPadding + CODE_BLOCK_BORDER_WIDTH;
         styleParts.push(
-          `margin-left: ${totalInset}px`,
+          `margin-left: ${totalInset - CODE_BLOCK_BORDER_WIDTH}px`,
           `margin-right: ${totalInset}px`,
-          // The backdrop is absolutely positioned from the code line's padding box, one code
-          // border-width inside its visible edge. Include that 1px only in the backdrop reach;
-          // the code panel itself already aligns with the toolbar and must not move again.
-          `--loommark-card-code-gutter: ${contentPadding + HEADING_CARD_BORDER_WIDTH + CODE_BLOCK_BORDER_WIDTH}px`,
+          // Absolutely positioned children use the code line's padding box as their origin,
+          // which is one pixel inside its border box. The 2px card-border width therefore gives
+          // the exact reach back to the normal card rail: 1px less retracts it, 1px more protrudes.
+          `--loommark-card-code-gutter-left: ${contentPadding + HEADING_CARD_BORDER_WIDTH - CODE_BLOCK_BORDER_WIDTH}px`,
+          `--loommark-card-code-gutter-right: ${contentPadding + HEADING_CARD_BORDER_WIDTH}px`,
           `--loommark-card-code-backdrop-image: ${images.join(', ')}`,
           `--loommark-card-code-backdrop-position: ${positions.join(', ')}`,
           `--loommark-card-code-backdrop-size: ${sizes.join(', ')}`,
@@ -997,6 +1134,50 @@ function scheduleSync(): void {
   }, syncDelay);
 }
 
+// Complete only unambiguous block delimiters typed on an otherwise empty line. This is a local
+// insertion at the cursor, not a Markdown serialization pass, so surrounding source remains exact.
+// The cursor stays after the opening fence so a language name can still be entered normally.
+const completeBlockDelimiters = EditorView.inputHandler.of((view, from, to, text) => {
+  if (from !== to || text.length !== 1) return false;
+  const line = view.state.doc.lineAt(from);
+  if (view.state.doc.sliceString(from, line.to).trim() !== '') return false;
+  const before = view.state.doc.sliceString(line.from, from);
+  const indent = before.match(/^ {0,3}/)?.[0] ?? '';
+
+  let insertion: string | undefined;
+  if (text === '`' && before === `${indent}\`\``) {
+    insertion = `\`\n\n${indent}\`\`\``;
+  } else if (text === '~' && before === `${indent}~~`) {
+    insertion = `~\n\n${indent}~~~`;
+  } else if (text === '$' && before === `${indent}$`) {
+    insertion = `$\n\n${indent}$$`;
+  }
+  if (!insertion) return false;
+
+  view.dispatch({
+    changes: { from, to, insert: insertion },
+    selection: { anchor: from + 1 },
+    userEvent: 'input.type',
+  });
+  return true;
+});
+
+function enterCompletedBlock(view: EditorView): boolean {
+  const selection = view.state.selection.main;
+  if (!selection.empty) return false;
+  const line = view.state.doc.lineAt(selection.head);
+  if (selection.head !== line.to) return false;
+  const code = line.text.match(/^( {0,3})(```|~~~)[^\n]*$/);
+  const math = line.text.match(/^( {0,3})(\$\$)\s*$/);
+  const match = code ?? math;
+  if (!match) return false;
+  const expectedClose = `${match[1]}${match[2]}`;
+  const after = view.state.doc.sliceString(selection.head, selection.head + expectedClose.length + 2);
+  if (after !== `\n\n${expectedClose}`) return false;
+  view.dispatch({ selection: { anchor: selection.head + 1 }, scrollIntoView: true });
+  return true;
+}
+
 function createEditor(text: string): void {
   editor?.destroy();
   root.replaceChildren();
@@ -1009,13 +1190,21 @@ function createEditor(text: string): void {
       extensions: [
         history(),
         markdown({ extensions: [GFM], codeLanguages: languages }),
-        autocompletion({ override: [wikiLinkCompletions] }),
+        autocompletion({ override: [fileLinkCompletions] }),
         search({ top: true }),
+        completeBlockDelimiters,
         // Matches LIST_INDENT_WIDTH: CommonMark requires a nested ordered item's content to
         // reach its parent's content column (3-4+ characters), which 2 spaces never satisfies.
         indentUnit.of(' '.repeat(LIST_INDENT_WIDTH)),
-        keymap.of([indentWithTab, ...searchKeymap, ...defaultKeymap, ...historyKeymap]),
+        keymap.of([
+          { key: 'Enter', run: enterCompletedBlock },
+          indentWithTab,
+          ...searchKeymap,
+          ...defaultKeymap,
+          ...historyKeymap,
+        ]),
         EditorView.lineWrapping,
+        cardImageLayer,
         headingDecorations,
         headingCardField,
         inlineDecorations,
@@ -1093,6 +1282,26 @@ root.addEventListener('mousedown', (event) => {
   });
 }, true);
 
+root.addEventListener('mousemove', (event) => {
+  const target = event.target as HTMLElement;
+  const visual = target.closest<HTMLElement>(
+    '.cm-loommark-card-image, .cm-loommark-math, .cm-loommark-heading-card, .cm-loommark-block-card-shell',
+  );
+  if (!visual) return;
+  const rect = visual.getBoundingClientRect();
+  const style = getComputedStyle(visual);
+  lastVisualHoverDiagnostic = {
+    target: target.outerHTML?.slice(0, 400),
+    visual: visual.outerHTML.slice(0, 600),
+    className: visual.className,
+    rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+    background: style.background,
+    backgroundImage: style.backgroundImage,
+    opacity: style.opacity,
+    zIndex: style.zIndex,
+  };
+});
+
 function wikiFileDetail(target: string): string {
   // Extensionless targets follow the Obsidian-style Markdown convention used by
   // findWikiFiles; everything else keeps its extension, which becomes the detail label.
@@ -1100,24 +1309,29 @@ function wikiFileDetail(target: string): string {
   return extension ? `${extension} file` : 'Markdown file';
 }
 
-function wikiLinkCompletions(context: CompletionContext): CompletionResult | null {
-  const match = context.matchBefore(/\[\[[^\]\n|]*/);
+function fileLinkCompletions(context: CompletionContext): CompletionResult | null {
+  const wikiMatch = context.matchBefore(/\[\[[^\]\n|]*/);
+  const markdownMatch = context.matchBefore(/\[[^\]\n]*\]\([^\s)\n]*/);
+  const match = wikiMatch ?? markdownMatch;
   if (!match) return null;
+  const wiki = Boolean(wikiMatch);
+  const targetStart = wiki ? match.from + 2 : match.from + match.text.lastIndexOf('(') + 1;
   return {
-    from: match.from + 2,
+    from: targetStart,
     options: wikiFiles.map((target) => ({
       label: target,
       detail: wikiFileDetail(target),
       type: 'file',
       apply(view, _completion, from, to) {
-        const suffix = view.state.doc.sliceString(to, to + 2) === ']]' ? '' : ']]';
+        const closing = wiki ? ']]' : ')';
+        const suffix = view.state.doc.sliceString(to, to + closing.length) === closing ? '' : closing;
         view.dispatch({
           changes: { from, to, insert: target + suffix },
           selection: { anchor: from + target.length },
         });
       },
     })),
-    validFor: /^[^\]\n|]*$/,
+    validFor: wiki ? /^[^\]\n|]*$/ : /^[^\s)\n]*$/,
   };
 }
 
@@ -1192,6 +1406,23 @@ function setOutlineCollapsed(collapsed: boolean): void {
 function applyConfiguration(config: EditorConfiguration): void {
   syncDelay = config.syncDelay;
   document.body.dataset.loommarkTheme = config.theme;
+  const background = config.background;
+  backgroundDiagnostic = background;
+  const hasBackground = background.enabled && Boolean(background.imageUri);
+  document.body.classList.toggle('loommark-has-background', hasBackground);
+  document.body.style.setProperty(
+    '--loommark-background-image',
+    hasBackground ? `url(${JSON.stringify(background.imageUri)})` : 'none',
+  );
+  document.body.style.setProperty('--loommark-background-opacity', String(background.opacity));
+  document.body.style.setProperty('--loommark-background-blur', `${background.blur}px`);
+  document.body.style.setProperty('--loommark-background-saturation', String(background.saturation));
+  document.body.style.setProperty('--loommark-background-overlay', String(background.overlay));
+  const nextCardImage = config.cardImage;
+  document.body.classList.toggle(
+    'loommark-has-card-images',
+    nextCardImage.enabled && nextCardImage.status === 'loaded' && nextCardImage.imageUris.length > 0,
+  );
   document.body.classList.toggle(
     'editor-outline-disabled',
     config.outline === 'explorer' || config.outline === 'off',
@@ -1203,6 +1434,9 @@ function applyConfiguration(config: EditorConfiguration): void {
     || keyboardEditing !== config.keyboardEditing
     || listGuidesEnabled !== config.listGuides
     || cardMode !== config.cardMode
+    || cardBackgroundStrength !== config.cardBackgroundStrength
+    || cardBorderStrength !== config.cardBorderStrength
+    || JSON.stringify(cardImage) !== JSON.stringify(nextCardImage)
     || cardColors.join(' ') !== config.cardColors.join(' ');
   tableMode = config.table;
   tableStyle = config.tableStyle;
@@ -1211,6 +1445,10 @@ function applyConfiguration(config: EditorConfiguration): void {
   listGuidesEnabled = config.listGuides;
   cardMode = config.cardMode;
   cardColors = config.cardColors;
+  cardBackgroundStrength = config.cardBackgroundStrength;
+  cardBorderStrength = config.cardBorderStrength;
+  cardImage = nextCardImage;
+  if (needsRefresh) cardImageRevision++;
   if (needsRefresh) editor?.dispatch({ effects: decorationsRefresh.of(null) });
 }
 
@@ -1273,6 +1511,14 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       documentRevision,
       localGeneration,
       pendingEdits: pendingEdits.size,
+      background: backgroundDiagnostic,
+      backgroundBodyClass: document.body.className,
+      backgroundImageStyle: document.body.style.getPropertyValue('--loommark-background-image'),
+      cardImage: {
+        ...cardImage,
+        imageUris: cardImage.imageUris.slice(0, 10),
+        renderedCards: document.querySelectorAll('.cm-loommark-card-image').length,
+      },
       wikiFileCount: wikiFiles.length,
       wikiFiles: wikiFiles.slice(0, 50),
       completionStatus: editor ? completionStatus(editor.state) : null,
@@ -1285,6 +1531,32 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
           background: getComputedStyle(line).backgroundColor,
           color: getComputedStyle(line).color,
         })),
+      codeGeometry: Array.from(document.querySelectorAll<HTMLElement>('.cm-loommark-code-toolbar'))
+        .map((toolbar) => {
+          const code = toolbar.parentElement?.nextElementSibling?.classList.contains('cm-line')
+            ? toolbar.parentElement.nextElementSibling as HTMLElement
+            : undefined;
+          const toolbarRect = toolbar.getBoundingClientRect();
+          const codeRect = code?.getBoundingClientRect();
+          return {
+            toolbar: { left: toolbarRect.left, right: toolbarRect.right, width: toolbarRect.width },
+            code: codeRect && { left: codeRect.left, right: codeRect.right, width: codeRect.width },
+          };
+        }),
+      visualLayers: Array.from(document.querySelectorAll<HTMLElement>(
+        '.cm-loommark-card-image, .cm-loommark-math.is-block, .cm-loommark-heading-card',
+      )).map((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          className: element.className,
+          rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+          background: style.background,
+          backgroundImage: style.backgroundImage,
+          opacity: style.opacity,
+          zIndex: style.zIndex,
+        };
+      }),
       cursorStyles: Array.from(document.querySelectorAll<HTMLElement>('.cm-cursor')).map((cursor) => ({
         className: cursor.className,
         borderLeftColor: getComputedStyle(cursor).borderLeftColor,
@@ -1305,6 +1577,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
           html: element.outerHTML,
         })),
       lastPointerDiagnostic,
+      lastVisualHoverDiagnostic,
       lastLinkRequest,
       lastHostLinkResult,
       editorLoaded: Boolean(editor),

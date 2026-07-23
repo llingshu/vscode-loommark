@@ -91,6 +91,21 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
 | `loommark.cardMode` | `card` | Heading section visualization: `off`, `tint`, `accent`, or `card`. Also cycled from the editor title bar. |
 | `loommark.cardColors` | `[]` | Custom colors to cycle per heading level in card mode. Empty uses the built-in palette. |
+| `loommark.cardBackgroundStrength` | `0.06` | Amount of heading accent mixed into the translucent Card surface. |
+| `loommark.cardBorderStrength` | `0.52` | Accent strength in Card borders; lower values are quieter and more neutral. |
+| `loommark.cardImage.enabled` | `false` | Draw an independently selected, stable image inside each heading Card. |
+| `loommark.cardImage.path` | `""` | Card image file or directory; empty reuses `loommark.background.path`. |
+| `loommark.cardImage.opacity` | `0.72` | Card image opacity from 0 to 1. |
+| `loommark.cardImage.blur` | `4` | Card image blur radius in pixels. |
+| `loommark.cardImage.saturation` | `0.75` | Card image color saturation multiplier. |
+| `loommark.cardImage.overlay` | `0.18` | Editor-theme overlay above each Card image. |
+| `loommark.background.enabled` | `false` | Enable an optional image behind the editor. |
+| `loommark.background.path` | `""` | Image file or directory. This machine-specific path is not synchronized to other devices. |
+| `loommark.background.selection` | `daily` | Directory selection mode: `fixed`, `onOpen`, `daily`, or `perDocument`. |
+| `loommark.background.opacity` | `0.72` | Background image opacity from 0 to 1. |
+| `loommark.background.blur` | `14` | Background blur radius in pixels. |
+| `loommark.background.saturation` | `0.7` | Background color saturation multiplier. |
+| `loommark.background.overlay` | `0.42` | Editor-theme overlay opacity; higher values improve readability. |
 | `loommark.keyboardEditing` | `false` | Let the cursor enter rendered images, tables, and math with the keyboard. When off, they are edited on click. |
 | `loommark.outline` | `both` | Show the outline in `both`, `editor`, `explorer`, or turn it `off`. |
 | `loommark.syncDelay` | `180` | Debounce duration in milliseconds before syncing local typing to VS Code. |
@@ -140,13 +155,30 @@ modes with the `$(layers)` button in the editor title bar, or `LoomMark: Toggle 
   blocks, blockquotes) is padded inward from the card's own border rather than sitting flush
   against it, so nested code blocks and quotes keep their own visual boundary.
 
-Colors cycle through six hues per level by default (the same palette used by list guides).
-`loommark.cardColors` overrides this with your own list of CSS colors, cycling per level.
+Colors cycle through a theme-aware six-hue palette. Each hue is treated as an accent token: Card
+surfaces mix only a small amount into a translucent editor-colored base, while borders use a
+muted accent/foreground mixture. `loommark.cardColors` replaces the accent list;
+`loommark.cardBackgroundStrength` and `loommark.cardBorderStrength` tune the two roles separately.
 
 Nested cards use dedicated boundary widgets for their rounded top and bottom edges, while line
 decorations draw the continuous side rails and background layers between those boundaries. Cards
 that close together receive progressively offset bottom spacing, so each heading level keeps a
 distinct rounded edge without rewriting the Markdown source.
+
+## Image Backgrounds
+
+LoomMark can select a fixed or rotating image without modifying the Markdown document. Set
+`loommark.background.path` to an image or a directory and enable `loommark.background.enabled`.
+Windows paths may use `C:\\Users\\name\\Pictures\\loommark`; network shares may use
+`//server/share/folder` or an escaped UNC path such as `\\\\server\\share\\folder` in JSON.
+The extension host resolves the selected file through VS Code's Webview resource API. A separate
+theme-colored overlay keeps text legible independently of image blur, saturation, and opacity.
+
+Card images are configured separately with `loommark.cardImage.*`. Each heading Card chooses a
+stable image from the directory using the document and heading identity, so editing or reopening
+the document does not reshuffle its appearance. Leave `loommark.cardImage.path` empty to reuse the
+global background directory. Card images use a dedicated layer below editor content and are clipped
+to the same inset geometry as Card borders rather than being repeated on individual editor lines.
 
 ## Rendered Widgets
 

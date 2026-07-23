@@ -369,6 +369,7 @@ export class CardBoundaryWidget extends WidgetType {
     private readonly inset: number,
     private readonly gap: number,
     private readonly color: string,
+    private readonly background: string,
   ) {
     super();
   }
@@ -377,7 +378,8 @@ export class CardBoundaryWidget extends WidgetType {
     return this.kind === other.kind
       && this.inset === other.inset
       && this.gap === other.gap
-      && this.color === other.color;
+      && this.color === other.color
+      && this.background === other.background;
   }
 
   toDOM(): HTMLElement {
@@ -386,6 +388,7 @@ export class CardBoundaryWidget extends WidgetType {
     boundary.style.setProperty('--loommark-card-boundary-inset', `${this.inset}px`);
     boundary.style.setProperty('--loommark-card-boundary-gap', `${this.gap}px`);
     boundary.style.setProperty('--loommark-card-boundary-color', this.color);
+    boundary.style.setProperty('--loommark-card-boundary-background', this.background);
     boundary.setAttribute('aria-hidden', 'true');
     return boundary;
   }

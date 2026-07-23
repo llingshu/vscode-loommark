@@ -107,10 +107,12 @@ a heading's subtree ends up listed under every ancestor section simultaneously. 
 everything relative to `outer`. `buildHeadingCardDecorations` early-returns for `cardMode === 'off'`
 and otherwise branches per mode; all three modes share `headingLevelColor(level)` (returns a
 `cardColors[...]` entry if the user configured any, else `var(--loommark-guide-N)`) and
-`headingBackgroundTint(level)` (`color-mix(in srgb, color 7%, transparent)` — a background *fill*
-strong enough to read as a color behind body text would hurt readability, so fills stay very
-light; border/rail lines use the full-strength color instead since a thin line at full color
-doesn't have the same effect).
+`headingBackgroundTint(level)` mixes the configured accent strength into
+`--loommark-card-surface-base`, a translucent editor-colored surface. `headingBorderColor(level)`
+separately mixes the accent with the active theme foreground. This keeps Card surfaces readable
+over either a plain editor or an image while allowing borders to remain distinct without using
+full-strength rainbow colors. The two roles are controlled by `cardBackgroundStrength` and
+`cardBorderStrength`.
 
 - `tint`: one low-opacity `linear-gradient(tint, tint)` background layer per active level, inset by
   `(level - outer.level) * HEADING_CARD_INSET_STEP` on each side, deepest level listed first in the
@@ -196,12 +198,21 @@ The extension host finds every workspace file (`**/*`, excluding `.git`, `node_m
 `.md`/`.markdown` extension, following the Obsidian convention that a bare wiki-link target is a
 note; every other file keeps its extension, both because that is what identifies the file type in
 the completion list and because `openLink` only appends `.md` to an extensionless target — a
-target that already has one opens exactly as named. The Webview completion source activates only
-after an unclosed `[[`. Workspace create/delete/rename events refresh candidates without reopening
-the file.
+target that already has one opens exactly as named. The Webview completion source activates after
+an unclosed `[[` or inside a Markdown link destination (`[label](target`). Workspace
+create/delete/rename events refresh candidates without reopening the file.
 
 Selecting a completion inserts a relative target and adds `]]` only when it is absent. Completion is
 a normal CodeMirror transaction and therefore participates in undo history.
+
+## Card Image Layer
+
+Per-Card images use a CodeMirror layer below document content, not repeated line backgrounds. The
+host resolves every configured image through `Webview.asWebviewUri`; the Webview deterministically
+selects an image from the document URI, heading level, and heading text. Layer markers derive their
+vertical bounds from CodeMirror block geometry and their horizontal bounds from the same integer
+inset constants as Card borders. Each marker owns the image, blur, overlay, and rounded clipping,
+so code blocks and rendered widgets cannot split the image into visible strips.
 
 ## Fenced Code Blocks
 

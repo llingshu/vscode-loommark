@@ -25,3 +25,4 @@ tsconfig.json
 dist/*.map
 dist/*.json
 assets/*.svg
+image.png

@@ -198,6 +198,110 @@
           "default": [],
           "description": "Custom colors to cycle through per heading level in card mode (CSS color values, e.g. \"#ff8800\"). Leave empty to use the built-in palette."
         },
+        "loommark.cardBackgroundStrength": {
+          "type": "number",
+          "default": 0.06,
+          "minimum": 0,
+          "maximum": 0.3,
+          "description": "Amount of each heading accent mixed into its translucent Card surface."
+        },
+        "loommark.cardBorderStrength": {
+          "type": "number",
+          "default": 0.52,
+          "minimum": 0.15,
+          "maximum": 1,
+          "description": "Strength of heading accent colors in Card borders. Lower values produce quieter, more neutral borders."
+        },
+        "loommark.cardImage.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a stable, independently selected image inside each heading Card."
+        },
+        "loommark.cardImage.path": {
+          "type": "string",
+          "scope": "machine-overridable",
+          "default": "",
+          "description": "Card image file or directory. Leave empty to reuse loommark.background.path."
+        },
+        "loommark.cardImage.opacity": {
+          "type": "number",
+          "default": 0.72,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of images drawn inside heading Cards."
+        },
+        "loommark.cardImage.blur": {
+          "type": "number",
+          "default": 4,
+          "minimum": 0,
+          "maximum": 40,
+          "description": "Blur radius of Card images in pixels."
+        },
+        "loommark.cardImage.saturation": {
+          "type": "number",
+          "default": 0.75,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Card image color saturation multiplier."
+        },
+        "loommark.cardImage.overlay": {
+          "type": "number",
+          "default": 0.18,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Editor-theme overlay above Card images. Higher values improve text readability."
+        },
+        "loommark.background.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a configurable image behind the LoomMark editor."
+        },
+        "loommark.background.path": {
+          "type": "string",
+          "scope": "machine-overridable",
+          "default": "",
+          "description": "Image file or directory. Windows paths may use C:\\\\Pictures\\\\LoomMark or //server/share/folder."
+        },
+        "loommark.background.selection": {
+          "type": "string",
+          "enum": ["fixed", "onOpen", "daily", "perDocument"],
+          "enumDescriptions": [
+            "Use the configured file, or the first image in a configured directory.",
+            "Choose a random image whenever the editor opens.",
+            "Choose one stable image per calendar day.",
+            "Choose a stable image based on the Markdown document path."
+          ],
+          "default": "daily",
+          "description": "How an image is selected when the configured path is a directory."
+        },
+        "loommark.background.opacity": {
+          "type": "number",
+          "default": 0.72,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of the background image."
+        },
+        "loommark.background.blur": {
+          "type": "number",
+          "default": 14,
+          "minimum": 0,
+          "maximum": 80,
+          "description": "Background image blur radius in pixels."
+        },
+        "loommark.background.saturation": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Background image color saturation multiplier."
+        },
+        "loommark.background.overlay": {
+          "type": "number",
+          "default": 0.42,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of the editor-theme color overlay above the image. Higher values improve text readability."
+        },
         "loommark.keyboardEditing": {
           "type": "boolean",
           "default": false,

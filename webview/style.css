@@ -11,6 +11,37 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
+body.loommark-has-background::before,
+body.loommark-has-background::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body.loommark-has-background::before {
+  z-index: 0;
+  inset: calc(-1 * var(--loommark-background-blur, 0px));
+  background-image: var(--loommark-background-image);
+  background-position: center;
+  background-size: cover;
+  filter: blur(var(--loommark-background-blur, 0px))
+    saturate(var(--loommark-background-saturation, 1));
+  opacity: var(--loommark-background-opacity, 0.72);
+}
+
+body.loommark-has-background::after {
+  z-index: 0;
+  background: var(--vscode-editor-background);
+  opacity: var(--loommark-background-overlay, 0.42);
+}
+
+#workspace,
+#status {
+  position: relative;
+  z-index: 1;
+}
+
 body {
   overflow-y: auto;
 }
@@ -394,6 +425,13 @@ body.outline-collapsed #outline {
   vertical-align: middle;
 }
 
+#editor > .cm-editor .cm-loommark-h1::before { border-left-color: var(--loommark-guide-0); }
+#editor > .cm-editor .cm-loommark-h2::before { border-left-color: var(--loommark-guide-1); }
+#editor > .cm-editor .cm-loommark-h3::before { border-left-color: var(--loommark-guide-2); }
+#editor > .cm-editor .cm-loommark-h4::before { border-left-color: var(--loommark-guide-3); }
+#editor > .cm-editor .cm-loommark-h5::before { border-left-color: var(--loommark-guide-4); }
+#editor > .cm-editor .cm-loommark-h6::before { border-left-color: var(--loommark-guide-5); }
+
 #editor > .cm-editor .cm-loommark-h1 { font-size: 2em; }
 #editor > .cm-editor .cm-loommark-h2 { font-size: 1.6em; }
 #editor > .cm-editor .cm-loommark-h3 { font-size: 1.35em; }
@@ -423,6 +461,42 @@ body.outline-collapsed #outline {
   box-sizing: border-box;
 }
 
+.cm-loommark-card-image-layer {
+  pointer-events: none;
+}
+
+.cm-loommark-card-image {
+  position: absolute;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 6px;
+  /* The marker receives an opaque, heading-level surface from the renderer. It replaces an
+     ancestor image without introducing a generic white/gray rectangle inside the Card. */
+  pointer-events: none;
+}
+
+.cm-loommark-card-image-media,
+.cm-loommark-card-image-overlay {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.cm-loommark-card-image-media {
+  inset: calc(-1 * var(--loommark-card-image-blur, 0px));
+  background-position: center;
+  background-size: cover;
+  filter: blur(var(--loommark-card-image-blur, 0px))
+    saturate(var(--loommark-card-image-saturation, 1));
+  opacity: var(--loommark-card-image-opacity, 0.72);
+}
+
+.cm-loommark-card-image-overlay {
+  inset: 0;
+  background: var(--vscode-editor-background);
+  opacity: var(--loommark-card-image-overlay, 0.18);
+}
+
 #editor > .cm-editor .cm-loommark-card-boundary {
   position: absolute;
   z-index: 2;
@@ -440,6 +514,8 @@ body.outline-collapsed #outline {
   height: 8px;
   border-right: 2px solid var(--loommark-card-boundary-color);
   border-left: 2px solid var(--loommark-card-boundary-color);
+  background: var(--loommark-card-boundary-background);
+  background-clip: padding-box;
   pointer-events: none;
 }
 
@@ -458,6 +534,7 @@ body.outline-collapsed #outline {
 #editor > .cm-editor .cm-loommark-heading-card-card {
   border-right: 2px solid var(--loommark-heading-card-color);
   border-left: 2px solid var(--loommark-heading-card-color);
+  background-clip: padding-box;
 }
 
 #editor > .cm-editor .cm-loommark-heading-card-first {
@@ -474,6 +551,14 @@ body.outline-collapsed #outline {
   border-bottom: 2px solid var(--loommark-heading-card-color);
   border-bottom-right-radius: 8px;
   border-bottom-left-radius: 8px;
+}
+
+#editor > .cm-editor .cm-loommark-heading-card-nested-first {
+  padding-top: 6px;
+}
+
+#editor > .cm-editor .cm-loommark-heading-card-nested-last {
+  padding-bottom: 6px;
 }
 
 #editor > .cm-editor .cm-loommark-strong {
@@ -541,6 +626,10 @@ body.outline-collapsed #outline {
 /* Code blocks invert the editor theme: an obsidian slab in a light room,
    a paper card in a dark room. All surfaces derive from these variables. */
 body {
+  /* Without an image behind the editor, Card surfaces must be opaque. Stacking several
+     translucent nested surfaces otherwise creates unintended pale rectangular patches. */
+  --loommark-card-surface-base: transparent;
+  --loommark-card-image-surface-alpha: 72%;
   --loommark-code-surface: #282c34;
   --loommark-code-surface-edge: #181a1f;
   --loommark-code-ink: #abb2bf;
@@ -554,15 +643,16 @@ body {
   --loommark-code-button-edge: #4a4f59;
   --loommark-code-button-surface: rgb(255 255 255 / 8%);
   --loommark-code-shadow: 0 18px 28px -20px rgb(14 16 22 / 60%);
-  --loommark-guide-0: #c678dd;
-  --loommark-guide-1: #61afef;
-  --loommark-guide-2: #98c379;
-  --loommark-guide-3: #e5c07b;
-  --loommark-guide-4: #d19a66;
-  --loommark-guide-5: #56b6c2;
+  --loommark-guide-0: #7c3aed;
+  --loommark-guide-1: #2563eb;
+  --loommark-guide-2: #168a72;
+  --loommark-guide-3: #b46a08;
+  --loommark-guide-4: #be3455;
+  --loommark-guide-5: #087f8c;
 }
 
 body.vscode-dark {
+  --loommark-card-image-surface-alpha: 68%;
   --loommark-code-surface: #fafafa;
   --loommark-code-surface-edge: #cfd2d8;
   --loommark-code-ink: #383a42;
@@ -576,12 +666,28 @@ body.vscode-dark {
   --loommark-code-button-edge: #c9cbd0;
   --loommark-code-button-surface: rgb(255 255 255 / 80%);
   --loommark-code-shadow: 0 18px 30px -18px rgb(0 0 0 / 65%);
-  --loommark-guide-0: #a626a4;
-  --loommark-guide-1: #4078f2;
-  --loommark-guide-2: #50a14f;
-  --loommark-guide-3: #c18401;
-  --loommark-guide-4: #986801;
-  --loommark-guide-5: #0184bc;
+  --loommark-guide-0: #b9a3f8;
+  --loommark-guide-1: #82aaff;
+  --loommark-guide-2: #67c7ae;
+  --loommark-guide-3: #e2b66d;
+  --loommark-guide-4: #ef8fa4;
+  --loommark-guide-5: #65c7d0;
+}
+
+/* Transparency is useful only when there is an actual image below it. */
+body.loommark-has-background {
+  --loommark-card-surface-base: color-mix(
+    in srgb,
+    var(--vscode-editor-background) var(--loommark-card-image-surface-alpha),
+    transparent
+  );
+}
+
+/* When Card images are active, their own overlay is the readability control. Keeping the normal
+   editor-colored Card surface here would place a second, mostly opaque white/dark veil above the
+   image and make cardImage.opacity appear ineffective. The level accent remains as a faint tint. */
+body.loommark-has-card-images {
+  --loommark-card-surface-base: transparent;
 }
 
 #editor > .cm-editor .cm-loommark-code-block-line {
@@ -610,9 +716,9 @@ body.vscode-dark {
   position: absolute;
   z-index: -1;
   top: 0;
-  right: calc(-1 * var(--loommark-card-code-gutter));
+  right: calc(-1 * var(--loommark-card-code-gutter-right));
   bottom: 0;
-  left: calc(-1 * var(--loommark-card-code-gutter));
+  left: calc(-1 * var(--loommark-card-code-gutter-left));
   border-right: 2px solid var(--loommark-heading-card-color);
   border-left: 2px solid var(--loommark-heading-card-color);
   background-image: var(--loommark-card-code-backdrop-image);
@@ -621,15 +727,15 @@ body.vscode-dark {
   background-repeat: no-repeat;
   -webkit-mask: linear-gradient(
     to right,
-    #000 0 var(--loommark-card-code-gutter),
-    transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
-    #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+    #000 0 var(--loommark-card-code-gutter-left),
+    transparent var(--loommark-card-code-gutter-left) calc(100% - var(--loommark-card-code-gutter-right)),
+    #000 calc(100% - var(--loommark-card-code-gutter-right)) 100%
   );
   mask: linear-gradient(
     to right,
-    #000 0 var(--loommark-card-code-gutter),
-    transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
-    #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+    #000 0 var(--loommark-card-code-gutter-left),
+    transparent var(--loommark-card-code-gutter-left) calc(100% - var(--loommark-card-code-gutter-right)),
+    #000 calc(100% - var(--loommark-card-code-gutter-right)) 100%
   );
   pointer-events: none;
 }
@@ -642,17 +748,17 @@ body.vscode-dark {
     linear-gradient(#000, #000) 0 100% / 100% 2px no-repeat,
     linear-gradient(
       to right,
-      #000 0 var(--loommark-card-code-gutter),
-      transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
-      #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+      #000 0 var(--loommark-card-code-gutter-left),
+      transparent var(--loommark-card-code-gutter-left) calc(100% - var(--loommark-card-code-gutter-right)),
+      #000 calc(100% - var(--loommark-card-code-gutter-right)) 100%
     );
   mask:
     linear-gradient(#000, #000) 0 100% / 100% 2px no-repeat,
     linear-gradient(
       to right,
-      #000 0 var(--loommark-card-code-gutter),
-      transparent var(--loommark-card-code-gutter) calc(100% - var(--loommark-card-code-gutter)),
-      #000 calc(100% - var(--loommark-card-code-gutter)) 100%
+      #000 0 var(--loommark-card-code-gutter-left),
+      transparent var(--loommark-card-code-gutter-left) calc(100% - var(--loommark-card-code-gutter-right)),
+      #000 calc(100% - var(--loommark-card-code-gutter-right)) 100%
     );
 }
 
@@ -699,7 +805,11 @@ body.vscode-dark {
 }
 
 #editor > .cm-editor .cm-loommark-block-card-shell > .cm-loommark-code-toolbar {
-  width: 100%;
+  /* The shell's 2px Card border puts its content origin one pixel farther inward than the code
+     line's 1px border compensation. Move only the toolbar's left edge out by that pixel, then
+     preserve the already-correct right edge with the matching width increase. */
+  width: calc(100% + 1px);
+  margin-left: -1px;
 }
 
 .cm-loommark-code-chrome {
@@ -1019,7 +1129,10 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 }
 
 #editor > .cm-editor .cm-loommark-task-done {
-  opacity: 0.65;
+  color: var(--vscode-descriptionForeground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
+  text-decoration-thickness: 1px;
 }
 
 /* Outline connector rails: one per ancestor level, replacing a list item's or continuation
@@ -1058,7 +1171,7 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 #editor > .cm-editor .cm-loommark-list-guide.is-active .cm-loommark-list-guide-rail:nth-child(6n+6) { border-left-color: var(--loommark-guide-5); }
 
 #editor > .cm-editor .cm-loommark-quote {
-  background-color: var(--vscode-textBlockQuote-background, rgb(127 127 127 / 10%));
+  background-color: transparent;
   color: var(--vscode-descriptionForeground);
 }
 
@@ -1094,7 +1207,7 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
   text-align: center;
 }
 
-#editor > .cm-editor .cm-loommark-math:hover {
+#editor > .cm-editor .cm-loommark-math:not(.is-block):hover {
   background: var(--vscode-list-hoverBackground);
   border-radius: 3px;
 }
@@ -1108,18 +1221,17 @@ body.loommark-table-ruled #editor > .cm-editor .cm-loommark-table.is-rich td:hov
 }
 
 /* CodeMirror's built-in find/replace panel (@codemirror/search), restyled as a floating
-   card anchored to the editor's top-right corner, matching VS Code's native find widget
-   instead of a full-width bar. `.cm-editor` is `position: relative !important` in
-   CodeMirror's own base theme, so it anchors this without extra positioning setup.
-   `top` must carry `!important`: CodeMirror sets it as an inline style via JS. */
+   card anchored to the viewport's top-right corner, matching VS Code's native find
+   widget instead of a full-width bar. The panel must be fixed so editor scrolling
+   cannot move it out of view. */
 #editor > .cm-editor .cm-panels.cm-panels-top {
-  position: absolute;
+  position: fixed;
   top: 10px !important;
-  right: 10px;
-  left: auto;
+  right: max(10px, calc((100vw - 860px) / 2 + 10px));
+  left: auto !important;
   z-index: 40;
   width: auto;
-  max-width: calc(100% - 20px);
+  max-width: calc(100vw - 20px);
   background: transparent;
 }
 

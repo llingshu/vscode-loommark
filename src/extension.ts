@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { markdownOutline, type OutlineNode } from './outline';
-import type { EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
+import type { BackgroundConfiguration, CardImageConfiguration, EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
 import { CARD_MODE_ORDER, isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
 
@@ -79,7 +79,10 @@ async function syncDefaultEditorAssociation(): Promise<void> {
   }
 }
 
-function editorConfiguration(): EditorConfiguration {
+function editorConfiguration(
+  background: BackgroundConfiguration,
+  cardImage: CardImageConfiguration,
+): EditorConfiguration {
   const configuration = vscode.workspace.getConfiguration('loommark');
   const configuredTheme = configuration.get<string>('theme', 'vscode');
   const theme: EditorTheme = ['crepe', 'frame', 'nord'].includes(configuredTheme)
@@ -109,7 +112,145 @@ function editorConfiguration(): EditorConfiguration {
     listGuides: configuration.get('listGuides', true),
     cardMode,
     cardColors: configuration.get<string[]>('cardColors', []),
+    cardBackgroundStrength: clampSetting(configuration.get('cardBackgroundStrength', 0.06), 0, 0.3),
+    cardBorderStrength: clampSetting(configuration.get('cardBorderStrength', 0.52), 0.15, 1),
+    background,
+    cardImage,
   };
+}
+
+const imageExtensionPattern = /\.(?:avif|bmp|gif|jpe?g|png|webp)$/i;
+
+function clampSetting(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function configuredImagePath(setting: 'background.path' | 'cardImage.path'): vscode.Uri | undefined {
+  const configuration = vscode.workspace.getConfiguration('loommark');
+  const configured = configuration.get<string>(setting, '').trim()
+    || (setting === 'cardImage.path' ? configuration.get<string>('background.path', '').trim() : '');
+  if (!configured) return undefined;
+  return vscode.Uri.file(configured.replace(/^file:(?:\/\/)?/i, ''));
+}
+
+async function backgroundResourceRoots(): Promise<vscode.Uri[]> {
+  const roots: vscode.Uri[] = [];
+  for (const uri of [configuredImagePath('background.path'), configuredImagePath('cardImage.path')]) {
+    if (!uri) continue;
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      const root = stat.type & vscode.FileType.Directory ? uri : vscode.Uri.joinPath(uri, '..');
+      if (!roots.some((entry) => entry.toString() === root.toString())) roots.push(root);
+    } catch {
+      // The resolver reports the actionable error after the Webview is initialized.
+    }
+  }
+  return roots;
+}
+
+function stableIndex(seed: string, count: number): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % count;
+}
+
+async function resolvedBackground(
+  webview: vscode.Webview,
+  document: vscode.TextDocument,
+): Promise<BackgroundConfiguration> {
+  const configuration = vscode.workspace.getConfiguration('loommark');
+  const enabled = configuration.get('background.enabled', false);
+  const result: BackgroundConfiguration = {
+    enabled,
+    opacity: clampSetting(configuration.get('background.opacity', 0.72), 0, 1),
+    blur: clampSetting(configuration.get('background.blur', 14), 0, 80),
+    saturation: clampSetting(configuration.get('background.saturation', 0.7), 0, 2),
+    overlay: clampSetting(configuration.get('background.overlay', 0.42), 0, 1),
+    status: enabled ? 'missing' : 'disabled',
+  };
+  const source = configuredImagePath('background.path');
+  if (!enabled || !source) return result;
+  try {
+    const stat = await vscode.workspace.fs.stat(source);
+    let selected = source;
+    if (stat.type & vscode.FileType.Directory) {
+      const entries = (await vscode.workspace.fs.readDirectory(source))
+        .filter(([name, type]) => type & vscode.FileType.File && imageExtensionPattern.test(name))
+        .map(([name]) => name)
+        .sort((left, right) => left.localeCompare(right));
+      if (!entries.length) return { ...result, status: 'empty', detail: source.fsPath };
+      const selection = configuration.get<string>('background.selection', 'daily');
+      let index = 0;
+      if (selection === 'onOpen') index = Math.floor(Math.random() * entries.length);
+      else if (selection === 'daily') index = stableIndex(new Date().toISOString().slice(0, 10), entries.length);
+      else if (selection === 'perDocument') index = stableIndex(document.uri.toString(), entries.length);
+      selected = vscode.Uri.joinPath(source, entries[index]);
+    } else if (!imageExtensionPattern.test(source.path)) {
+      return { ...result, status: 'error', detail: `Unsupported image: ${source.fsPath}` };
+    }
+    result.imageUri = webview.asWebviewUri(selected).toString();
+    result.status = 'loaded';
+    result.detail = selected.fsPath;
+  } catch (error: unknown) {
+    console.warn('LoomMark could not load the configured background.', error);
+    result.status = 'error';
+    const detail = String(error);
+    const blockedUncHost = detail.match(/UNC host '([^']+)' access is not allowed/i)?.[1];
+    const allowedUncHosts = vscode.workspace
+      .getConfiguration('security')
+      .get<string[]>('allowedUNCHosts', []);
+    result.detail = blockedUncHost
+      ? `${detail} Add ${JSON.stringify(blockedUncHost)} to the VS Code Application setting security.allowedUNCHosts. Current extension host value: ${JSON.stringify(allowedUncHosts)}.`
+      : detail;
+  }
+  return result;
+}
+
+async function resolvedCardImage(webview: vscode.Webview): Promise<CardImageConfiguration> {
+  const configuration = vscode.workspace.getConfiguration('loommark');
+  const enabled = configuration.get('cardImage.enabled', false);
+  const result: CardImageConfiguration = {
+    enabled,
+    imageUris: [],
+    opacity: clampSetting(configuration.get('cardImage.opacity', 0.72), 0, 1),
+    blur: clampSetting(configuration.get('cardImage.blur', 4), 0, 40),
+    saturation: clampSetting(configuration.get('cardImage.saturation', 0.75), 0, 2),
+    overlay: clampSetting(configuration.get('cardImage.overlay', 0.18), 0, 1),
+    status: enabled ? 'missing' : 'disabled',
+  };
+  const source = configuredImagePath('cardImage.path');
+  if (!enabled || !source) return result;
+  try {
+    const stat = await vscode.workspace.fs.stat(source);
+    let images: vscode.Uri[];
+    if (stat.type & vscode.FileType.Directory) {
+      images = (await vscode.workspace.fs.readDirectory(source))
+        .filter(([name, type]) => type & vscode.FileType.File && imageExtensionPattern.test(name))
+        .map(([name]) => vscode.Uri.joinPath(source, name))
+        .sort((left, right) => left.path.localeCompare(right.path));
+    } else {
+      images = imageExtensionPattern.test(source.path) ? [source] : [];
+    }
+    if (!images.length) return { ...result, status: 'empty', detail: source.fsPath };
+    result.imageUris = images.map((image) => webview.asWebviewUri(image).toString());
+    result.status = 'loaded';
+    result.detail = `${images.length} image${images.length === 1 ? '' : 's'} from ${source.fsPath}`;
+  } catch (error: unknown) {
+    console.warn('LoomMark could not load the configured Card images.', error);
+    result.status = 'error';
+    const detail = String(error);
+    const blockedUncHost = detail.match(/UNC host '([^']+)' access is not allowed/i)?.[1];
+    const allowedUncHosts = vscode.workspace
+      .getConfiguration('security')
+      .get<string[]>('allowedUNCHosts', []);
+    result.detail = blockedUncHost
+      ? `${detail} Add ${JSON.stringify(blockedUncHost)} to security.allowedUNCHosts. Current extension host value: ${JSON.stringify(allowedUncHosts)}.`
+      : detail;
+  }
+  return result;
 }
 
 class MarkdownOutlineTree implements vscode.TreeDataProvider<OutlineNode>, vscode.Disposable {
@@ -181,11 +322,13 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     // one exists so those resolve; a loose file outside any workspace keeps the
     // narrower default of only its own directory.
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+    const configuredBackgroundRoots = await backgroundResourceRoots();
     panel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
         workspaceFolder?.uri ?? documentDirectory,
+        ...configuredBackgroundRoots,
       ],
     };
     panel.webview.html = this.html(panel.webview);
@@ -193,15 +336,40 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     let documentRevision = document.version;
     let applyingClientEdit = false;
     let ready = false;
+    let lastBackgroundWarning = '';
+    let lastCardImageWarning = '';
 
     const post = (message: HostToWebview) => panel.webview.postMessage(message);
+    const loadConfiguration = async (): Promise<EditorConfiguration> => {
+      const background = await resolvedBackground(panel.webview, document);
+      const cardImage = await resolvedCardImage(panel.webview);
+      if (background.enabled && background.status !== 'loaded') {
+        const warning = `${background.status}: ${background.detail ?? 'No usable image path configured.'}`;
+        if (warning !== lastBackgroundWarning) {
+          lastBackgroundWarning = warning;
+          void vscode.window.showWarningMessage(`LoomMark background ${warning}`);
+        }
+      } else {
+        lastBackgroundWarning = '';
+      }
+      if (cardImage.enabled && cardImage.status !== 'loaded') {
+        const warning = `${cardImage.status}: ${cardImage.detail ?? 'No usable image path configured.'}`;
+        if (warning !== lastCardImageWarning) {
+          lastCardImageWarning = warning;
+          void vscode.window.showWarningMessage(`LoomMark Card image ${warning}`);
+        }
+      } else {
+        lastCardImageWarning = '';
+      }
+      return editorConfiguration(background, cardImage);
+    };
     const initialize = async () => post({
       type: 'init',
       text: document.getText(),
       revision: documentRevision,
       resourceBase: ensureTrailingSlash(panel.webview.asWebviewUri(documentDirectory).toString()),
       wikiFiles: await findWikiFiles(document),
-      ...editorConfiguration(),
+      ...await loadConfiguration(),
     });
 
     const messageSubscription = panel.webview.onDidReceiveMessage(async (raw: unknown) => {
@@ -262,7 +430,19 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
 
     const configurationSubscription = vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (!ready || !event.affectsConfiguration('loommark')) return;
-      await post({ type: 'configuration', ...editorConfiguration() });
+      const backgroundRoots = await backgroundResourceRoots();
+      panel.webview.options = {
+        ...panel.webview.options,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+          workspaceFolder?.uri ?? documentDirectory,
+          ...backgroundRoots,
+        ],
+      };
+      await post({
+        type: 'configuration',
+        ...await loadConfiguration(),
+      });
     });
 
     const refreshWikiFiles = async () => {

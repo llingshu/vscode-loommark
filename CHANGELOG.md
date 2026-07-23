@@ -6,6 +6,16 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- Optional per-Card image backgrounds with stable heading-based selection, an independent path
+  (or reuse of the global background directory), opacity, blur, saturation, and readability overlay.
+
+### Fixed
+
+- Card tint backgrounds now occupy the border's inner geometry, preventing antialiasing fringes
+  from extending beyond the right edge at fractional zoom or display scaling.
+
 ## [0.3.1] - 2026-07-20
 
 ### Added
@@ -35,6 +45,8 @@ All notable changes to LoomMark are documented here. This project follows
   the new `LoomMark: Toggle Heading Card Mode` command, also in the editor title bar. Colors cycle
   through the same six-hue palette as list guides by default, or a custom list via the new
   `loommark.cardColors` setting.
+- Optional local image backgrounds with fixed, random-on-open, daily, or per-document selection,
+  plus independently configurable opacity, blur, saturation, and theme-colored readability overlay.
 
 ### Changed
 
