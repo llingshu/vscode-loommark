@@ -6,6 +6,17 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `loommark.keyboardEditing` had no effect: with it off (the default), arrow-key motion was meant
+  to skip clean over a rendered table/image/math widget, but instead walked through it one
+  character at a time, identically to it being on. The range that blocks keyboard entry was
+  derived from whether a widget was *currently* rendered there, which those fields stop doing the
+  instant the cursor first touches the widget's own boundary — the same position CodeMirror
+  already treats as a legal approach point — so reaching that boundary immediately cleared the
+  very protection the next keystroke needed, letting the cursor slip in one edge at a time
+  regardless of the setting.
+
 ## [0.4.1] - 2026-07-23
 
 ### Changed

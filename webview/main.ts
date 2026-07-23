@@ -995,28 +995,32 @@ const quoteField = selectionAwareField((state) => {
 });
 
 // Marks rendered images, tables, and math as atomic so keyboard cursor motion skips over them
-// instead of stepping in to reveal source. The set mirrors whatever those fields currently render,
-// so a range stops being atomic exactly when its widget yields to source (e.g. after a click).
-// Enabling keyboard editing empties the set, letting the cursor enter and edit with the keyboard.
+// instead of stepping in to reveal source. Enabling keyboard editing empties the set, letting the
+// cursor enter and edit with the keyboard.
+//
+// Ranges come directly from the source scanners (tableRanges/imageRanges/mathRanges), not from
+// reading tableField/imageField/mathField's current decorations: those fields hide their widget
+// (revealing raw source) using an inclusive cursor >= from && cursor <= to check, the same `from`
+// CodeMirror treats as a legal, non-atomic landing spot when moving in from outside. Deriving
+// atomicity from "is a widget currently rendered there" made the range stop being atomic the
+// instant the cursor first touched that boundary — which is exactly the step arrow-key motion is
+// supposed to be free to take — so the very next keystroke found nothing atomic left to skip and
+// walked straight through, one character at a time, regardless of loommark.keyboardEditing. Using
+// a strict cursor > from && cursor < to check here (matching CodeMirror's own strict "inside an
+// atomic range" test) keeps the range atomic right up to and including that boundary, so a
+// keyboard approach from outside is correctly bounced to the far edge in one step, while a cursor
+// already genuinely inside (via a click, or keyboardEditing entry) still moves around freely.
 class AtomicMarker extends RangeValue {}
 const atomicMarker = new AtomicMarker();
 
 function buildAtomicRanges(state: EditorState): RangeSet<AtomicMarker> {
   if (keyboardEditing) return RangeSet.empty;
-  const ranges: Range<AtomicMarker>[] = [];
-  for (const field of [tableField, imageField, mathField]) {
-    for (const iter = state.field(field).iter(); iter.value; iter.next()) {
-      // Only ranges actually replaced by a widget should block cursor motion. These
-      // fields also emit plain Decoration.mark entries (e.g. the click-to-open attribute
-      // on an image shown as source, cursor already inside); marking those atomic too
-      // creates a range that is simultaneously "selected here" and "cursor can't enter",
-      // which a direct selection assignment (like the search panel's Next button) can
-      // land on, confusing CodeMirror's own selection handling.
-      if (!iter.value.spec.widget) continue;
-      ranges.push(atomicMarker.range(iter.from, iter.to));
-    }
-  }
-  return RangeSet.of(ranges, true);
+  const cursor = state.selection.main.head;
+  const source = state.doc.toString();
+  const spans = [...tableRanges(source), ...imageRanges(source), ...mathRanges(source)]
+    .filter((span) => !(cursor > span.from && cursor < span.to))
+    .sort((a, b) => a.from - b.from);
+  return RangeSet.of(spans.map((span) => atomicMarker.range(span.from, span.to)), true);
 }
 
 const atomicRangesField = StateField.define<RangeSet<AtomicMarker>>({

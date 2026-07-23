@@ -184,12 +184,31 @@ and copy controls. CodeMirror requires block widgets to be supplied synchronousl
 
 The table, image, and math `StateField`s each emit both `Decoration.replace` (the widget, cursor
 outside) and plain `Decoration.mark` (cursor-inside source text, e.g. the `data-loommark-href`
-attribute images carry so Ctrl/Cmd + click still opens them as source). `loommark.keyboardEditing`'s
-atomic-range builder only walks `.spec.widget`-bearing entries. Marking a mark decoration atomic
-too would make the cursor-inside range simultaneously "here" and "cannot be entered here" the
-moment a direct selection assignment (find/replace's Next button, `revealHeading`) lands inside
-it — CodeMirror does not expect that combination, and one observed symptom was the search panel
-appearing to vanish after clicking Next.
+attribute images carry so Ctrl/Cmd + click still opens them as source).
+
+`loommark.keyboardEditing`'s atomic-range builder (`buildAtomicRanges`, `webview/main.ts`) derives
+its ranges directly from `tableRanges`/`imageRanges`/`mathRanges` (the same source scanners those
+three fields use internally), not by reading the fields' current decorations. An earlier version
+did read those decorations — walking each field's `.spec.widget`-bearing entries — reasoning that a
+range should stop being atomic exactly when its widget yields to source (e.g. after a click), so
+arrow keys can move freely once already inside a revealed table/image/math span instead of being
+bounced back out on every step. That reasoning is correct, but reading the *live decorations* to
+implement it created a self-defeating cycle: those fields hide their widget using an inclusive
+`cursor >= from && cursor <= to` check, and `from` is also the exact position CodeMirror's own
+`skipAtomicRanges` treats as a legal, non-atomic landing spot when approaching from outside (its
+test is the strict `pos > from && pos < to`). So the moment keyboard motion legally stepped onto
+that boundary, the field's own decoration flipped to "revealed," `buildAtomicRanges` immediately
+saw no widget left to mark atomic, and the *next* keystroke found nothing there to skip — walking
+through the rest of the span one character at a time regardless of `loommark.keyboardEditing`,
+since both states looked identical from that point on. The fix keeps the same intent (free movement
+once genuinely inside) but computes "inside" independently, using CodeMirror's own strict
+inequality (`cursor > from && cursor < to`) rather than the fields' inclusive one, so reaching the
+boundary no longer clears the atomicity that the very next step depends on. Marking a
+`Decoration.mark` entry atomic (instead of only `.spec.widget` ones) has a separate, unrelated
+failure mode worth keeping in mind: it would make the cursor-inside range simultaneously "here" and
+"cannot be entered here" the moment a direct selection assignment (find/replace's Next button,
+`revealHeading`) lands inside it — CodeMirror does not expect that combination, and one observed
+symptom was the search panel appearing to vanish after clicking Next.
 
 ## Progressive Syntax
 
