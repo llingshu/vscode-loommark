@@ -178,8 +178,14 @@ LoomMark can select a fixed or rotating image without modifying the Markdown doc
 `loommark.background.path` to an image or a directory and enable `loommark.background.enabled`.
 Windows paths may use `C:\\Users\\name\\Pictures\\loommark`; network shares may use
 `//server/share/folder` or an escaped UNC path such as `\\\\server\\share\\folder` in JSON.
-The extension host resolves the selected file through VS Code's Webview resource API. A separate
-theme-colored overlay keeps text legible independently of image blur, saturation, and opacity.
+The extension host resolves the selected local file through VS Code's Webview resource API. A
+separate theme-colored overlay keeps text legible independently of image blur, saturation, and
+opacity.
+
+`loommark.background.path` (and `loommark.cardImage.path`) also accept an `https://` URL, loaded
+directly by the Webview instead of being resolved as a local file — useful for a shared team image
+without distributing it alongside the workspace. A URL is always a single fixed image;
+`loommark.background.selection`'s directory-rotation modes only apply to a local directory.
 
 Card images are configured separately with `loommark.cardImage.*` and work in both the `card` and
 `tint` `loommark.cardMode` styles (not `accent` or `off`). Each heading section chooses a stable

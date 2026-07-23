@@ -131,21 +131,32 @@ function clampSetting(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-function configuredImagePath(setting: 'background.path' | 'cardImage.path'): vscode.Uri | undefined {
+type ConfiguredImageSource = { kind: 'remote'; url: string } | { kind: 'local'; uri: vscode.Uri };
+
+// Deliberately narrower than a generic "scheme://" test: the already-supported `file://` prefix
+// (stripped below and resolved as a local path) also matches that shape, and the Webview CSP only
+// permits https:/data: to load in the first place, so recognizing any other scheme as "remote"
+// would just produce a silently-broken image. A bare "C:" drive letter never has a second slash,
+// so Windows paths (documented as a supported loommark.background.path/cardImage.path form) are
+// never misread as remote either.
+const remoteUrlPattern = /^https?:\/\//i;
+
+function configuredImagePath(setting: 'background.path' | 'cardImage.path'): ConfiguredImageSource | undefined {
   const configuration = vscode.workspace.getConfiguration('loommark');
   const configured = configuration.get<string>(setting, '').trim()
     || (setting === 'cardImage.path' ? configuration.get<string>('background.path', '').trim() : '');
   if (!configured) return undefined;
-  return vscode.Uri.file(configured.replace(/^file:(?:\/\/)?/i, ''));
+  if (remoteUrlPattern.test(configured)) return { kind: 'remote', url: configured };
+  return { kind: 'local', uri: vscode.Uri.file(configured.replace(/^file:(?:\/\/)?/i, '')) };
 }
 
 async function backgroundResourceRoots(): Promise<vscode.Uri[]> {
   const roots: vscode.Uri[] = [];
-  for (const uri of [configuredImagePath('background.path'), configuredImagePath('cardImage.path')]) {
-    if (!uri) continue;
+  for (const source of [configuredImagePath('background.path'), configuredImagePath('cardImage.path')]) {
+    if (!source || source.kind === 'remote') continue;
     try {
-      const stat = await vscode.workspace.fs.stat(uri);
-      const root = stat.type & vscode.FileType.Directory ? uri : vscode.Uri.joinPath(uri, '..');
+      const stat = await vscode.workspace.fs.stat(source.uri);
+      const root = stat.type & vscode.FileType.Directory ? source.uri : vscode.Uri.joinPath(source.uri, '..');
       if (!roots.some((entry) => entry.toString() === root.toString())) roots.push(root);
     } catch {
       // The resolver reports the actionable error after the Webview is initialized.
@@ -179,23 +190,32 @@ async function resolvedBackground(
   };
   const source = configuredImagePath('background.path');
   if (!enabled || !source) return result;
+  if (source.kind === 'remote') {
+    // A remote URL is always exactly one image; loommark.background.selection (which rotates
+    // through a local directory's entries) has nothing to select between here.
+    result.imageUri = source.url;
+    result.status = 'loaded';
+    result.detail = source.url;
+    return result;
+  }
+  const localSource = source.uri;
   try {
-    const stat = await vscode.workspace.fs.stat(source);
-    let selected = source;
+    const stat = await vscode.workspace.fs.stat(localSource);
+    let selected = localSource;
     if (stat.type & vscode.FileType.Directory) {
-      const entries = (await vscode.workspace.fs.readDirectory(source))
+      const entries = (await vscode.workspace.fs.readDirectory(localSource))
         .filter(([name, type]) => type & vscode.FileType.File && imageExtensionPattern.test(name))
         .map(([name]) => name)
         .sort((left, right) => left.localeCompare(right));
-      if (!entries.length) return { ...result, status: 'empty', detail: source.fsPath };
+      if (!entries.length) return { ...result, status: 'empty', detail: localSource.fsPath };
       const selection = configuration.get<string>('background.selection', 'daily');
       let index = 0;
       if (selection === 'onOpen') index = Math.floor(Math.random() * entries.length);
       else if (selection === 'daily') index = stableIndex(new Date().toISOString().slice(0, 10), entries.length);
       else if (selection === 'perDocument') index = stableIndex(document.uri.toString(), entries.length);
-      selected = vscode.Uri.joinPath(source, entries[index]);
-    } else if (!imageExtensionPattern.test(source.path)) {
-      return { ...result, status: 'error', detail: `Unsupported image: ${source.fsPath}` };
+      selected = vscode.Uri.joinPath(localSource, entries[index]);
+    } else if (!imageExtensionPattern.test(localSource.path)) {
+      return { ...result, status: 'error', detail: `Unsupported image: ${localSource.fsPath}` };
     }
     result.imageUri = webview.asWebviewUri(selected).toString();
     result.status = 'loaded';
@@ -229,21 +249,30 @@ async function resolvedCardImage(webview: vscode.Webview): Promise<CardImageConf
   };
   const source = configuredImagePath('cardImage.path');
   if (!enabled || !source) return result;
+  if (source.kind === 'remote') {
+    // A single-entry array: cardImageIndex (webview/main.ts) picks an index into imageUris per
+    // heading, but with exactly one remote URL configured every heading section gets that image.
+    result.imageUris = [source.url];
+    result.status = 'loaded';
+    result.detail = source.url;
+    return result;
+  }
+  const localSource = source.uri;
   try {
-    const stat = await vscode.workspace.fs.stat(source);
+    const stat = await vscode.workspace.fs.stat(localSource);
     let images: vscode.Uri[];
     if (stat.type & vscode.FileType.Directory) {
-      images = (await vscode.workspace.fs.readDirectory(source))
+      images = (await vscode.workspace.fs.readDirectory(localSource))
         .filter(([name, type]) => type & vscode.FileType.File && imageExtensionPattern.test(name))
-        .map(([name]) => vscode.Uri.joinPath(source, name))
+        .map(([name]) => vscode.Uri.joinPath(localSource, name))
         .sort((left, right) => left.path.localeCompare(right.path));
     } else {
-      images = imageExtensionPattern.test(source.path) ? [source] : [];
+      images = imageExtensionPattern.test(localSource.path) ? [localSource] : [];
     }
-    if (!images.length) return { ...result, status: 'empty', detail: source.fsPath };
+    if (!images.length) return { ...result, status: 'empty', detail: localSource.fsPath };
     result.imageUris = images.map((image) => webview.asWebviewUri(image).toString());
     result.status = 'loaded';
-    result.detail = `${images.length} image${images.length === 1 ? '' : 's'} from ${source.fsPath}`;
+    result.detail = `${images.length} image${images.length === 1 ? '' : 's'} from ${localSource.fsPath}`;
   } catch (error: unknown) {
     console.warn('LoomMark could not load the configured Card images.', error);
     result.status = 'error';

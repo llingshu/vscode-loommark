@@ -6,6 +6,13 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- `loommark.background.path` and `loommark.cardImage.path` accept an `https://` URL, loaded
+  directly by the Webview instead of being resolved as a local file. A URL is always a single
+  fixed image; `loommark.background.selection`'s directory-rotation modes only apply to a local
+  directory.
+
 ## [0.4.2] - 2026-07-23
 
 ### Fixed

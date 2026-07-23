@@ -227,7 +227,7 @@
           "type": "string",
           "scope": "machine-overridable",
           "default": "",
-          "description": "Card image file or directory. Leave empty to reuse loommark.background.path."
+          "description": "Card image file, directory, or https:// URL. Leave empty to reuse loommark.background.path."
         },
         "loommark.cardImage.opacity": {
           "type": "number",
@@ -266,7 +266,7 @@
           "type": "string",
           "scope": "machine-overridable",
           "default": "",
-          "description": "Image file or directory. Windows paths may use C:\\\\Pictures\\\\LoomMark or //server/share/folder."
+          "description": "Image file, directory, https:// URL, or //server/share/folder. Windows paths may use C:\\\\Pictures\\\\LoomMark."
         },
         "loommark.background.selection": {
           "type": "string",
