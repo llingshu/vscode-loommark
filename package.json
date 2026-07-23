@@ -2,7 +2,7 @@
   "name": "loommark",
   "displayName": "LoomMark",
   "description": "A source-backed, live-rendering WYSIWYG Markdown editor for VS Code.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "llingshu",
   "license": "MIT",
   "icon": "assets/icon.png",
