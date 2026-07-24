@@ -362,11 +362,11 @@
   },
   "devDependencies": {
     "@types/katex": "^0.16.8",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.1.1",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.6.0",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "ovsx": "^1.0.2",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }
