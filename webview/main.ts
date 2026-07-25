@@ -131,6 +131,8 @@ let lastPointerDiagnostic: Record<string, unknown> | undefined;
 let lastVisualHoverDiagnostic: Record<string, unknown> | undefined;
 let lastLinkRequest: Record<string, unknown> | undefined;
 let lastHostLinkResult: Record<string, unknown> | undefined;
+let lastPasteDiagnostic: Record<string, unknown> | undefined;
+let lastImagePasteResult: Record<string, unknown> | undefined;
 let editorInitializationError: string | undefined;
 let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
@@ -1313,22 +1315,39 @@ function markdownImageLink(relativePath: string): string {
 // The extension host owns actually writing the file (webview JS has no file-system access), so
 // this only detects a pasted image, reads it into a data URL, and hands the bytes over; the
 // resulting Markdown link is inserted once the host replies with where it saved the file (see the
-// 'imagePasteResult' handler below).
+// 'imagePasteResult' handler below). Records what it saw into lastPasteDiagnostic regardless of
+// outcome (surfaced by LoomMark: Copy Editor Diagnostics), since a paste that silently does
+// nothing could mean no handler ran at all, clipboardData had no items, or an item was found but
+// wasn't recognized as an image — each points to a different cause and isn't otherwise visible.
 const imagePasteHandler = EditorView.domEventHandlers({
   paste(event, view) {
-    const items = event.clipboardData?.items;
+    const items = event.clipboardData ? Array.from(event.clipboardData.items) : undefined;
+    lastPasteDiagnostic = {
+      firedAt: new Date().toISOString(),
+      hasClipboardData: !!event.clipboardData,
+      itemCount: items?.length ?? 0,
+      itemKinds: items?.map((item) => ({ kind: item.kind, type: item.type })) ?? [],
+    };
     if (!items) return false;
-    const imageItem = Array.from(items).find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+    const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
     const file = imageItem?.getAsFile();
     if (!file) return false;
     event.preventDefault();
     const requestId = nextPasteRequestId++;
+    lastPasteDiagnostic = { ...lastPasteDiagnostic, requestId, fileType: file.type, fileSize: file.size };
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
-      if (typeof result !== 'string') return;
+      if (typeof result !== 'string') {
+        lastPasteDiagnostic = { ...lastPasteDiagnostic, requestId, readerResultType: typeof result };
+        return;
+      }
       const base64 = result.slice(result.indexOf(',') + 1);
+      lastPasteDiagnostic = { ...lastPasteDiagnostic, requestId, sentDataLength: base64.length };
       vscode.postMessage({ type: 'pasteImage', requestId, data: base64, mimeType: file.type });
+    };
+    reader.onerror = () => {
+      lastPasteDiagnostic = { ...lastPasteDiagnostic, requestId, readerError: String(reader.error) };
     };
     reader.readAsDataURL(file);
     return true;
@@ -1695,6 +1714,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
   } else if (message.type === 'linkOpenResult') {
     lastHostLinkResult = { ...message, receivedAt: new Date().toISOString() };
   } else if (message.type === 'imagePasteResult') {
+    lastImagePasteResult = { ...message, receivedAt: new Date().toISOString() };
     if (!editor) return;
     if (message.relativePath) {
       const markdown = markdownImageLink(message.relativePath);
@@ -1715,10 +1735,23 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       text: line.textContent,
       html: line.innerHTML,
     }));
+    const atomicRanges: Array<{ from: number; to: number }> = [];
+    if (editor) {
+      for (let iter = editor.state.field(atomicRangesField).iter(); iter.value; iter.next()) {
+        atomicRanges.push({ from: iter.from, to: iter.to });
+      }
+    }
     const report = JSON.stringify({
       documentRevision,
       localGeneration,
       pendingEdits: pendingEdits.size,
+      keyboardEditing,
+      selectionHead: editor?.state.selection.main.head,
+      atomicRangeCount: atomicRanges.length,
+      atomicRanges: atomicRanges.slice(0, 30),
+      clipboardApiAvailable: typeof navigator !== 'undefined' && !!navigator.clipboard,
+      lastPasteDiagnostic,
+      lastImagePasteResult,
       background: backgroundDiagnostic,
       backgroundBodyClass: document.body.className,
       backgroundImageStyle: document.body.style.getPropertyValue('--loommark-background-image'),
