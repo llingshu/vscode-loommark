@@ -133,6 +133,15 @@ let lastLinkRequest: Record<string, unknown> | undefined;
 let lastHostLinkResult: Record<string, unknown> | undefined;
 let lastPasteDiagnostic: Record<string, unknown> | undefined;
 let lastImagePasteResult: Record<string, unknown> | undefined;
+// Rolling logs for LoomMark: Copy Editor Diagnostics, to see exactly what a keypress did without
+// having to reproduce a report with a headless browser: recentKeydowns records the raw DOM event
+// (key/modifiers, and whether *something* called preventDefault on it) as it happens, in capture
+// phase so nothing else can react first; recentSelectionChanges records every resulting selection
+// move. Comparing the two after reproducing a "keyboardEditing doesn't work" report shows whether
+// the keypress reached the page at all, whether some handler claimed it, and whether the cursor
+// actually moved (and by how much) versus visually appearing to skip.
+const recentKeydowns: Array<{ at: string; key: string; shift: boolean; ctrl: boolean; alt: boolean; meta: boolean; defaultPrevented: boolean }> = [];
+const recentSelectionChanges: Array<{ at: string; head: number }> = [];
 let editorInitializationError: string | undefined;
 let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
@@ -1426,6 +1435,10 @@ function createEditor(text: string): void {
         escapedCharDecorations,
         syntaxHighlighting(markdownHighlightStyle),
         EditorView.updateListener.of((update) => {
+          if (update.selectionSet) {
+            recentSelectionChanges.push({ at: new Date().toISOString(), head: update.state.selection.main.head });
+            if (recentSelectionChanges.length > 20) recentSelectionChanges.shift();
+          }
           if (applyingHostUpdate) return;
           if (update.docChanged) {
             sourceText = update.state.doc.toString();
@@ -1750,6 +1763,23 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
         atomicRanges.push({ from: iter.from, to: iter.to });
       }
     }
+    // Every table/image/math span in the document plus whether the current selection is
+    // "within" each one (the same selectionWithin check the fields themselves use) and whether a
+    // rendered widget for it is actually still in the DOM. If keyboardEditing is on, atomicRanges
+    // is empty, and this shows a range the cursor is inside yet hasRenderedWidget is still true,
+    // the cursor genuinely reached that position but the field never revealed it -- a rendering
+    // bug, not an atomic-range one. If instead no range ever reports being "inside" no matter
+    // where the cursor is moved to, the keypress isn't moving the model's cursor at all in this
+    // environment, which points at CodeMirror's key handling instead.
+    const activeEditor = editor;
+    const revealCandidates = activeEditor ? [
+      ...tableRanges(sourceText).map((r) => ({ kind: 'table', from: r.from, to: r.to })),
+      ...imageRanges(sourceText).map((r) => ({ kind: 'image', from: r.from, to: r.to })),
+      ...mathRanges(sourceText).map((r) => ({ kind: 'math', from: r.from, to: r.to })),
+    ].map((range) => ({
+      ...range,
+      selectionWithinRange: selectionWithin(activeEditor.state, range.from, range.to),
+    })) : [];
     const report = JSON.stringify({
       documentRevision,
       localGeneration,
@@ -1758,6 +1788,14 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       selectionHead: editor?.state.selection.main.head,
       atomicRangeCount: atomicRanges.length,
       atomicRanges: atomicRanges.slice(0, 30),
+      revealCandidates: revealCandidates.slice(0, 30),
+      renderedWidgetCounts: {
+        table: document.querySelectorAll('.cm-loommark-table').length,
+        image: document.querySelectorAll('.cm-loommark-image').length,
+        math: document.querySelectorAll('.cm-loommark-math').length,
+      },
+      recentKeydowns,
+      recentSelectionChanges,
       clipboardApiAvailable: typeof navigator !== 'undefined' && !!navigator.clipboard,
       lastPasteDiagnostic,
       lastImagePasteResult,
@@ -1861,4 +1899,27 @@ window.addEventListener('beforeunload', () => {
   window.clearTimeout(timer);
   editor?.destroy();
 });
+
+// Capture phase, so this always sees the raw event before CodeMirror's own keymap (or anything
+// else) can act on or stop it -- including a stopPropagation() call that would keep a bubble-phase
+// listener from ever seeing the event at all. defaultPrevented is read back via setTimeout rather
+// than immediately (capture runs *before* the target/bubble-phase handlers, including CodeMirror's
+// own keymap, that would actually call it) or via queueMicrotask (CodeMirror's own state updates
+// were not reliably visible by the next microtask in testing); a macrotask reliably runs after the
+// full synchronous dispatch and any microtasks it queued.
+document.addEventListener('keydown', (event) => {
+  const entry = {
+    at: new Date().toISOString(),
+    key: event.key,
+    shift: event.shiftKey,
+    ctrl: event.ctrlKey,
+    alt: event.altKey,
+    meta: event.metaKey,
+    defaultPrevented: false,
+  };
+  recentKeydowns.push(entry);
+  if (recentKeydowns.length > 20) recentKeydowns.shift();
+  window.setTimeout(() => { entry.defaultPrevented = event.defaultPrevented; }, 0);
+}, true);
+
 vscode.postMessage({ type: 'ready' });
