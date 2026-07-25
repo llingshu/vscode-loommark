@@ -6,6 +6,8 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-07-25
+
 ### Added
 
 - Shift+Enter at the end of a list item's own marker line now indents the new line one level
