@@ -74,6 +74,16 @@ under it needs no connector. Because ancestor levels are always a contiguous run
 line's active levels are exactly the union of every segment containing it, with no gap-filling
 needed for well-formed nesting.
 
+The "required continuation indent" (own indent plus `LIST_INDENT_WIDTH`) is exact — a continuation
+line even one column short of it falls outside the item's segment entirely, the same threshold
+that keeps a too-shallow nested ordered item from being recognized as a real sub-list at all (see
+List Nesting Indent Width above). This is why Shift+Enter (`continueListInsideItem`,
+`webview/main.ts`) has to special-case breaking directly off a list item's own marker line: the
+default `insertNewlineAndIndent` copies the current line's exact indent onto the new line, which is
+correct once already inside the item's continuation (already offset), but produces a line at only
+the marker's own indent — one `LIST_INDENT_WIDTH` short — when pressed on the marker line itself,
+silently falling outside the item's own segment instead of extending it.
+
 `webview/main.ts`'s `listGuideField` renders this as a `ListGuideWidget` per qualifying line,
 replacing that line's entire leading whitespace with one fixed-width rail per active level (rather
 than trying to align with the source's actual indentation, which cannot be measured reliably in a
@@ -85,11 +95,15 @@ when the cursor lands on their line: there is no syntax being hidden, only blank
 reverting would just make the indent jump and the rails disappear right where the cursor is —
 the opposite of what a "where am I" indicator is for. Each `ListGuideSegment` records its owning
 item's own line (`itemLineFrom`), which `listGuideField` uses to build a `highlightedLines` set —
-the cursor's own line, plus the owning line of every segment that contains the cursor position.
-Only lines in that set render `.is-active` (colored); every other line within the same
-connector's span (a sibling branch, unrelated continuation content one level up) stays the muted
-default even though it is technically inside a segment covering that level — a segment marks
-where a connector visually passes, not who counts as being on the cursor's ancestor path.
+the cursor's own line, plus the owning line of every segment that contains the cursor position,
+plus (separately) the whole contiguous run of plain continuation lines directly belonging to
+whichever segment matches the cursor's own deepest level: a soft line break (Shift+Enter) partway
+through a list item's own multi-line content produces another line that is logically still the
+same paragraph, just visually wrapped, so the cursor sitting on any one of those lines lights up
+all of them together. That walk stops at the item's own opening line or at a nested child item's
+line in either direction, so a sibling branch, or a nested sub-item one level deeper, still does
+not light up just because it happens to share a segment with the highlighted item — a segment
+marks where a connector visually passes, not who counts as being on the cursor's ancestor path.
 
 ## Heading Card Mode
 

@@ -413,15 +413,6 @@ const listGuideField = selectionAwareField((state) => {
   const segments = listGuideSegments(source, items);
   if (!segments.length) return Decoration.set(ranges);
 
-  // Highlighted lines are the cursor's own line plus each ancestor *item's own line* (where
-  // its bullet/number sits) — not every line a connector visually passes through. A sibling
-  // branch under the same shallow ancestor sits inside that ancestor's segment too, but isn't
-  // on the cursor's actual path, so it must not light up just because the level matches.
-  const highlightedLines = new Set<number>([state.doc.lineAt(cursor).from]);
-  for (const segment of segments) {
-    if (cursor >= segment.from && cursor <= segment.to) highlightedLines.add(segment.itemLineFrom);
-  }
-
   const itemByLineFrom = new Map(items.map((item) => [item.lineFrom, item] as const));
   // A line's rendered rails are exactly the ancestor levels of every segment that covers it;
   // an item's own segment (if any) starts on the line *after* it, so this never includes the
@@ -438,6 +429,43 @@ const listGuideField = selectionAwareField((state) => {
       }
       levels.add(segment.level);
       position = line.to + 1;
+    }
+  }
+
+  // Highlighted lines are the cursor's own line plus each ancestor *item's own line* (where
+  // its bullet/number sits) — not every line a connector visually passes through. A sibling
+  // branch under the same shallow ancestor sits inside that ancestor's segment too, but isn't
+  // on the cursor's actual path, so it must not light up just because the level matches.
+  const cursorLine = state.doc.lineAt(cursor);
+  const highlightedLines = new Set<number>([cursorLine.from]);
+  for (const segment of segments) {
+    if (cursor >= segment.from && cursor <= segment.to) highlightedLines.add(segment.itemLineFrom);
+  }
+  // A soft line break (Shift+Enter) inside a list item's own content produces another line that
+  // is logically still the same paragraph, just visually wrapped onto more lines — so the cursor
+  // sitting on any of them should light up that *whole contiguous run* of plain (markerless)
+  // continuation lines, not just the exact line the cursor is on. This walks outward from the
+  // cursor's line only through lines that share its own deepest level and carry no marker of
+  // their own, stopping at the item's own opening line or at a nested child item's line in
+  // either direction — a nested sub-item one level deeper still only lights up when the cursor
+  // is actually on/under it, not just because it happens to share the same parent segment.
+  const ownLevel = Math.max(-1, ...(lineLevels.get(cursorLine.from) ?? []));
+  const ownSegment = ownLevel >= 0
+    ? segments.find((segment) => segment.level === ownLevel && cursor >= segment.from && cursor <= segment.to)
+    : undefined;
+  if (ownSegment) {
+    for (const direction of [-1, 1] as const) {
+      let line = cursorLine;
+      for (;;) {
+        const nextLineNumber = line.number + direction;
+        if (nextLineNumber < 1 || nextLineNumber > state.doc.lines) break;
+        const nextLine = state.doc.line(nextLineNumber);
+        if (nextLine.from < ownSegment.from || nextLine.from > ownSegment.to) break;
+        if (itemByLineFrom.has(nextLine.from)) break;
+        if (!lineLevels.get(nextLine.from)?.has(ownLevel)) break;
+        highlightedLines.add(nextLine.from);
+        line = nextLine;
+      }
     }
   }
 
@@ -1388,6 +1416,32 @@ function enterCompletedBlock(view: EditorView): boolean {
   return true;
 }
 
+// Shift+Enter's default (insertNewlineAndIndent, from @codemirror/commands) copies the current
+// line's exact leading whitespace onto the new line. That is correct once already inside a list
+// item's own continuation content (already offset from the marker), but wrong when pressed on the
+// item's own marker line itself: the new line needs LIST_INDENT_WIDTH *more* indent than the
+// marker line to actually be recognized as that item's continuation, matching the same fixed
+// per-level width used everywhere else in this file (indentUnit, Tab/Shift-Tab, list rendering).
+// Otherwise it reads as a dedent/sibling and drops out of the item's scope entirely -- both for
+// Lezer's own parser and for listGuideSegments (webview/markdown-ranges.ts), which is what made a
+// line created this way fail to inherit its parent item's guide rails and highlighting.
+function continueListInsideItem(view: EditorView): boolean {
+  const selection = view.state.selection.main;
+  if (!selection.empty) return false;
+  const line = view.state.doc.lineAt(selection.head);
+  if (selection.head !== line.to) return false;
+  const ownItem = listItemRanges(view.state.doc.toString()).find((item) => item.lineFrom === line.from);
+  if (!ownItem) return false;
+  const indent = ' '.repeat((ownItem.markerFrom - ownItem.lineFrom) + LIST_INDENT_WIDTH);
+  view.dispatch({
+    changes: { from: selection.head, insert: `\n${indent}` },
+    selection: { anchor: selection.head + 1 + indent.length },
+    scrollIntoView: true,
+    userEvent: 'input.type',
+  });
+  return true;
+}
+
 function createEditor(text: string): void {
   editor?.destroy();
   root.replaceChildren();
@@ -1409,6 +1463,7 @@ function createEditor(text: string): void {
         indentUnit.of(' '.repeat(LIST_INDENT_WIDTH)),
         keymap.of([
           { key: 'Enter', run: enterCompletedBlock },
+          { key: 'Shift-Enter', run: continueListInsideItem },
           indentWithTab,
           ...searchKeymap,
           ...defaultKeymap,

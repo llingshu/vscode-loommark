@@ -6,8 +6,24 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- Shift+Enter at the end of a list item's own marker line now indents the new line one level
+  deeper than the marker, matching this project's fixed per-level indent width, so it is correctly
+  recognized as that item's own continuation content instead of reading as a dedent. Pressing
+  Shift+Enter again from a line that is already correctly indented continuation content still just
+  matches that line's indent, as before — only the first break directly off a marker line needed
+  the extra step in.
+
 ### Fixed
 
+- List guide rails and the cursor-position highlight only lit up an item's own marker line and the
+  cursor's exact line, so a line produced by a soft line break (Shift+Enter) partway through a list
+  item's own multi-line content stayed gray even though it is logically the same paragraph, just
+  visually wrapped onto more lines. The whole contiguous run of such lines directly belonging to
+  the cursor's own item now lights up together; a nested sub-item one level deeper still only
+  lights up when the cursor is actually on or under it, not just because it shares a parent with
+  the highlighted item.
 - A rendered table, image, or math block would revert to raw Markdown source the instant a range
   (non-collapsed) selection extended across it — while dragging or shift-clicking to select a span
   of text that includes one, for example — even though nothing was placed inside it to edit.

@@ -258,6 +258,9 @@ parent's own content column, which for an ordered marker like `1. ` is 3+ charac
 too-shallow nested ordered item is parsed as a continuation paragraph of its parent instead of a
 real sub-list — which also breaks Enter part way through typing it, since there is no list for
 Enter to continue. Use Tab rather than typing spaces by hand to always get a valid amount.
+Shift+Enter at the end of a list item's own marker line indents the new line to match, for the
+same reason — pressing it again from that new (now correctly indented) line just continues
+matching its indent, without adding another level.
 
 Nested ordered lists are renumbered for display only; the source keeps whatever number was typed.
 `loommark.orderedListStyle` chooses `cycle` (default: arabic, then letters, then lowercase roman
@@ -271,9 +274,11 @@ label to edit the source number.
 children, and any indented continuation content underneath it (a paragraph, blockquote, or code
 block). Guides stay visible at all times, including on the line the cursor is on — there is no
 raw source to reveal, only blank space, so there is nothing to switch to. Guides are gray by
-default; the cursor's own line and each of its direct ancestor items' lines light up in color,
-one per level, while sibling branches and unrelated content stay gray even when they happen to
-share part of the same connector.
+default; the cursor's own line, each of its direct ancestor items' lines, and — if the cursor is
+on one of several lines belonging to the same multi-line item's own paragraph (for example after
+a Shift+Enter soft line break) — the whole run of those lines together, all light up in color, one
+per level, while sibling branches and unrelated content stay gray even when they happen to share
+part of the same connector.
 
 ## Tags
 
