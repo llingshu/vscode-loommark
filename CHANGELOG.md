@@ -9,10 +9,12 @@ All notable changes to LoomMark are documented here. This project follows
 ### Fixed
 
 - A rendered table, image, or math block would revert to raw Markdown source the instant a range
-  (non-collapsed) selection's moving end passed through it — while dragging or shift-clicking to
-  select a span of text that includes one, for example — even though nothing was placed inside it
-  to edit. Only a genuinely collapsed cursor now reveals source; extending a selection across a
-  widget no longer disrupts it.
+  (non-collapsed) selection extended across it — while dragging or shift-clicking to select a span
+  of text that includes one, for example — even though nothing was placed inside it to edit.
+  Revealing now checks whether the *whole* selection stays within the block, not just where it
+  currently ends: a selection made within already-revealed source (to copy part of it) still
+  reveals correctly, but one that extends across a still-rendered block from outside no longer
+  disrupts it.
 
 ### Added
 

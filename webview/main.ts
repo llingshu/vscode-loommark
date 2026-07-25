@@ -284,19 +284,24 @@ function selectionAwareField(build: (state: EditorState) => DecorationSet): Stat
   });
 }
 
+// True when the current selection sits entirely within [from, to]: a collapsed cursor placed
+// inside to edit, or a range selection made *within* already-revealed source to copy it (e.g.
+// double-clicking a word, or dragging across some of the raw text) both count. False for a
+// selection that extends outside the range — a drag or shift-click that merely passes through
+// while selecting a wider span, which must not force the widget to reveal for the duration (see
+// docs/EDITOR_TECHNOLOGY.md, "Widgets"). Checking only the selection head (as an earlier version
+// of this did) got the first case right but broke the second: once revealed, selecting text
+// inside it to copy turns the selection non-empty, which needs to keep counting as "inside".
+function selectionWithin(state: EditorState, from: number, to: number): boolean {
+  const selection = state.selection.main;
+  return selection.from >= from && selection.to <= to;
+}
+
 const tableField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  // A non-empty (range) selection whose head merely passes through a widget while dragging or
-  // shift-clicking to select across it must not reveal source: cursor >= from && cursor <= to
-  // only checked the head position, so extending a selection *past* a table swapped it for raw
-  // Markdown mid-drag purely because the head briefly sat inside it, disrupting the selection
-  // and making it look like the table "expanded" on its own. -1 can never satisfy any real
-  // range's from/to, so every check below stays false whenever the selection isn't a plain
-  // collapsed cursor, without touching each check individually.
-  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const table of tableRanges(source)) {
-    if (tableMode === 'source' && cursor >= table.from && cursor <= table.to) continue;
+    if (tableMode === 'source' && selectionWithin(state, table.from, table.to)) continue;
     ranges.push(Decoration.replace({
       widget: new TableWidget(
         table,
@@ -312,9 +317,6 @@ const tableField = selectionAwareField((state) => {
 
 const imageField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal
-  // source, not a range selection whose head happens to pass through the image.
-  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   const destinations = linkDestinationRanges(source);
   const markSource = (image: { from: number; to: number; src: string }): void => {
@@ -334,7 +336,7 @@ const imageField = selectionAwareField((state) => {
   for (const image of imageRanges(source)) {
     if (image.ownLine) {
       const line = state.doc.lineAt(image.from);
-      if (cursor >= line.from && cursor <= line.to) {
+      if (selectionWithin(state, line.from, line.to)) {
         markSource(image);
         continue;
       }
@@ -343,7 +345,7 @@ const imageField = selectionAwareField((state) => {
         block: true,
       }).range(line.from, line.to));
     } else {
-      if (cursor >= image.from && cursor <= image.to) {
+      if (selectionWithin(state, image.from, image.to)) {
         markSource(image);
         continue;
       }
@@ -960,9 +962,6 @@ const headingCardField = StateField.define<DecorationSet>({
 
 const mathField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal
-  // source, not a range selection whose head happens to pass through the math block.
-  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const math of mathRanges(source)) {
     const startLine = state.doc.lineAt(math.from);
@@ -971,13 +970,13 @@ const mathField = selectionAwareField((state) => {
     const ownLine = multiLine
       || source.slice(startLine.from, endLine.to).trim() === source.slice(math.from, math.to);
     if (math.display && ownLine) {
-      if (cursor >= startLine.from && cursor <= endLine.to) continue;
+      if (selectionWithin(state, startLine.from, endLine.to)) continue;
       ranges.push(Decoration.replace({
         widget: new MathWidget(math, true, blockCardPresentation(source, math.from)),
         block: true,
       }).range(startLine.from, endLine.to));
     } else {
-      if (cursor >= math.from && cursor <= math.to) continue;
+      if (selectionWithin(state, math.from, math.to)) continue;
       ranges.push(Decoration.replace({
         widget: new MathWidget(math, false),
       }).range(math.from, math.to));
@@ -988,16 +987,13 @@ const mathField = selectionAwareField((state) => {
 
 const quoteField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal a
-  // quote marker or a horizontal rule, not a range selection whose head happens to pass through.
-  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const quote of quoteLineRanges(source)) {
     const line = state.doc.lineAt(quote.lineFrom);
     ranges.push(Decoration.line({
       attributes: { class: `cm-loommark-quote cm-loommark-quote-depth-${Math.min(quote.depth, 3)}` },
     }).range(line.from));
-    if (!(cursor >= line.from && cursor <= line.to)) {
+    if (!selectionWithin(state, line.from, line.to)) {
       ranges.push(Decoration.replace({
         widget: new QuoteMarkerWidget(quote.depth),
       }).range(quote.markerFrom, quote.markerTo));
@@ -1005,7 +1001,7 @@ const quoteField = selectionAwareField((state) => {
   }
   for (const rule of horizontalRuleRanges(source)) {
     const line = state.doc.lineAt(rule.from);
-    if (cursor >= line.from && cursor <= line.to) continue;
+    if (selectionWithin(state, line.from, line.to)) continue;
     ranges.push(Decoration.replace({ widget: new HorizontalRuleWidget() }).range(rule.from, rule.to));
   }
   return Decoration.set(ranges, true);

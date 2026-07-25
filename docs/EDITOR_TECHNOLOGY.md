@@ -185,14 +185,17 @@ and copy controls. CodeMirror requires block widgets to be supplied synchronousl
 The table, image, math, and quote/rule `StateField`s each emit both `Decoration.replace` (the
 widget, cursor outside) and, for table/image/math, plain `Decoration.mark` (cursor-inside source
 text, e.g. the `data-loommark-href` attribute images carry so Ctrl/Cmd + click still opens them as
-source). "Cursor outside" specifically means a collapsed, empty selection outside the range — each
-field computes its own local `cursor` as `state.selection.main.empty ? state.selection.main.head :
--1` (an impossible position, so every `cursor >= from && cursor <= to` check below it stays false)
-rather than the head unconditionally. A non-empty (range) selection extending across a widget, such
-as dragging or shift-clicking to select a paragraph that contains an image, moves its *head*
-through the widget's range without the user ever placing a cursor inside it to edit; checking the
-head alone made the widget revert to raw source for the duration, which is disruptive when the
-intent was only to select past it, not edit it.
+source). "Cursor outside" is decided by a shared `selectionWithin(state, from, to)` helper, not by
+comparing the selection head alone: it requires the selection's *entire* span (`selection.from` and
+`selection.to`, which are the sorted low/high bounds regardless of which end the user is actively
+dragging) to sit inside `[from, to]`. This covers both a collapsed cursor placed inside to edit, and
+a range selection made *within* already-revealed source to copy part of it (double-clicking a word,
+or dragging across some of the raw text) — both keep the widget revealed. A selection that extends
+past the block's own boundary — dragging or shift-clicking to select a wider span that happens to
+include it, without ever confining the selection to just its source — does not reveal it, or
+collapses it back to a widget if it had been revealed. An earlier version of this checked only the
+selection head, which got the "drag a wider selection through it" case right but broke selecting
+text *within* an already-revealed block to copy it, since that selection is non-empty too.
 
 `loommark.keyboardEditing`'s atomic-range builder (`buildAtomicRanges`, `webview/main.ts`) derives
 its ranges directly from `tableRanges`/`imageRanges`/`mathRanges` (the same source scanners those
