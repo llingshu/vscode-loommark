@@ -6,6 +6,14 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A rendered table, image, or math block would revert to raw Markdown source the instant a range
+  (non-collapsed) selection's moving end passed through it — while dragging or shift-clicking to
+  select a span of text that includes one, for example — even though nothing was placed inside it
+  to edit. Only a genuinely collapsed cursor now reveals source; extending a selection across a
+  widget no longer disrupts it.
+
 ### Added
 
 - Pasting an image from the clipboard saves it to disk and inserts a Markdown image link at the

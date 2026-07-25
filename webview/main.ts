@@ -286,7 +286,14 @@ function selectionAwareField(build: (state: EditorState) => DecorationSet): Stat
 
 const tableField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  const cursor = state.selection.main.head;
+  // A non-empty (range) selection whose head merely passes through a widget while dragging or
+  // shift-clicking to select across it must not reveal source: cursor >= from && cursor <= to
+  // only checked the head position, so extending a selection *past* a table swapped it for raw
+  // Markdown mid-drag purely because the head briefly sat inside it, disrupting the selection
+  // and making it look like the table "expanded" on its own. -1 can never satisfy any real
+  // range's from/to, so every check below stays false whenever the selection isn't a plain
+  // collapsed cursor, without touching each check individually.
+  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const table of tableRanges(source)) {
     if (tableMode === 'source' && cursor >= table.from && cursor <= table.to) continue;
@@ -305,7 +312,9 @@ const tableField = selectionAwareField((state) => {
 
 const imageField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  const cursor = state.selection.main.head;
+  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal
+  // source, not a range selection whose head happens to pass through the image.
+  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   const destinations = linkDestinationRanges(source);
   const markSource = (image: { from: number; to: number; src: string }): void => {
@@ -951,7 +960,9 @@ const headingCardField = StateField.define<DecorationSet>({
 
 const mathField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  const cursor = state.selection.main.head;
+  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal
+  // source, not a range selection whose head happens to pass through the math block.
+  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const math of mathRanges(source)) {
     const startLine = state.doc.lineAt(math.from);
@@ -977,7 +988,9 @@ const mathField = selectionAwareField((state) => {
 
 const quoteField = selectionAwareField((state) => {
   const ranges: Range<Decoration>[] = [];
-  const cursor = state.selection.main.head;
+  // See the matching comment in tableField: only a genuinely collapsed cursor should reveal a
+  // quote marker or a horizontal rule, not a range selection whose head happens to pass through.
+  const cursor = state.selection.main.empty ? state.selection.main.head : -1;
   const source = state.doc.toString();
   for (const quote of quoteLineRanges(source)) {
     const line = state.doc.lineAt(quote.lineFrom);
