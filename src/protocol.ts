@@ -46,13 +46,15 @@ export type HostToWebview =
   | { type: 'revealHeading'; ordinal: number }
   | { type: 'wikiFilesChanged'; wikiFiles: string[] }
   | { type: 'linkOpenResult'; href: string; status: 'received' | 'opened' | 'error'; resolvedUri?: string; error?: string }
-  | { type: 'requestDiagnostics' };
+  | { type: 'requestDiagnostics' }
+  | { type: 'imagePasteResult'; requestId: number; relativePath?: string; error?: string };
 
 export type WebviewToHost =
   | { type: 'ready' }
   | { type: 'edit'; text: string; baseRevision: number; clientRevision: number }
   | { type: 'openLink'; href: string; wiki?: boolean }
-  | { type: 'diagnostics'; report: string };
+  | { type: 'diagnostics'; report: string }
+  | { type: 'pasteImage'; requestId: number; data: string; mimeType: string };
 
 export type EditorTheme = 'vscode' | 'crepe' | 'frame' | 'nord';
 export type OutlineMode = 'both' | 'editor' | 'explorer' | 'off';
@@ -70,6 +72,11 @@ export function isWebviewMessage(value: unknown): value is WebviewToHost {
   const message = value as Record<string, unknown>;
   if (message.type === 'ready') return true;
   if (message.type === 'diagnostics') return typeof message.report === 'string';
+  if (message.type === 'pasteImage') {
+    return Number.isInteger(message.requestId)
+      && typeof message.data === 'string'
+      && typeof message.mimeType === 'string';
+  }
   return (message.type === 'edit'
     && typeof message.text === 'string'
     && Number.isInteger(message.baseRevision)

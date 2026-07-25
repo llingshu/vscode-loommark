@@ -26,6 +26,8 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - GFM tables that render as real tables, editable in place or as expand-to-source widgets, in a
   bordered grid or a booktabs-style three-line layout.
 - Inline and block image preview, including images in a sibling folder or wrapped in `<...>`.
+- Paste an image from the clipboard to save it and insert a Markdown image link, honoring VS
+  Code's own `markdown.copyFiles.destination` setting.
 - Inline and display math rendered with KaTeX.
 - Clickable task-list checkboxes, styled nested bullets, blockquotes, and horizontal rules.
 - Tab/Shift+Tab indent and outdent lines, turning a list item into a nested sub-list. Nested
@@ -225,6 +227,19 @@ sources are used as-is. An image that fails to load shows a placeholder instead 
 line. Click an image to edit its Markdown source; Ctrl/Cmd + click opens it instead, whether the
 image is rendered or shown as source. The raw source gets a highlighted background and a
 link-colored destination while the cursor is inside it, so it stays easy to find.
+
+Pasting an image from the clipboard saves it to disk and inserts a Markdown image link at the
+cursor. The destination folder reuses VS Code's own `markdown.copyFiles.destination` setting (the
+same one the built-in Markdown editor uses for dropped/pasted files), so existing configuration
+like:
+
+```json
+"markdown.copyFiles.destination": { "**/*": "assets/" }
+```
+
+applies unchanged — no separate LoomMark setting to configure. With nothing configured, the image
+saves next to the document. The file is named `image.png` (or the appropriate extension for the
+clipboard's image type), with `-1`, `-2`, ... appended if that name is already taken.
 
 ## Math
 

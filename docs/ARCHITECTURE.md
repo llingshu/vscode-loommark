@@ -45,6 +45,7 @@ attributes, and widgets.
 - application of local changes through `WorkspaceEdit`;
 - external document change forwarding;
 - link resolution and file opening;
+- saving pasted clipboard images to disk;
 - workspace Markdown discovery for wiki-link completion;
 - native Explorer outline registration;
 - configuration and diagnostics commands.

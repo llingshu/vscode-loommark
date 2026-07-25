@@ -267,6 +267,26 @@ color bands run flush to each line's own box — so its markers use the plain pe
 no border/gap compensation. Each marker owns the image, blur, overlay, and rounded clipping, so
 code blocks and rendered widgets cannot split the image into visible strips.
 
+## Pasting Images
+
+The Webview has no file-system access, so `EditorView.domEventHandlers({ paste })`
+(`webview/main.ts`) only detects an image on the clipboard (`event.clipboardData.items`,
+`kind === 'file'` and an `image/*` type), calls `preventDefault()`, reads it into a data URL with
+`FileReader`, and hands the base64 payload and MIME type to the host as a `pasteImage` message —
+nothing is inserted into the document yet. `src/paste-image.ts` (dependency-free, unit-tested the
+same way as `src/text.ts`) provides the pure pieces the host uses to actually save it:
+`matchCopyDestination` re-implements just enough glob matching (`**`, `*`, `?`, literal segments —
+not a full minimatch) to honor VS Code's own `markdown.copyFiles.destination` setting, matched
+against the document's workspace-relative path, so a pasted image lands in the same place a
+dropped file would whether or not the document happens to be open in LoomMark; `extensionForMimeType`
+maps the clipboard's MIME type to a file extension; `nextAvailableFileName` finds `image.png`,
+`image-1.png`, `image-2.png`, ... by taking an async existence check as a callback rather than
+performing I/O itself, so it stays testable without a real workspace. `src/extension.ts`'s
+`pasteImage` wires those into real `vscode.workspace.fs` calls and replies with an
+`imagePasteResult` message; the Webview inserts a `![](relativePath)` link at the current cursor
+position (wrapping the path in `<...>` if it contains a space or a closing paren, the same as any
+other typed image path) once that reply arrives.
+
 ## Fenced Code Blocks
 
 The fence scanner records:

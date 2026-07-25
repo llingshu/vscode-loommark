@@ -6,6 +6,15 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- Pasting an image from the clipboard saves it to disk and inserts a Markdown image link at the
+  cursor. The destination folder reuses VS Code's own `markdown.copyFiles.destination` setting —
+  the same one the built-in Markdown editor already honors for dropped/pasted files — so existing
+  configuration applies unchanged; with nothing configured, the image saves next to the document.
+  Files are named `image.png` (or the extension matching the clipboard's image type), with `-1`,
+  `-2`, ... appended if that name is already taken.
+
 ### Fixed
 
 - Underscores and other emphasis punctuation inside inline (`$...$`) and display (`$$...$$`) math

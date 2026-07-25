@@ -4,6 +4,7 @@ import { markdownOutline, type OutlineNode } from './outline';
 import type { BackgroundConfiguration, CardImageConfiguration, EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
 import { CARD_MODE_ORDER, isWebviewMessage } from './protocol';
 import { singleSplice } from './text';
+import { extensionForMimeType, matchCopyDestination, nextAvailableFileName } from './paste-image';
 
 const viewType = 'loommark.editor';
 
@@ -425,6 +426,11 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         void vscode.window.showInformationMessage('LoomMark diagnostics copied to the clipboard.');
         return;
       }
+      if (raw.type === 'pasteImage') {
+        const result = await pasteImage(document, documentDirectory, raw.data, raw.mimeType);
+        await post({ type: 'imagePasteResult', requestId: raw.requestId, ...result });
+        return;
+      }
 
       const current = document.getText();
       const splice = singleSplice(current, raw.text);
@@ -614,6 +620,62 @@ async function openLink(
       `LoomMark could not open ${href} (${uri.toString(true)}): ${detail}`,
     );
     return { status: 'error', resolvedUri: uri.toString(true), error: detail };
+  }
+}
+
+type PasteImageResult = { relativePath: string } | { error: string };
+
+// Reuses VS Code's own markdown.copyFiles.destination setting rather than inventing a
+// loommark-specific one, so pasting an image behaves the same whether the document happens to be
+// open in LoomMark or the built-in text editor, and existing settings.json configuration just
+// works.
+async function pasteImage(
+  document: vscode.TextDocument,
+  documentDirectory: vscode.Uri,
+  data: string,
+  mimeType: string,
+): Promise<PasteImageResult> {
+  let bytes: Uint8Array;
+  try {
+    bytes = Buffer.from(data, 'base64');
+  } catch (error: unknown) {
+    return { error: `Could not decode pasted image data: ${String(error)}` };
+  }
+
+  const destinations = vscode.workspace
+    .getConfiguration('markdown')
+    .get<Record<string, string>>('copyFiles.destination', {});
+  const relativeDocumentPath = vscode.workspace.asRelativePath(document.uri, false);
+  const destinationTemplate = matchCopyDestination(destinations, relativeDocumentPath);
+  const destinationDirectory = destinationTemplate
+    ? vscode.Uri.joinPath(documentDirectory, destinationTemplate)
+    : documentDirectory;
+
+  try {
+    await vscode.workspace.fs.createDirectory(destinationDirectory);
+    const fileName = await nextAvailableFileName(
+      async (candidate) => {
+        try {
+          await vscode.workspace.fs.stat(vscode.Uri.joinPath(destinationDirectory, candidate));
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      'image',
+      extensionForMimeType(mimeType),
+    );
+    const fileUri = vscode.Uri.joinPath(destinationDirectory, fileName);
+    await vscode.workspace.fs.writeFile(fileUri, bytes);
+    const relativePath = path.posix.relative(
+      documentDirectory.path,
+      fileUri.path,
+    );
+    return { relativePath };
+  } catch (error: unknown) {
+    const detail = String(error);
+    void vscode.window.showWarningMessage(`LoomMark could not save the pasted image: ${detail}`);
+    return { error: detail };
   }
 }
 

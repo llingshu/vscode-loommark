@@ -136,6 +136,7 @@ let localGeneration = 0;
 const pendingEdits = new Map<number, number>();
 let outlineCollapsed = savedState?.outlineCollapsed ?? true;
 let initialCursorRestored = false;
+let nextPasteRequestId = 1;
 
 const headingDecorations = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
@@ -1302,6 +1303,38 @@ const completeBlockDelimiters = EditorView.inputHandler.of((view, from, to, text
   return true;
 });
 
+// A path segment containing a space, or a closing paren (which would otherwise end the link
+// early), needs the same <...> wrapping the README already documents for typed image paths.
+function markdownImageLink(relativePath: string): string {
+  const target = /[\s)]/.test(relativePath) ? `<${relativePath}>` : relativePath;
+  return `![](${target})`;
+}
+
+// The extension host owns actually writing the file (webview JS has no file-system access), so
+// this only detects a pasted image, reads it into a data URL, and hands the bytes over; the
+// resulting Markdown link is inserted once the host replies with where it saved the file (see the
+// 'imagePasteResult' handler below).
+const imagePasteHandler = EditorView.domEventHandlers({
+  paste(event, view) {
+    const items = event.clipboardData?.items;
+    if (!items) return false;
+    const imageItem = Array.from(items).find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+    const file = imageItem?.getAsFile();
+    if (!file) return false;
+    event.preventDefault();
+    const requestId = nextPasteRequestId++;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') return;
+      const base64 = result.slice(result.indexOf(',') + 1);
+      vscode.postMessage({ type: 'pasteImage', requestId, data: base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+    return true;
+  },
+});
+
 function enterCompletedBlock(view: EditorView): boolean {
   const selection = view.state.selection.main;
   if (!selection.empty) return false;
@@ -1333,6 +1366,7 @@ function createEditor(text: string): void {
         autocompletion({ override: [fileLinkCompletions] }),
         search({ top: true }),
         completeBlockDelimiters,
+        imagePasteHandler,
         // Matches LIST_INDENT_WIDTH: CommonMark requires a nested ordered item's content to
         // reach its parent's content column (3-4+ characters), which 2 spaces never satisfies.
         indentUnit.of(' '.repeat(LIST_INDENT_WIDTH)),
@@ -1660,6 +1694,22 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
     wikiFiles = message.wikiFiles;
   } else if (message.type === 'linkOpenResult') {
     lastHostLinkResult = { ...message, receivedAt: new Date().toISOString() };
+  } else if (message.type === 'imagePasteResult') {
+    if (!editor) return;
+    if (message.relativePath) {
+      const markdown = markdownImageLink(message.relativePath);
+      const pos = editor.state.selection.main.head;
+      editor.dispatch({
+        changes: { from: pos, insert: markdown },
+        selection: { anchor: pos + markdown.length },
+        scrollIntoView: true,
+      });
+      editor.focus();
+    } else if (message.error) {
+      console.error('LoomMark could not paste image:', message.error);
+      status.textContent = 'Image paste failed';
+      window.setTimeout(() => { if (status.textContent === 'Image paste failed') status.textContent = ''; }, 3000);
+    }
   } else if (message.type === 'requestDiagnostics') {
     const lines = Array.from(document.querySelectorAll<HTMLElement>('.cm-line')).map((line) => ({
       text: line.textContent,
