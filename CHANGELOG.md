@@ -6,6 +6,20 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Underscores and other emphasis punctuation inside inline (`$...$`) and display (`$$...$$`) math
+  were still hidden as if they were live Markdown emphasis markers while editing the revealed raw
+  math source, corrupting the visible text until the cursor left and KaTeX re-rendered it. Math
+  ranges are now excluded from emphasis scanning the same way code ranges already are. Backslash
+  sequences that are common, valid LaTeX (`\\` for a matrix row break, `\{`/`\}` for set notation)
+  were similarly at risk of being misread as Markdown escape sequences; math ranges are now
+  excluded there too.
+- Jumping to a heading from the outline landed it at the top of the view only when scrolling
+  upward to reach it; scrolling downward left it hugging the bottom instead, so where the heading
+  ended up depended on where the cursor already was. Both directions now align the heading to the
+  top.
+
 ## [0.4.3] - 2026-07-23
 
 ### Added

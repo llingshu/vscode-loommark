@@ -195,6 +195,11 @@ test('ignores escape sequences inside code', () => {
   assert.equal(escapedCharRanges(source).length, 0);
 });
 
+test('ignores escape sequences inside math (LaTeX \\\\ row breaks, \\{ \\})', () => {
+  const source = 'inline $\\{1, 2\\}$ and\n\n$$\nmatrix \\\\ next row\n$$';
+  assert.equal(escapedCharRanges(source).length, 0);
+});
+
 test('ignores tags inside code and link destinations', () => {
   const source = '`#notreal` and [a](url#frag) and\n```\n#alsofake\n```';
   assert.equal(tagRanges(source).length, 0);

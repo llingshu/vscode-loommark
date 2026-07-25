@@ -1081,6 +1081,7 @@ function buildInlineDecorations(view: EditorView): DecorationSet {
     ...codeRanges(source),
     ...linkDestinationRanges(source),
     ...tagRanges(source),
+    ...mathRanges(source),
   ];
   // Content group matches a single non-space char alone, or a non-space char followed by
   // anything lazily ending in a non-space char — unlike `(?=\S)(.+?\S)`, this also matches
@@ -1511,7 +1512,14 @@ function headingsFromSource(source: string): Heading[] {
 
 function revealHeading(heading: Heading): void {
   if (!editor) return;
-  editor.dispatch({ selection: { anchor: heading.offset }, scrollIntoView: true });
+  // Plain `scrollIntoView: true` only scrolls the minimal distance needed, so the heading lands
+  // wherever the *edge it approached from* happens to stop — hugging the bottom when scrolling
+  // down to it, the top when scrolling up — which reads as random depending on where the cursor
+  // already was. An explicit `y: 'start'` effect always aligns the heading to the top instead.
+  editor.dispatch({
+    selection: { anchor: heading.offset },
+    effects: EditorView.scrollIntoView(heading.offset, { y: 'start' }),
+  });
   editor.focus();
 }
 

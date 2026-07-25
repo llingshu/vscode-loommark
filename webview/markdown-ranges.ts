@@ -162,7 +162,10 @@ export function linkDestinationRanges(source: string): SourceRange[] {
 const escapableCharPattern = /\\[!-/:-@[-`{-~]/g;
 
 export function escapedCharRanges(source: string): SourceRange[] {
-  const excluded = codeRanges(source);
+  // LaTeX commonly uses punctuation CommonMark would otherwise treat as escapable (`\\` for a
+  // matrix row break, `\{`/`\}` for set notation, ...); those backslashes are math syntax, not
+  // Markdown escapes, so math content must stay excluded the same way code content already is.
+  const excluded = [...codeRanges(source), ...mathRanges(source)];
   const results: SourceRange[] = [];
   for (const match of source.matchAll(escapableCharPattern)) {
     const from = match.index ?? 0;
