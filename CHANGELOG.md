@@ -64,6 +64,14 @@ All notable changes to LoomMark are documented here. This project follows
   through the edit — silently drifting forward by however many characters were removed earlier in
   the document. External updates are now applied as a single minimal, targeted change instead, so
   the cursor only moves when the edit actually touches it.
+- With `loommark.keyboardEditing` on, pressing Up/Down still skipped clean over a rendered
+  table/image/math block instead of entering it, even though Left/Right correctly stepped in
+  character by character. CodeMirror resolves vertical motion by hit-testing pixel coordinates
+  against the rendered DOM, and an opaque block widget has no per-character positions for that
+  hit-test to land on, so vertical movement had nothing to do but jump clean over it regardless of
+  the atomic-range settings that already governed horizontal motion. Up/Down now check whether the
+  adjacent line in the direction of travel is the boundary of such a block and, if so, move the
+  cursor directly to that edge so it reveals normally, the same as arriving there horizontally.
 
 ## [0.4.3] - 2026-07-23
 

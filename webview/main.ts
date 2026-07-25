@@ -1442,6 +1442,42 @@ function continueListInsideItem(view: EditorView): boolean {
   return true;
 }
 
+// Vertical arrow-key movement (moveVertically, which cursorLineUp/Down are built on) finds its
+// target by hit-testing a pixel coordinate against the rendered DOM. A table/image/math block
+// widget has no per-character rendering inside it to hit-test against, so that coordinate lookup
+// always resolves to just outside the widget — silently skipping over the whole block regardless
+// of loommark.keyboardEditing or buildAtomicRanges, unlike horizontal motion (which walks logical
+// document offsets, not pixel coordinates, so it can land inside one just fine). This explicitly
+// redirects into the adjacent block instead, landing at its near edge (which selectionWithin then
+// correctly recognizes as inside, revealing it), whenever keyboardEditing allows entering at all.
+function verticalMoveIntoBlockWidget(forward: boolean) {
+  return (view: EditorView): boolean => {
+    if (!keyboardEditing) return false;
+    const selection = view.state.selection.main;
+    if (!selection.empty) return false;
+    const source = view.state.doc.toString();
+    const blockRanges = [
+      ...tableRanges(source),
+      ...imageRanges(source).filter((image) => image.ownLine),
+      ...mathRanges(source).filter((math) => math.display),
+    ];
+    const currentLine = view.state.doc.lineAt(selection.head);
+    for (const range of blockRanges) {
+      const startLine = view.state.doc.lineAt(range.from);
+      const endLine = view.state.doc.lineAt(range.to);
+      if (forward && startLine.number === currentLine.number + 1) {
+        view.dispatch({ selection: { anchor: range.from }, scrollIntoView: true });
+        return true;
+      }
+      if (!forward && endLine.number === currentLine.number - 1) {
+        view.dispatch({ selection: { anchor: range.to }, scrollIntoView: true });
+        return true;
+      }
+    }
+    return false;
+  };
+}
+
 function createEditor(text: string): void {
   editor?.destroy();
   root.replaceChildren();
@@ -1464,6 +1500,8 @@ function createEditor(text: string): void {
         keymap.of([
           { key: 'Enter', run: enterCompletedBlock },
           { key: 'Shift-Enter', run: continueListInsideItem },
+          { key: 'ArrowDown', run: verticalMoveIntoBlockWidget(true) },
+          { key: 'ArrowUp', run: verticalMoveIntoBlockWidget(false) },
           indentWithTab,
           ...searchKeymap,
           ...defaultKeymap,

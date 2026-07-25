@@ -235,6 +235,23 @@ failure mode worth keeping in mind: it would make the cursor-inside range simult
 `revealHeading`) lands inside it — CodeMirror does not expect that combination, and one observed
 symptom was the search panel appearing to vanish after clicking Next.
 
+Atomic ranges only govern *horizontal* motion (`cursorCharRight`/`cursorCharLeft` and friends
+consult `skipAtomicRanges`, which walks the document offset by offset). Vertical motion
+(`cursorLineUp`/`cursorLineDown`) is built on CodeMirror's `moveVertically`, which resolves its
+target by hit-testing a pixel coordinate against the rendered DOM (`posAtCoords`), not by walking
+offsets — and an opaque block widget has no per-character DOM to hit-test into, so there is no
+coordinate inside it for that resolution to land on regardless of `loommark.keyboardEditing` or
+atomic-range state. Pressing Up/Down next to a rendered table/image/display-math block therefore
+always jumped clean over it, even with keyboard editing correctly enabled and no atomic range in
+the way — a distinct failure mode from the one above, only reachable by testing with the arrow keys
+rather than by reasoning about atomic ranges alone. `verticalMoveIntoBlockWidget` (`webview/main.ts`,
+bound to `ArrowUp`/`ArrowDown` in the main keymap ahead of `defaultKeymap`) handles this directly:
+when `loommark.keyboardEditing` is on and the line adjacent to the cursor in the direction of travel
+is the start (moving down) or end (moving up) of a table/own-line-image/display-math range, it
+dispatches a selection straight to that boundary instead of letting coordinate-based motion decide,
+landing inside the range the same way arriving there horizontally already does. With keyboard
+editing off, the function is a no-op and the original skip-over behavior is unchanged.
+
 ## Progressive Syntax
 
 The implementation uses two complementary mechanisms:
