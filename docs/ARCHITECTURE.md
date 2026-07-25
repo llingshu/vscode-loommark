@@ -118,6 +118,20 @@ the client edit currently being applied. The Webview does not apply an external 
 local timer or unacknowledged edit exists. Overlapping collaborative edits are a documented future
 rebase problem.
 
+Both `documentChanged` and a text-bearing `ack` reach `applyHostText`, which uses `singleSplice`
+(`src/text.ts`, the same minimal-diff helper the host uses for the opposite direction) to turn the
+incoming full document text into one small, targeted `changes` range rather than replacing the
+whole document. A full-document replace would make CodeMirror's own selection mapping meaningless
+— everything is "deleted and reinserted from scratch" as far as the ChangeSet is concerned — so the
+cursor would need to be repositioned by clamping its raw numeric offset against the new length
+instead of really being carried through the edit. That breaks the moment an external change shifts
+character offsets anywhere before the cursor without moving it (autosave trimming trailing
+whitespace on an earlier line, for example): the same numeric offset now points further into the
+document than it should, silently moving the cursor forward — potentially onto a different line —
+even though nothing at the cursor's own position changed. A targeted change lets CodeMirror map the
+existing selection through it like any other edit, so the cursor only moves when the edit actually
+touches it.
+
 ## Decoration Model
 
 Decorations are presentation and must never dispatch source changes.

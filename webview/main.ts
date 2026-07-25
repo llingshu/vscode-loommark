@@ -60,6 +60,7 @@ import {
   TableWidget,
   type BlockCardPresentation,
 } from './widgets';
+import { singleSplice } from '../src/text';
 import type {
   CardMode,
   EditorConfiguration,
@@ -1480,15 +1481,24 @@ function applyHostText(text: string): void {
     createEditor(text);
     return;
   }
-  if (text === editor.state.doc.toString()) return;
+  const current = editor.state.doc.toString();
+  if (text === current) return;
+  // A full-document replace (from 0 to the old length) makes CodeMirror's own change-based
+  // selection mapping meaningless — as far as the ChangeSet is concerned everything was deleted
+  // and reinserted from scratch, so a cursor anywhere in the document loses its logical position
+  // and the old code fell back to clamping its raw numeric offset against the new length instead.
+  // That silently breaks whenever an external edit changes the document's length anywhere before
+  // the cursor — trimming trailing whitespace on an earlier line during autosave, for example —
+  // since every character removed/added earlier shifts what that same numeric offset now points
+  // at, up to landing the cursor lines away from where it actually was. singleSplice (the same
+  // minimal-diff helper the extension host already uses for the opposite direction) turns this
+  // into one small, targeted change instead, so CodeMirror maps the existing selection through it
+  // like any other edit and the cursor only moves if the edit actually touches its position.
+  const splice = singleSplice(current, text);
+  if (!splice) return;
   applyingHostUpdate = true;
-  const selection = editor.state.selection;
   editor.dispatch({
-    changes: { from: 0, to: editor.state.doc.length, insert: text },
-    selection: {
-      anchor: Math.min(selection.main.anchor, text.length),
-      head: Math.min(selection.main.head, text.length),
-    },
+    changes: { from: splice.from, to: splice.to, insert: splice.insert },
   });
   sourceText = text;
   applyingHostUpdate = false;

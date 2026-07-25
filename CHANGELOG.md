@@ -19,6 +19,16 @@ All notable changes to LoomMark are documented here. This project follows
   upward to reach it; scrolling downward left it hugging the bottom instead, so where the heading
   ended up depended on where the cursor already was. Both directions now align the heading to the
   top.
+- The cursor could silently jump to the wrong line whenever an external change reached the
+  document while the cursor sat elsewhere — most commonly autosave running a "trim trailing
+  whitespace" formatter over an earlier line while still typing further down, which is what made
+  typing a trailing space at the end of a list item appear to auto-advance to the next line after
+  a short delay. Applying an external update replaced the entire document text in one change,
+  which CodeMirror cannot meaningfully map an existing cursor position through, so the cursor's
+  raw numeric offset was clamped to the new document length instead of actually being carried
+  through the edit — silently drifting forward by however many characters were removed earlier in
+  the document. External updates are now applied as a single minimal, targeted change instead, so
+  the cursor only moves when the edit actually touches it.
 
 ## [0.4.3] - 2026-07-23
 
