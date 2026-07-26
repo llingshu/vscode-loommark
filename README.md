@@ -208,7 +208,10 @@ to let the cursor step in with the keyboard instead, for mouse-free editing.
 GFM tables render as real `<table>` elements. `loommark.table` controls how cells are edited:
 
 - `rich` (default) — click a cell to edit its raw Markdown in place. Enter or clicking elsewhere
-  commits the change, Escape cancels, and Tab/Shift+Tab moves to the next/previous cell.
+  commits the change, Escape cancels, and Tab/Shift+Tab moves to the next/previous cell. Tab past
+  the last cell of the last row adds a new row. `Alt+Shift+Up`/`Down`/`Left`/`Right` inserts an
+  empty row above/below or column left/right of the current cell. Inline and display math
+  (`$...$`, `$$...$$`) inside a cell renders with KaTeX like it does everywhere else.
 - `source` — the whole table expands to Markdown source when the cursor enters it, matching the
   edit style used for headings and emphasis.
 

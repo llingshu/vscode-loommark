@@ -252,6 +252,39 @@ dispatches a selection straight to that boundary instead of letting coordinate-b
 landing inside the range the same way arriving there horizontally already does. With keyboard
 editing off, the function is a no-op and the original skip-over behavior is unchanged.
 
+A rich-mode table (`loommark.table: 'rich'`, the default) is the one exception to that redirect:
+it is architecturally unlike image/math widgets, so simply moving the CodeMirror selection into its
+range does nothing visible. `TableWidget` never reveals as plain source on cursor-inside the way
+`imageField`/`mathField` do — its container stays `contentEditable="false"` at all times, and
+individual cells become editable only through a small self-managed `contentEditable="plaintext-only"`
+island that `startEditing` turns on for exactly one cell (mousedown is the only thing that has ever
+triggered it). Landing the CodeMirror selection at the table's `from`/`to` offset therefore lands on
+an offset with no editable surface anywhere near it. `verticalMoveIntoBlockWidget` special-cases
+tables: instead of dispatching a selection, it calls `enterTableFromKeyboard(view, table.from, edge)`
+(`webview/widgets.ts`), which looks up the table's currently-rendered `TableWidget` instance in a
+module-level `liveTableWidgets` map (keyed by the table's `from` offset, populated in `toDOM` and
+cleared in `destroy`) and calls its `startEditing` directly on the first cell (entering from above)
+or last cell (entering from below) — the same call a click already makes. The registry exists
+because CodeMirror reuses a widget's DOM (skipping `toDOM`) whenever the replacing decoration's
+`WidgetType.eq()` still returns true, so there is no decoration-level hook available to intercept a
+pure selection change the way there is for image/math; reaching the live instance directly is the
+only way in. `tableMode: 'source'` does not have this problem — like image/math, it swaps to
+`selectionWithin`-driven reveal-as-source instead of a click-to-edit island — so it keeps using the
+plain selection dispatch.
+
+Row/column insertion (`Alt+Shift+Up`/`Down`/`Left`/`Right` while a cell is being edited, plus Tab
+past the last cell of the last row) works by re-serializing the *entire* table source in one change
+rather than splicing individual lines, since inserting a row or column shifts every cell after it.
+`TableWidget.insertRow`/`insertColumn` read the current grid back out as plain strings (substituting
+the live, not-yet-committed text of whichever cell is being edited, via `currentRowsText`, so an
+in-progress edit isn't dropped by the rewrite), splice in the new empty row/column, and hand the
+result to a small `serializeTable` helper before dispatching
+`{ changes: { from: table.from, to: table.to, insert: source } }`. `pendingTableFocus` (the same
+mechanism the existing Tab-between-cells flow already relies on) is set before the dispatch so that
+once the change forces a fresh `TableWidget` to be constructed and drawn — its `source` differs, so
+`eq()` is false and `toDOM` runs again — the new instance immediately resumes editing at the newly
+inserted row or column.
+
 ## Progressive Syntax
 
 The implementation uses two complementary mechanisms:

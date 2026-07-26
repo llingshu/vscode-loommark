@@ -6,6 +6,25 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- `Alt+Shift+Up`/`Down`/`Left`/`Right` while editing a table cell inserts an empty row above/below
+  or column left/right of the current cell, and pressing Tab past the last cell of the last row
+  now extends the table with a new row instead of doing nothing — table row/column layout was
+  previously only editable by hand-editing the raw Markdown pipes.
+- Inline (`$...$`) and display (`$$...$$`) math inside a table cell now renders with KaTeX; it was
+  previously left as unrendered raw text, since table cell rendering never ran math through KaTeX
+  in the first place.
+
+### Fixed
+
+- With `loommark.keyboardEditing` on, Up/Down still skipped clean over a table the same way they
+  did before block widgets gained keyboard entry, unlike image/math which now correctly enter. A
+  rendered table never reveals as plain source the way image/math widgets do — its cells are edited
+  in place via a small contentEditable island that only ever starts on a click — so simply moving
+  the CodeMirror selection into its range had nothing to land on. Up/Down landing next to a table
+  now starts editing its first/last cell directly, the same as a click would.
+
 ## [0.4.4] - 2026-07-25
 
 ### Added

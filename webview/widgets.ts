@@ -1,7 +1,8 @@
 import { EditorView, WidgetType } from '@codemirror/view';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import type { FencedCodeRange, ImageRange, MathRange, TableCell, TableRange } from './markdown-ranges';
+import { mathRanges } from './markdown-ranges';
+import type { FencedCodeRange, ImageRange, MathRange, TableAlignment, TableCell, TableRange } from './markdown-ranges';
 import type { TableMode } from '../src/protocol';
 
 export type BlockCardPresentation = { className: string; style: string } | undefined;
@@ -124,7 +125,26 @@ export class CodeToolbarWidget extends WidgetType {
   }
 }
 
+// Math is scanned first (via the same mathRanges() scanner used for the top-level document) and
+// rendered with KaTeX, since its delimiters ($, $$) would otherwise collide with the emphasis
+// pattern below; the text between math spans is then run through the emphasis/code/link pattern
+// as before.
 export function renderInlineMarkdown(text: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  for (const math of mathRanges(text)) {
+    if (math.from > cursor) fragment.append(renderInlineEmphasis(text.slice(cursor, math.from)));
+    const container = document.createElement(math.display ? 'div' : 'span');
+    container.className = `cm-loommark-math${math.display ? ' is-block' : ''}`;
+    katex.render(math.tex, container, { displayMode: math.display, throwOnError: false });
+    fragment.append(container);
+    cursor = math.to;
+  }
+  if (cursor < text.length) fragment.append(renderInlineEmphasis(text.slice(cursor)));
+  return fragment;
+}
+
+function renderInlineEmphasis(text: string): DocumentFragment {
   const fragment = document.createDocumentFragment();
   const pattern = /(\*\*|__)(?=\S)(.+?\S)\1|(?<![*_])([*_])(?![*_])(?=\S)(.+?\S)\3(?![*_])|~~(?=\S)(.+?\S)~~|`([^`\n]+)`|\[([^\]\n]+)\]\(([^\s)]+)\)/g;
   let last = 0;
@@ -459,6 +479,34 @@ function normalizeCellText(text: string): string {
   return text.replace(/\r?\n/g, ' ').replace(/\\\|/g, '|').replace(/\|/g, '\\|').trim();
 }
 
+function delimiterCellText(alignment: TableAlignment): string {
+  if (alignment === 'center') return ':-:';
+  if (alignment === 'right') return '--:';
+  if (alignment === 'left') return ':--';
+  return '---';
+}
+
+function serializeTable(alignments: TableAlignment[], rows: string[][]): string {
+  const renderRow = (cells: string[]): string => `| ${cells.map((cell) => cell.replace(/\|/g, '\\|')).join(' | ')} |`;
+  return [
+    renderRow(rows[0]),
+    `| ${alignments.map(delimiterCellText).join(' | ')} |`,
+    ...rows.slice(1).map(renderRow),
+  ].join('\n');
+}
+
+// Live widget instances by their table's starting offset, so keyboard-driven entry
+// (enterTableFromKeyboard, called from outside when Up/Down lands next to a table) can start
+// cell editing on the actual rendered widget. A rendered table is always contentEditable="false"
+// and never reveals as plain source the way image/math widgets do, so simply moving the
+// CodeMirror selection into its range has nothing visible to land on; editing has to be started
+// directly, the same way a click on a cell already does.
+const liveTableWidgets = new Map<number, TableWidget>();
+
+export function enterTableFromKeyboard(view: EditorView, tableFrom: number, edge: 'start' | 'end'): boolean {
+  return liveTableWidgets.get(tableFrom)?.enterFromKeyboard(view, edge) ?? false;
+}
+
 type EditingCell = {
   element: HTMLTableCellElement;
   row: number;
@@ -509,10 +557,23 @@ export class TableWidget extends WidgetType {
       pendingTableFocus = undefined;
       window.setTimeout(() => this.startEditing(view, focus.row, focus.column), 0);
     }
+    liveTableWidgets.set(this.table.from, this);
     return container;
   }
 
+  destroy(_dom: HTMLElement): void {
+    if (liveTableWidgets.get(this.table.from) === this) liveTableWidgets.delete(this.table.from);
+  }
+
   ignoreEvent(): boolean {
+    return true;
+  }
+
+  enterFromKeyboard(view: EditorView, edge: 'start' | 'end'): boolean {
+    if (this.mode !== 'rich') return false;
+    const row = edge === 'start' ? 0 : this.allRows.length - 1;
+    const column = edge === 'start' ? 0 : this.allRows[row].length - 1;
+    this.startEditing(view, row, column);
     return true;
   }
 
@@ -561,6 +622,17 @@ export class TableWidget extends WidgetType {
     const keydownHandler = (event: KeyboardEvent): void => {
       const editing = this.editing;
       if (!editing || editing.element !== element) return;
+      if (event.altKey && event.shiftKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        if (event.key === 'ArrowUp' && editing.row === 0) return;
+        this.insertRow(view, editing, event.key === 'ArrowDown' ? editing.row + 1 : editing.row);
+        return;
+      }
+      if (event.altKey && event.shiftKey && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+        event.preventDefault();
+        this.insertColumn(view, editing, event.key === 'ArrowRight' ? editing.column + 1 : editing.column);
+        return;
+      }
       if (event.key === 'Enter') {
         event.preventDefault();
         this.commitCell(view, editing);
@@ -569,12 +641,19 @@ export class TableWidget extends WidgetType {
         this.cancelEditing();
       } else if (event.key === 'Tab') {
         event.preventDefault();
-        const next = this.siblingCell(editing.row, editing.column, event.shiftKey ? -1 : 1);
-        if (next) pendingTableFocus = { tableFrom: this.table.from, ...next };
-        if (this.commitCell(view, editing)) return;
+        const step = event.shiftKey ? -1 : 1;
+        const next = this.siblingCell(editing.row, editing.column, step);
         if (next) {
+          pendingTableFocus = { tableFrom: this.table.from, ...next };
+          if (this.commitCell(view, editing)) return;
           pendingTableFocus = undefined;
           this.startEditing(view, next.row, next.column);
+        } else if (step > 0) {
+          // Tab past the last cell of the last row extends the table instead of doing nothing,
+          // the same convenience spreadsheet-style table editors offer for adding a row.
+          this.insertRow(view, editing, this.allRows.length);
+        } else {
+          this.commitCell(view, editing);
         }
       }
     };
@@ -618,6 +697,37 @@ export class TableWidget extends WidgetType {
     this.detachEditing(editing);
     view.dispatch({ changes: { from: cell.from, to: cell.to, insert: next } });
     return true;
+  }
+
+  // Rewrites the whole table source in one change, since inserting a row/column shifts every
+  // cell after it. Reads the cell currently being edited back from the live element instead of
+  // the (stale) parsed text, so an in-progress, not-yet-committed edit isn't dropped by the
+  // rewrite.
+  private currentRowsText(editing: EditingCell): string[][] {
+    return this.allRows.map((row, rowIndex) => row.map((cell, column) => (
+      rowIndex === editing.row && column === editing.column
+        ? normalizeCellText(editing.element.textContent ?? '')
+        : cell.text
+    )));
+  }
+
+  private insertRow(view: EditorView, editing: EditingCell, index: number): void {
+    const columnCount = this.table.header.length;
+    const rows = this.currentRowsText(editing);
+    rows.splice(index, 0, new Array(columnCount).fill(''));
+    this.detachEditing(editing);
+    pendingTableFocus = { tableFrom: this.table.from, row: index, column: Math.min(editing.column, columnCount - 1) };
+    view.dispatch({ changes: { from: this.table.from, to: this.table.to, insert: serializeTable(this.table.alignments, rows) } });
+  }
+
+  private insertColumn(view: EditorView, editing: EditingCell, index: number): void {
+    const rows = this.currentRowsText(editing);
+    for (const row of rows) row.splice(index, 0, '');
+    const alignments = [...this.table.alignments];
+    alignments.splice(index, 0, null);
+    this.detachEditing(editing);
+    pendingTableFocus = { tableFrom: this.table.from, row: editing.row, column: index };
+    view.dispatch({ changes: { from: this.table.from, to: this.table.to, insert: serializeTable(alignments, rows) } });
   }
 
   private cancelEditing(): void {

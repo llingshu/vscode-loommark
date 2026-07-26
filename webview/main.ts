@@ -51,6 +51,7 @@ import {
   CardBoundaryWidget,
   CheckboxWidget,
   CodeToolbarWidget,
+  enterTableFromKeyboard,
   HorizontalRuleWidget,
   ImageWidget,
   ListGuideWidget,
@@ -1456,12 +1457,23 @@ function verticalMoveIntoBlockWidget(forward: boolean) {
     const selection = view.state.selection.main;
     if (!selection.empty) return false;
     const source = view.state.doc.toString();
+    const currentLine = view.state.doc.lineAt(selection.head);
+    // A rich-mode table never reveals as plain source the way image/math widgets do (see
+    // enterTableFromKeyboard in widgets.ts), so entering one has to start cell editing directly
+    // rather than just moving the selection into its range, which the widget would ignore.
+    for (const table of tableRanges(source)) {
+      const startLine = view.state.doc.lineAt(table.from);
+      const endLine = view.state.doc.lineAt(table.to);
+      const adjacent = forward ? startLine.number === currentLine.number + 1 : endLine.number === currentLine.number - 1;
+      if (!adjacent) continue;
+      if (tableMode === 'rich' && enterTableFromKeyboard(view, table.from, forward ? 'start' : 'end')) return true;
+      view.dispatch({ selection: { anchor: forward ? table.from : table.to }, scrollIntoView: true });
+      return true;
+    }
     const blockRanges = [
-      ...tableRanges(source),
       ...imageRanges(source).filter((image) => image.ownLine),
       ...mathRanges(source).filter((math) => math.display),
     ];
-    const currentLine = view.state.doc.lineAt(selection.head);
     for (const range of blockRanges) {
       const startLine = view.state.doc.lineAt(range.from);
       const endLine = view.state.doc.lineAt(range.to);
