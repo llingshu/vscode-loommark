@@ -285,6 +285,15 @@ once the change forces a fresh `TableWidget` to be constructed and drawn — its
 `eq()` is false and `toDOM` runs again — the new instance immediately resumes editing at the newly
 inserted row or column.
 
+Arrow-key movement between cells (while one is being edited) reuses the same `moveToCell` +
+`pendingTableFocus` path as Tab, but Up/Down and Left/Right differ in one respect: Up/Down always
+switch cells (a table cell holds a single line of text, so vertical movement has no other meaning
+inside it), while Left/Right only switch once the caret has nowhere left to go in the current cell's
+own text — checked with `caretAtBoundary`, which compares a probe `Range` spanning from the cell's
+edge to the caret against an empty string rather than reading `selectionStart`/`End` (not meaningful
+on a `contentEditable` element). This keeps normal in-text horizontal movement, including Ctrl+Arrow
+word jumps and Shift+Arrow selection, working everywhere except at the cell's own boundary.
+
 ## Progressive Syntax
 
 The implementation uses two complementary mechanisms:

@@ -8,6 +8,11 @@ All notable changes to LoomMark are documented here. This project follows
 
 ### Added
 
+- Arrow keys move between table cells while editing one: Up/Down always move to the cell directly
+  above/below, and Left/Right move to the adjacent cell once the caret has nowhere left to go
+  within the current cell's own text (so normal in-text cursor movement, including word jumps,
+  still works everywhere else). Previously only Tab/Shift+Tab could move between cells.
+
 - `Alt+Shift+Up`/`Down`/`Left`/`Right` while editing a table cell inserts an empty row above/below
   or column left/right of the current cell, and pressing Tab past the last cell of the last row
   now extends the table with a new row instead of doing nothing — table row/column layout was

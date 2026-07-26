@@ -479,6 +479,22 @@ function normalizeCellText(text: string): string {
   return text.replace(/\r?\n/g, ' ').replace(/\\\|/g, '|').replace(/\|/g, '\\|').trim();
 }
 
+// Left/Right only switch cells once the caret has nowhere left to go within the current cell's
+// own text (so normal in-text horizontal movement, including Ctrl+Arrow word jumps, keeps
+// working); Up/Down always switch cells, since a table cell holds a single line of text and so
+// has no other meaning for vertical movement.
+function caretAtBoundary(element: HTMLElement, side: 'start' | 'end'): boolean {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) return false;
+  const probe = document.createRange();
+  probe.selectNodeContents(element);
+  if (side === 'start') probe.setEnd(range.startContainer, range.startOffset);
+  else probe.setStart(range.endContainer, range.endOffset);
+  return probe.toString().length === 0;
+}
+
 function delimiterCellText(alignment: TableAlignment): string {
   if (alignment === 'center') return ':-:';
   if (alignment === 'right') return '--:';
@@ -633,6 +649,19 @@ export class TableWidget extends WidgetType {
         this.insertColumn(view, editing, event.key === 'ArrowRight' ? editing.column + 1 : editing.column);
         return;
       }
+      const plainArrow = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+        && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight');
+      if (plainArrow) {
+        const target = event.key === 'ArrowUp' ? this.cellAt(editing.row - 1, editing.column)
+          : event.key === 'ArrowDown' ? this.cellAt(editing.row + 1, editing.column)
+          : event.key === 'ArrowLeft' ? (caretAtBoundary(element, 'start') ? this.cellAt(editing.row, editing.column - 1) : undefined)
+          : (caretAtBoundary(element, 'end') ? this.cellAt(editing.row, editing.column + 1) : undefined);
+        if (target) {
+          event.preventDefault();
+          this.moveToCell(view, editing, target);
+        }
+        return;
+      }
       if (event.key === 'Enter') {
         event.preventDefault();
         this.commitCell(view, editing);
@@ -644,10 +673,7 @@ export class TableWidget extends WidgetType {
         const step = event.shiftKey ? -1 : 1;
         const next = this.siblingCell(editing.row, editing.column, step);
         if (next) {
-          pendingTableFocus = { tableFrom: this.table.from, ...next };
-          if (this.commitCell(view, editing)) return;
-          pendingTableFocus = undefined;
-          this.startEditing(view, next.row, next.column);
+          this.moveToCell(view, editing, next);
         } else if (step > 0) {
           // Tab past the last cell of the last row extends the table instead of doing nothing,
           // the same convenience spreadsheet-style table editors offer for adding a row.
@@ -684,6 +710,19 @@ export class TableWidget extends WidgetType {
       if (row < 0 || row >= this.allRows.length) return undefined;
       next = step > 0 ? 0 : this.allRows[row].length - 1;
     }
+  }
+
+  private cellAt(row: number, column: number): { row: number; column: number } | undefined {
+    return row >= 0 && row < this.allRows.length && column >= 0 && column < (this.allRows[row]?.length ?? 0)
+      ? { row, column }
+      : undefined;
+  }
+
+  private moveToCell(view: EditorView, editing: EditingCell, target: { row: number; column: number }): void {
+    pendingTableFocus = { tableFrom: this.table.from, ...target };
+    if (this.commitCell(view, editing)) return;
+    pendingTableFocus = undefined;
+    this.startEditing(view, target.row, target.column);
   }
 
   private commitCell(view: EditorView, editing: EditingCell): boolean {
