@@ -1,0 +1,108 @@
+/* VS Code-specific styling layered on top of @llingshu/loommark-core's own stylesheet. Two kinds
+   of thing live here, neither of which the portable kernel package can own:
+
+   1. A page-level reset. In VS Code's webview, this extension's container fills the entire page,
+      so it's safe to assume ownership of the real <html>/<body> here — the kernel itself must
+      not, since a host embedding it elsewhere (a note app, a wiki) may have other content on the
+      page around it.
+   2. Real overrides keyed on `vscode-light`/`vscode-dark`, classes VS Code itself injects onto
+      the page body to signal the active color theme — not something this extension's own code
+      sets, and not a mechanism the portable kernel has any notion of. Each override redeclares
+      directly on `.loommark-workspace` (the class createLoomMarkEditor adds to its container),
+      not on `body` itself, since CSS custom properties/declarations on a descendant always win
+      over an inherited value from an ancestor regardless of selector specificity — declaring
+      these on `body` alone would be silently shadowed by the kernel's own unconditional base
+      values declared directly on `.loommark-workspace`. */
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+body.vscode-dark .loommark-workspace {
+  --loommark-card-image-surface-alpha: 68%;
+  --loommark-code-surface: #fafafa;
+  --loommark-code-surface-edge: #cfd2d8;
+  --loommark-code-ink: #383a42;
+  --loommark-code-gutter-ink: #9d9d9f;
+  --loommark-code-gutter-edge: #ececed;
+  --loommark-code-selection: #e5e5e6;
+  --loommark-code-titlebar: linear-gradient(#f4f4f5, #e9e9ea);
+  --loommark-code-titlebar-ink: #696c77;
+  --loommark-code-titlebar-gloss: rgb(255 255 255 / 70%);
+  --loommark-code-titlebar-edge: #cfd2d8;
+  --loommark-code-button-edge: #c9cbd0;
+  --loommark-code-button-surface: rgb(255 255 255 / 80%);
+  --loommark-code-shadow: 0 18px 30px -18px rgb(0 0 0 / 65%);
+  --loommark-guide-0: #b9a3f8;
+  --loommark-guide-1: #82aaff;
+  --loommark-guide-2: #67c7ae;
+  --loommark-guide-3: #e2b66d;
+  --loommark-guide-4: #ef8fa4;
+  --loommark-guide-5: #65c7d0;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
+  color: #c678dd;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line .tok-string {
+  color: #98c379;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
+  color: #d19a66;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line .tok-comment {
+  color: #5c6370;
+  font-style: italic;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line :is(.tok-keyword, .tok-operator) {
+  color: #a626a4;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line .tok-string {
+  color: #50a14f;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line :is(.tok-number, .tok-bool) {
+  color: #986801;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor .cm-loommark-code-block-line .tok-comment {
+  color: #a0a1a7;
+  font-style: italic;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor.cm-loommark-code-cursor .cm-cursor {
+  border-left: 2px solid #ffffff;
+}
+
+body.vscode-light .loommark-workspace .loommark-editor-root > .cm-editor.cm-loommark-code-cursor .cm-content {
+  caret-color: #ffffff;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor.cm-loommark-code-cursor .cm-cursor {
+  border-left: 2px solid #000000;
+}
+
+body.vscode-dark .loommark-workspace .loommark-editor-root > .cm-editor.cm-loommark-code-cursor .cm-content {
+  caret-color: #000000;
+}
+
+body.vscode-light .loommark-workspace[data-loommark-theme="crepe"] { background: #fffdfb; color: #1f1b16; }
+
+body.vscode-dark .loommark-workspace[data-loommark-theme="crepe"] { background: #1f1b16; color: #eae1d9; }
+
+body.vscode-light .loommark-workspace[data-loommark-theme="frame"] { background: #fff; color: #000; }
+
+body.vscode-dark .loommark-workspace[data-loommark-theme="frame"] { background: #1a1a1a; color: #e6e6e6; }
+
+body.vscode-light .loommark-workspace[data-loommark-theme="nord"] { background: #fdfcff; color: #1b1c1d; }
+
+body.vscode-dark .loommark-workspace[data-loommark-theme="nord"] { background: #1b1c1d; color: #f8f9ff; }

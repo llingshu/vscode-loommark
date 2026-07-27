@@ -368,9 +368,9 @@ THE SOFTWARE.
 
 --------------------------------------------------------------------------------
 
-@codemirror/lang-markdown@6.5.0
+@codemirror/lang-markdown@6.5.1
 Declared license: MIT
-Source: https://github.com/codemirror/lang-markdown.git
+Source: git+https://code.haverbeke.berlin/codemirror/lang-markdown.git
 
 MIT License
 
@@ -1096,7 +1096,7 @@ THE SOFTWARE.
 
 --------------------------------------------------------------------------------
 
-@lezer/markdown@1.7.1
+@lezer/markdown@1.7.2
 Declared license: MIT
 Source: git+https://code.haverbeke.berlin/lezer/markdown.git
 

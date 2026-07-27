@@ -1,42 +1,21 @@
-export type EditorConfiguration = {
-  syncDelay: number;
-  theme: EditorTheme;
-  outline: OutlineMode;
-  table: TableMode;
-  tableStyle: TableStyle;
-  orderedListStyle: OrderedListStyle;
-  keyboardEditing: boolean;
-  listGuides: boolean;
-  cardMode: CardMode;
-  cardBackgroundColors: string[];
-  cardBorderColors: string[];
-  cardBackgroundStrength: number;
-  cardBorderStrength: number;
-  background: BackgroundConfiguration;
-  cardImage: CardImageConfiguration;
-};
+import type { EditorConfiguration } from '@llingshu/loommark-core/pure';
 
-export type BackgroundConfiguration = {
-  enabled: boolean;
-  imageUri?: string;
-  opacity: number;
-  blur: number;
-  saturation: number;
-  overlay: number;
-  status: 'disabled' | 'loaded' | 'missing' | 'empty' | 'error';
-  detail?: string;
-};
-
-export type CardImageConfiguration = {
-  enabled: boolean;
-  imageUris: string[];
-  opacity: number;
-  blur: number;
-  saturation: number;
-  overlay: number;
-  status: 'disabled' | 'loaded' | 'missing' | 'empty' | 'error';
-  detail?: string;
-};
+// Imports from the /pure subpath, not the bare package — these types and CARD_MODE_ORDER (an
+// actual runtime value, not just a type) have zero CodeMirror/DOM dependency, and this module is
+// shared by both extension.ts (Node.js) and webview/main.ts (browser); resolving through the
+// bare package here would pull the whole CodeMirror-dependent bundle into the Node.js side too.
+export type {
+  BackgroundConfiguration,
+  CardImageConfiguration,
+  CardMode,
+  EditorConfiguration,
+  EditorTheme,
+  OrderedListStyle,
+  OutlineMode,
+  TableMode,
+  TableStyle,
+} from '@llingshu/loommark-core/pure';
+export { CARD_MODE_ORDER } from '@llingshu/loommark-core/pure';
 
 export type HostToWebview =
   | ({ type: 'init'; text: string; revision: number; resourceBase: string; wikiFiles: string[] } & EditorConfiguration)
@@ -45,7 +24,7 @@ export type HostToWebview =
   | { type: 'documentChanged'; text: string; documentRevision: number }
   | { type: 'revealHeading'; ordinal: number }
   | { type: 'wikiFilesChanged'; wikiFiles: string[] }
-  | { type: 'linkOpenResult'; href: string; status: 'received' | 'opened' | 'error'; resolvedUri?: string; error?: string }
+  | { type: 'linkOpenResult'; href: string; status: 'opened' | 'error'; resolvedUri?: string; error?: string }
   | { type: 'requestDiagnostics' }
   | { type: 'imagePasteResult'; requestId: number; relativePath?: string; error?: string };
 
@@ -55,17 +34,6 @@ export type WebviewToHost =
   | { type: 'openLink'; href: string; wiki?: boolean }
   | { type: 'diagnostics'; report: string }
   | { type: 'pasteImage'; requestId: number; data: string; mimeType: string };
-
-export type EditorTheme = 'vscode' | 'crepe' | 'frame' | 'nord';
-export type OutlineMode = 'both' | 'editor' | 'explorer' | 'off';
-export type TableMode = 'rich' | 'source';
-export type TableStyle = 'grid' | 'ruled';
-export type OrderedListStyle = 'decimal' | 'cycle';
-// off: no heading visualization. tint: soft background wash only, no borders. accent: a colored
-// left border bar per level plus a faint tint. card: bordered, independently rounded nested
-// sections drawn with line decorations and boundary widgets.
-export type CardMode = 'off' | 'tint' | 'accent' | 'card';
-export const CARD_MODE_ORDER: readonly CardMode[] = ['off', 'tint', 'accent', 'card'];
 
 export function isWebviewMessage(value: unknown): value is WebviewToHost {
   if (!value || typeof value !== 'object') return false;

@@ -340,11 +340,13 @@
     "build": "node esbuild.mjs --production",
     "licenses": "node scripts/generate-third-party-licenses.mjs",
     "watch": "node esbuild.mjs --watch",
-    "test": "node scripts/build-test-bundle.mjs && node --test test/*.test.mjs",
-    "check": "tsc --noEmit && npm run test",
+    "test": "echo \"No unit tests remain in this package: pure logic moved to @llingshu/loommark-core, which has its own test suite.\"",
+    "check": "tsc --noEmit",
     "package": "npm run clean && npm run check && npm run build && npm run licenses && vsce package --no-dependencies --out artifacts/loommark.vsix",
     "publish:vscode": "vsce publish --packagePath artifacts/loommark.vsix",
-    "publish:openvsx": "ovsx publish artifacts/loommark.vsix"
+    "publish:openvsx": "ovsx publish artifacts/loommark.vsix",
+    "dev:link": "npm link @llingshu/loommark-core",
+    "dev:unlink": "npm unlink @llingshu/loommark-core && npm install"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -357,6 +359,7 @@
     "@codemirror/view": "^6.43.6",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.1",
+    "@llingshu/loommark-core": "^0.1.0",
     "katex": "^0.18.1",
     "mdast-util-from-markdown": "^2.0.3"
   },

@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { markdownOutline, type OutlineNode } from './outline';
+import {
+  extensionForMimeType,
+  markdownHeadings,
+  matchCopyDestination,
+  nestHeadings,
+  nextAvailableFileName,
+  singleSplice,
+  type HeadingTreeNode,
+} from '@llingshu/loommark-core/pure';
 import type { BackgroundConfiguration, CardImageConfiguration, EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
 import { CARD_MODE_ORDER, isWebviewMessage } from './protocol';
-import { singleSplice } from './text';
-import { extensionForMimeType, matchCopyDestination, nextAvailableFileName } from './paste-image';
 
 const viewType = 'loommark.editor';
 
@@ -289,11 +295,11 @@ async function resolvedCardImage(webview: vscode.Webview): Promise<CardImageConf
   return result;
 }
 
-class MarkdownOutlineTree implements vscode.TreeDataProvider<OutlineNode>, vscode.Disposable {
-  private readonly changeEmitter = new vscode.EventEmitter<OutlineNode | undefined>();
+class MarkdownOutlineTree implements vscode.TreeDataProvider<HeadingTreeNode>, vscode.Disposable {
+  private readonly changeEmitter = new vscode.EventEmitter<HeadingTreeNode | undefined>();
   readonly onDidChangeTreeData = this.changeEmitter.event;
   private document: vscode.TextDocument | undefined;
-  private roots: OutlineNode[] = [];
+  private roots: HeadingTreeNode[] = [];
 
   setDocument(document: vscode.TextDocument | undefined): void {
     this.document = document;
@@ -307,7 +313,7 @@ class MarkdownOutlineTree implements vscode.TreeDataProvider<OutlineNode>, vscod
     }
   }
 
-  getTreeItem(node: OutlineNode): vscode.TreeItem {
+  getTreeItem(node: HeadingTreeNode): vscode.TreeItem {
     const item = new vscode.TreeItem(
       node.label,
       node.children.length
@@ -325,7 +331,7 @@ class MarkdownOutlineTree implements vscode.TreeDataProvider<OutlineNode>, vscod
     return item;
   }
 
-  getChildren(node?: OutlineNode): OutlineNode[] {
+  getChildren(node?: HeadingTreeNode): HeadingTreeNode[] {
     return node?.children ?? this.roots;
   }
 
@@ -334,7 +340,7 @@ class MarkdownOutlineTree implements vscode.TreeDataProvider<OutlineNode>, vscod
   }
 
   private refresh(): void {
-    this.roots = this.document ? markdownOutline(this.document.getText()) : [];
+    this.roots = this.document ? nestHeadings(markdownHeadings(this.document.getText())) : [];
     this.changeEmitter.fire(undefined);
   }
 }
@@ -416,7 +422,6 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         return;
       }
       if (raw.type === 'openLink') {
-        await post({ type: 'linkOpenResult', href: raw.href, status: 'received' });
         const result = await openLink(raw.href, document, raw.wiki ?? false);
         await post({ type: 'linkOpenResult', href: raw.href, ...result });
         return;
@@ -552,25 +557,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
   <title>LoomMark</title>
 </head>
 <body>
-  <div id="workspace">
-    <main id="editor" aria-label="Markdown editor"></main>
-    <button id="outline-fab" type="button" title="Show outline" aria-label="Show outline" aria-controls="outline" aria-expanded="false">
-      <span class="outline-fab-icon" aria-hidden="true"><i></i><i></i><i></i></span>
-    </button>
-    <aside id="outline" aria-label="Document outline">
-      <header class="outline-header">
-        <span class="outline-title">Outline</span>
-        <button id="outline-toggle" type="button" title="Hide outline" aria-label="Hide outline" aria-controls="outline" aria-expanded="true">
-          <span class="outline-toggle-icon" aria-hidden="true"></span>
-        </button>
-      </header>
-      <nav class="outline-nav" aria-label="Headings">
-        <ol id="outline-list"></ol>
-        <p id="outline-empty">No headings</p>
-      </nav>
-    </aside>
-  </div>
-  <div id="status" role="status">Loading editor...</div>
+  <div id="loommark-root"></div>
   <script nonce="${nonce}" src="${script}"></script>
 </body>
 </html>`;

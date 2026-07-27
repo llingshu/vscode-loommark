@@ -164,25 +164,7 @@
   </script>
 </head>
 <body>
-  <div id="workspace">
-    <main id="editor" aria-label="Markdown editor"></main>
-    <button id="outline-fab" type="button" title="Show outline" aria-label="Show outline" aria-controls="outline" aria-expanded="false">
-      <span class="outline-fab-icon" aria-hidden="true"><i></i><i></i><i></i></span>
-    </button>
-    <aside id="outline" aria-label="Document outline">
-      <header class="outline-header">
-        <span class="outline-title">Outline</span>
-        <button id="outline-toggle" type="button" title="Hide outline" aria-label="Hide outline" aria-controls="outline" aria-expanded="true">
-          <span class="outline-toggle-icon" aria-hidden="true"></span>
-        </button>
-      </header>
-      <nav class="outline-nav" aria-label="Headings">
-        <ol id="outline-list"></ol>
-        <p id="outline-empty">No headings</p>
-      </nav>
-    </aside>
-  </div>
-  <div id="status" role="status">Loading editor...</div>
+  <div id="loommark-root"></div>
   <script src="../dist/webview.js"></script>
 </body>
 </html>
