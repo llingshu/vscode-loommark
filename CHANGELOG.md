@@ -6,6 +6,8 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-07-26
+
 ### Added
 
 - Arrow keys move between table cells while editing one: Up/Down always move to the cell directly
