@@ -1,0 +1,55 @@
+/* Placeholder margin-indicator styling — a real integration would pull this out into an actual
+   left/right gutter; this first pass renders the arrow inline, right at the edge of the target
+   line's own text. */
+.annotation-arrow {
+  position: relative;
+  display: inline-block;
+  cursor: default;
+  color: var(--vscode-textLink-foreground);
+  font-weight: bold;
+  padding: 0 2px;
+}
+
+.annotation-arrow-left {
+  margin-right: 4px;
+}
+
+.annotation-arrow-right {
+  margin-left: 4px;
+}
+
+.annotation-popup {
+  display: none;
+  position: absolute;
+  top: 100%;
+  z-index: 50;
+  min-width: 200px;
+  max-width: 360px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 18%);
+  padding: 6px 8px;
+  font-family: var(--vscode-font-family);
+  font-size: 13px;
+  white-space: pre-wrap;
+  color: var(--vscode-editor-foreground);
+}
+
+.annotation-arrow-left .annotation-popup {
+  left: 0;
+}
+
+.annotation-arrow-right .annotation-popup {
+  right: 0;
+}
+
+.annotation-arrow.is-open .annotation-popup {
+  display: block;
+}
+
+.annotation-popup-item + .annotation-popup-item {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--vscode-widget-border);
+}

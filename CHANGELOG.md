@@ -6,6 +6,22 @@ All notable changes to LoomMark are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- Experimental margin annotations: a block opened and closed by a line containing only `<<<`
+  attaches a left-margin note to the line (or table/fenced-code/display-math block) directly above
+  it; `>>>` attaches a right-margin note the same way. The block never renders as part of the
+  document and is invisible to every other Markdown construct — list numbering, guide rails,
+  heading sections — not just to its own rendering. Stacking several blocks back to back (either
+  side) all attach to the same original line rather than to each other. A small arrow next to the
+  attached line reveals the note on hover. See the README for the current limitations of this
+  first pass.
+
+The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
+Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of
+the scanners/widgets/decorations directly. No behavior change is expected from this alone; it's
+what makes the annotation feature above possible without forking that logic.
+
 ## [0.4.5] - 2026-07-26
 
 ### Added

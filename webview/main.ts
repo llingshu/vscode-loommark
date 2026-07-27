@@ -1,6 +1,8 @@
 import { createLoomMarkEditor, type LoomMarkEditor } from '@llingshu/loommark-core';
 import '@llingshu/loommark-core/style.css';
 import './vscode-theme.css';
+import './annotation.css';
+import { annotationExtension } from './annotation-extension';
 import type { HostToWebview, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
@@ -51,6 +53,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       onStateChange(state) {
         vscode.setState(state);
       },
+      extensions: [annotationExtension()],
     });
   } else if (message.type === 'configuration') {
     editor?.updateConfiguration(message);
