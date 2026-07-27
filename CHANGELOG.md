@@ -13,9 +13,10 @@ All notable changes to LoomMark are documented here. This project follows
   it; `>>>` attaches a right-margin note the same way. The block never renders as part of the
   document and is invisible to every other Markdown construct — list numbering, guide rails,
   heading sections — not just to its own rendering. Stacking several blocks back to back (either
-  side) all attach to the same original line rather than to each other. A small arrow next to the
-  attached line reveals the note on hover. See the README for the current limitations of this
-  first pass.
+  side) all attach to the same original line rather than to each other. The note stays permanently
+  visible in the margin whenever there's room for it there, falling back to a small hover-revealed
+  arrow otherwise; it's directly editable and deletable without touching the hidden raw source by
+  hand. See the README for the current limitations of this first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of

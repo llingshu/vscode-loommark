@@ -305,14 +305,16 @@ the note's content — can span multiple lines
 ```
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
-guide rails, heading sections, ...) sees it as present at all. A small arrow appears next to the
-attached line; hover it to read the note. Stacking several blocks back to back (either side) all
-attach to the same original line rather than to each other, and a block whose target line belongs
-to a table/fenced-code/display-math construct attaches to the whole thing, not just that one line.
+guide rails, heading sections, ...) sees it as present at all. The note stays permanently visible
+in the margin next to its attached line whenever there's enough room for it there; otherwise it
+collapses to a small arrow, revealed on hover. Click into a note to edit it directly, or use its ×
+to delete it — both take effect immediately, without ever needing to touch the hidden raw
+`<<</>>>` source by hand. Stacking several blocks back to back (either side) all attach to the same
+original line rather than to each other, and a block whose target line belongs to a
+table/fenced-code/display-math construct attaches to the whole thing, not just that one line.
 
-This is a first pass: the arrow always shows as an icon revealed on hover, rather than the note
-appearing inline when there's room for it, and it renders at the edge of the target's own text
-rather than in a dedicated margin/gutter.
+This is still a first pass: it renders at the edge of the target's own text rather than in a
+dedicated CodeMirror gutter, so very long lines can push it around.
 
 ## Search And Replace
 
