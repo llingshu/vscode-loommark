@@ -148,6 +148,58 @@ const PIN_THRESHOLD_PX = 232;
 // snapshot avoids.
 type ColoredAnnotation = { annotation: AnnotationRange; color: string; collapsed: boolean };
 
+// The workspace container (createLoomMarkEditor's own `.loommark-workspace`, position:relative,
+// overflow-y:auto — view.dom's grandparent) is the one element wide enough, and un-indented
+// enough, to anchor a card flush against the true left/right edge regardless of how deeply the
+// target line itself is nested inside a heading Card (which indents via margin-left) or how far
+// into the editing area it sits. Anchoring there also means the card scrolls naturally with the
+// document: position:absolute inside a scrolling positioned ancestor tracks that ancestor's
+// content, it isn't pinned to the viewport.
+function findWorkspaceElement(view: EditorView): HTMLElement | undefined {
+  return view.dom.parentElement?.parentElement ?? undefined;
+}
+
+type CardMeasurement = { card: HTMLElement; top: number | null };
+
+function measureCardPositions(view: EditorView): CardMeasurement[] {
+  const workspaceElement = findWorkspaceElement(view);
+  if (!workspaceElement) return [];
+  const workspaceRect = workspaceElement.getBoundingClientRect();
+  const cards = Array.from(workspaceElement.querySelectorAll<HTMLElement>(':scope > .annotation-card'));
+  return cards.map((card) => {
+    const targetFrom = Number(card.dataset.targetFrom);
+    if (!Number.isFinite(targetFrom)) return { card, top: null };
+    const coords = view.coordsAtPos(targetFrom);
+    return { card, top: coords ? coords.top - workspaceRect.top + workspaceElement.scrollTop : null };
+  });
+}
+
+function applyCardPositions(measurements: CardMeasurement[]): void {
+  for (const { card, top } of measurements) {
+    card.classList.toggle('is-offscreen', top === null);
+    if (top !== null) card.style.top = `${top}px`;
+  }
+}
+
+// Repositions every currently-live annotation card's `top` from scratch via view.coordsAtPos, so a
+// card stays glued to its target line even when something *else* in the document reflows the page
+// (a resize-driven rewrap, an edit above the target shifting later lines down) without this
+// specific widget's own eq() reporting a change (see AnnotationMarginWidget.eq — content/color/
+// collapsed unchanged means CodeMirror reuses the old, now-stale-positioned DOM node as-is).
+// Reads position from each card's own data-target-from attribute rather than closing over any one
+// widget instance, so a single listener (registered once in annotationExtension) can refresh every
+// card regardless of which widget last rebuilt it.
+//
+// Split into measure (read) + apply (write) and run through view.requestMeasure rather than
+// reading view.coordsAtPos directly: called synchronously from inside toDOM, coordsAtPos throws
+// ("Reading the editor layout isn't allowed during an update") since toDOM itself runs mid-update,
+// before this very update's own layout has settled. requestMeasure defers the read to the point
+// CodeMirror considers it safe, and the write to right after — the same phased read/write batching
+// CodeMirror's own built-in panels and tooltips rely on for this exact situation.
+function repositionAnnotationCards(view: EditorView): void {
+  view.requestMeasure({ read: measureCardPositions, write: applyCardPositions });
+}
+
 // The margin indicator: an icon when space is tight, the note card itself (always visible, no
 // hover needed) when there's room — re-measured live via ResizeObserver, since the available
 // margin changes with the window/editor width, not just once at render time. Each note is
@@ -158,16 +210,25 @@ type ColoredAnnotation = { annotation: AnnotationRange; color: string; collapsed
 // the whole widget isn't torn down and rebuilt (losing focus) on every keystroke.
 class AnnotationMarginWidget extends WidgetType {
   private resizeObserver: ResizeObserver | undefined;
+  private card: HTMLElement | undefined;
 
   constructor(
     private readonly side: 'left' | 'right',
     private readonly items: ColoredAnnotation[],
+    // The exact source offset this group's stripe/card is attached to (group.range.from for the
+    // left side, group.range.to for the right — see buildAnnotationDecorations) — carried along so
+    // toDOM can record it on the card for repositionAnnotationCards to read back later, and so eq()
+    // notices when an upstream edit shifts it (annotation.from already has this same
+    // shifts-under-upstream-edits characteristic; targetPos just extends the same comparison to
+    // the position the card itself is anchored to).
+    private readonly targetPos: number,
   ) {
     super();
   }
 
   eq(other: AnnotationMarginWidget): boolean {
     return this.side === other.side
+      && this.targetPos === other.targetPos
       && this.items.length === other.items.length
       && this.items.every(({ annotation, color, collapsed }, index) => (
         annotation.from === other.items[index].annotation.from
@@ -191,8 +252,13 @@ class AnnotationMarginWidget extends WidgetType {
     icon.textContent = this.side === 'left' ? '◂' : '▸';
     icon.setAttribute('aria-hidden', 'true');
 
+    // The card is deliberately NOT appended under wrapper: wrapper stays inline at the target's
+    // own (possibly heading-indented) text position, but the card itself is appended straight onto
+    // the workspace container so its position is independent of that indentation entirely — see
+    // findWorkspaceElement/repositionAnnotationCards above.
     const card = document.createElement('div');
-    card.className = 'annotation-card';
+    card.className = `annotation-card annotation-card-${this.side}`;
+    card.dataset.targetFrom = String(this.targetPos);
     card.setAttribute('aria-label', `${this.items.length} annotation(s)`);
 
     const list = document.createElement('div');
@@ -215,9 +281,27 @@ class AnnotationMarginWidget extends WidgetType {
     });
     card.append(addButton);
 
-    wrapper.append(icon, card);
-    wrapper.addEventListener('mouseenter', () => wrapper.classList.add('is-open'));
-    wrapper.addEventListener('mouseleave', () => wrapper.classList.remove('is-open'));
+    // The icon and the (now-detached) card no longer share a DOM ancestor, so ":hover" can't
+    // bridge them with a plain CSS descendant selector; open/close state is tracked on the card
+    // directly instead, and mouseleave gets a short grace delay so the mouse can travel across the
+    // gap between the inline icon and the edge-pinned card without the card closing mid-transit.
+    let closeTimer: number | undefined;
+    const openCard = () => {
+      window.clearTimeout(closeTimer);
+      card.classList.add('is-open');
+    };
+    const scheduleClose = () => {
+      closeTimer = window.setTimeout(() => card.classList.remove('is-open'), 150);
+    };
+    icon.addEventListener('mouseenter', openCard);
+    icon.addEventListener('mouseleave', scheduleClose);
+    card.addEventListener('mouseenter', openCard);
+    card.addEventListener('mouseleave', scheduleClose);
+
+    wrapper.append(icon);
+    const workspaceElement = findWorkspaceElement(view);
+    (workspaceElement ?? wrapper).append(card);
+    this.card = card;
 
     // The gap that matters is between the text column (createLoomMarkEditor's own
     // .loommark-editor-root, centered and width-capped — view.dom's parent) and the workspace
@@ -230,6 +314,7 @@ class AnnotationMarginWidget extends WidgetType {
       const workspace = textColumn?.parentElement;
       if (!textColumn || !workspace) {
         wrapper.classList.remove('is-pinned');
+        card.classList.remove('is-pinned');
         return;
       }
       const columnRect = textColumn.getBoundingClientRect();
@@ -237,12 +322,17 @@ class AnnotationMarginWidget extends WidgetType {
       const margin = this.side === 'left'
         ? columnRect.left - workspaceRect.left
         : workspaceRect.right - columnRect.right;
-      wrapper.classList.toggle('is-pinned', margin >= PIN_THRESHOLD_PX);
+      const pinned = margin >= PIN_THRESHOLD_PX;
+      wrapper.classList.toggle('is-pinned', pinned);
+      card.classList.toggle('is-pinned', pinned);
     };
     updatePinned();
-    this.resizeObserver = new ResizeObserver(updatePinned);
+    repositionAnnotationCards(view);
+    this.resizeObserver = new ResizeObserver(() => {
+      updatePinned();
+      repositionAnnotationCards(view);
+    });
     this.resizeObserver.observe(view.scrollDOM);
-    const workspaceElement = view.dom.parentElement?.parentElement;
     if (workspaceElement) this.resizeObserver.observe(workspaceElement);
 
     if (pendingFocusAnnotationFrom !== undefined) {
@@ -293,7 +383,7 @@ class AnnotationMarginWidget extends WidgetType {
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'annotation-item-delete';
-    deleteButton.textContent = '×';
+    deleteButton.textContent = '🗑';
     deleteButton.setAttribute('aria-label', 'Delete this annotation');
     deleteButton.addEventListener('mousedown', (event) => {
       // mousedown, not click: fires before the textarea below it would otherwise steal focus.
@@ -332,6 +422,7 @@ class AnnotationMarginWidget extends WidgetType {
 
   destroy(): void {
     this.resizeObserver?.disconnect();
+    this.card?.remove();
   }
 
   ignoreEvent(): boolean {
@@ -386,14 +477,14 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
       const isWholeBlock = state.doc.lineAt(group.range.from).number !== state.doc.lineAt(group.range.to).number;
       if (group.left.length) {
         ranges.push(Decoration.widget({
-          widget: new AnnotationMarginWidget('left', group.left),
+          widget: new AnnotationMarginWidget('left', group.left, group.range.from),
           side: -1,
           block: isWholeBlock,
         }).range(group.range.from));
       }
       if (group.right.length) {
         ranges.push(Decoration.widget({
-          widget: new AnnotationMarginWidget('right', group.right),
+          widget: new AnnotationMarginWidget('right', group.right, group.range.to),
           side: 1,
           block: isWholeBlock,
         }).range(group.range.to));
@@ -416,10 +507,44 @@ const annotationField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+// Typing the 3rd `<` (or `>`) of a delimiter line auto-closes it immediately, the same way
+// loommark-core's own completeBlockDelimiters does for code fences/math. Without this, a bare
+// `<<<` typed anywhere with no matching close left "open" until the next `<<<`/`>>>` line
+// anywhere later in the document, however far away — which silently swallows every real paragraph
+// in between into the hidden block, with no visible sign anything went wrong (the content doesn't
+// look deleted, it just isn't there — see annotationRanges' fence-matching in loommark-core).
+// Auto-closing on the same keystroke that completes the opener means a bare, unclosed `<<<`
+// essentially can't happen through normal typing in the first place.
+const completeAnnotationDelimiters = EditorView.inputHandler.of((view, from, to, text) => {
+  if (from !== to || text.length !== 1 || (text !== '<' && text !== '>')) return false;
+  const line = view.state.doc.lineAt(from);
+  if (view.state.doc.sliceString(from, line.to).trim() !== '') return false;
+  const before = view.state.doc.sliceString(line.from, from);
+  const indent = before.match(/^ {0,3}/)?.[0] ?? '';
+  if (before !== `${indent}${text}${text}`) return false;
+
+  view.dispatch({
+    changes: { from, to, insert: `${text}\n\n${indent}${text}${text}${text}` },
+    selection: { anchor: from + 1 },
+    userEvent: 'input.type',
+  });
+  return true;
+});
+
+// Keeps every annotation card glued to its target line across reflows that don't touch this
+// widget's own eq() (see AnnotationMarginWidget.eq/repositionAnnotationCards above) — a
+// window/panel resize that rewraps a long line, or an edit above the target that pushes it down,
+// without changing this annotation's own content/color/collapsed state.
+const repositionOnGeometryChange = EditorView.updateListener.of((update) => {
+  if (update.geometryChanged || update.docChanged) repositionAnnotationCards(update.view);
+});
+
 export function annotationExtension(): Extension {
   return [
     annotationsVisibleField,
     annotationField,
+    repositionOnGeometryChange,
+    completeAnnotationDelimiters,
     keymap.of([
       {
         key: 'Mod-Shift-a',

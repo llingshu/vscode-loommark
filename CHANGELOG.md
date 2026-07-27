@@ -13,13 +13,17 @@ All notable changes to LoomMark are documented here. This project follows
   item's own shift+enter continuation) directly above it; `>>>` attaches a right-margin note the
   same way. The block never renders as part of the document and is invisible to every other
   Markdown construct — list numbering, guide rails, heading sections — not just to its own
-  rendering. Stacking several blocks back to back (either side) all attach to the same original
-  line rather than to each other. A color-coded accent stripe links the attached content to its
-  same-colored note in the margin, Word/PDF-annotator style. The note stays permanently visible in
-  the margin whenever there's room for it there, falling back to a small hover-revealed arrow
-  otherwise; each note can be individually collapsed, edited directly, or deleted, and a card's
-  "+ Add note" attaches another note to the same point — none of it ever needs touching the hidden
-  raw source by hand. See the README for the current limitations of this first pass.
+  rendering. Typing a 3rd `<` or `>` on an empty line auto-closes the block immediately, so a bare
+  opener can never accidentally run on and swallow real content up to the next `<<<`/`>>>` line
+  anywhere later in the document. Stacking several blocks back to back (either side) all attach to
+  the same original line rather than to each other. A color-coded accent stripe links the attached
+  content to its same-colored note, which renders pinned flush to the true left/right edge of the
+  editor — outside the editing area and unaffected by heading Card mode's own indentation — the
+  same way whenever there's room for it there, falling back to a small hover-revealed arrow
+  otherwise; each note can be individually collapsed, edited directly, or deleted (a trash-can
+  button, not a close "×"), and a card's "+ Add note" attaches another note to the same point —
+  none of it ever needs touching the hidden raw source by hand. See the README for the current
+  limitations of this first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of

@@ -304,29 +304,36 @@ the note's content — can span multiple lines
 <<<
 ```
 
+Typing the 3rd `<` (or `>`) of a delimiter line on an otherwise-empty line auto-closes the block
+immediately, the same way a code fence or `$$` block auto-closes — a bare, unclosed opener can't
+run on and silently swallow every real paragraph up to the next `<<<`/`>>>` line later in the
+document.
+
 The block never renders as part of the document — no other Markdown construct (list numbering,
 guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a
-thin color-coded accent stripe, matched to the same-colored note in the margin next to it — the
-same visual link Word/Google Docs comments and PDF annotation tools use, so it's clear which note
-belongs to which content even with several on screen at once. The note stays permanently visible
-in the margin whenever there's enough room for it there; otherwise it collapses to a small arrow,
-revealed on hover. Each note can be individually collapsed to a one-line preview, edited directly,
-or deleted with its own ×, and a card's "+ Add note" appends another note to the same attachment
-point — none of this ever needs touching the hidden raw `<<</>>>` source by hand. Stacking several
-blocks back to back (either side, or via "+ Add note") all attach to the same original line rather
-than to each other, and a block whose target line belongs to a table/fenced-code/display-math
-construct or a list item's own shift+enter continuation attaches to the whole thing, not just one
-line of it.
+thin color-coded accent stripe, matched to the same-colored note next to it — the same visual link
+Word/Google Docs comments and PDF annotation tools use, so it's clear which note belongs to which
+content even with several on screen at once. The note itself renders pinned flush to the true
+left/right edge of the editor — outside the editing area entirely, and unaffected by heading Card
+mode's own indentation, so notes on deeply nested headings still line up with everything else on
+the same side — whenever there's enough room for it there; otherwise it collapses to a small
+arrow, revealed on hover. Each note can be individually collapsed to a one-line preview, edited
+directly, or deleted with its own trash-can button, and a card's "+ Add note" appends another note
+to the same attachment point — none of this ever needs touching the hidden raw `<<</>>>` source by
+hand. Stacking several blocks back to back (either side, or via "+ Add note") all attach to the
+same original line rather than to each other, and a block whose target line belongs to a
+table/fenced-code/display-math construct or a list item's own shift+enter continuation attaches to
+the whole thing, not just one line of it.
 
 This is still a first pass:
 
-- It renders at the edge of the target's own text rather than in a dedicated CodeMirror gutter, so
-  very long lines can push it around.
 - The color-coded stripe doesn't currently reach a table/fenced-code/display-math target — those
   render as a widget that replaces their own source lines entirely, leaving nothing left to color;
   the note itself still attaches and works normally there, just without the connecting stripe.
 - Colors are assigned by each annotation's position among all annotations in the document, so
   adding or removing one earlier in the document can shift the colors of unrelated ones after it.
+- Several notes anchored close together on the same side can visually overlap — there's no
+  collision-avoidance layout yet to space them apart.
 
 ## Search And Replace
 

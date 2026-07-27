@@ -1,8 +1,11 @@
-/* Placeholder margin-indicator styling — a real integration would pull this out into an actual
-   left/right gutter; this first pass anchors the card to the edge of the target's own text
-   instead, extending outward into the margin (not below it), and either stays permanently visible
-   there (.is-pinned, set by AnnotationMarginWidget once it measures enough room) or collapses to
-   just the small arrow icon, revealed on hover, when the margin is too narrow.
+/* .annotation-marker is a small inline indicator that stays right at the target's own (possibly
+   heading-indented) text position — that's fine, it's just a tiny arrow. The actual .annotation-card
+   is deliberately NOT a child of the marker: AnnotationMarginWidget.toDOM appends it straight onto
+   `.loommark-workspace` instead (position:relative, overflow-y:auto — see loommark-core's
+   style.css), so it can sit flush against the true left/right edge of the whole editor, outside any
+   heading Card's own border/indentation, consistently aligned across every annotation on that side,
+   regardless of how deeply its target line is nested. Its `top` is computed in JS (see
+   repositionAnnotationCards) via view.coordsAtPos, not by CSS.
 
    .cm-loommark-annotation-target has no rules of its own here — its whole visual effect (a thin
    color stripe per attached annotation) comes from the inline background-image/position/size
@@ -53,17 +56,24 @@
   font-size: 0.85em;
 }
 
-.annotation-marker-left .annotation-card {
-  right: calc(100% + 8px);
+.annotation-card-left {
+  left: 6px;
 }
 
-.annotation-marker-right .annotation-card {
-  left: calc(100% + 8px);
+.annotation-card-right {
+  right: 6px;
 }
 
-.annotation-marker.is-open .annotation-card,
-.annotation-marker.is-pinned .annotation-card {
+.annotation-card.is-open,
+.annotation-card.is-pinned {
   display: block;
+}
+
+/* Target line scrolled out of the viewport CodeMirror currently measures — coordsAtPos has
+   nothing to report, so the last known `top` would be stale rather than absent. Hiding it beats
+   leaving a card frozen at a wrong position until it scrolls back into range. */
+.annotation-card.is-offscreen {
+  display: none;
 }
 
 .annotation-card-list {
