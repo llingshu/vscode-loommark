@@ -2,7 +2,14 @@
    left/right gutter; this first pass anchors the card to the edge of the target's own text
    instead, extending outward into the margin (not below it), and either stays permanently visible
    there (.is-pinned, set by AnnotationMarginWidget once it measures enough room) or collapses to
-   just the small arrow icon, revealed on hover, when the margin is too narrow. */
+   just the small arrow icon, revealed on hover, when the margin is too narrow.
+
+   .cm-loommark-annotation-target has no rules of its own here — its whole visual effect (a thin
+   color stripe per attached annotation) comes from the inline background-image/position/size
+   AnnotationMarginWidget's addTargetStripeDecorations sets directly, one per annotation color, the
+   same multi-layer-gradient technique buildHeadingCardDecorations already uses for nested Card
+   accents. The class exists only so a future rule (or a user stylesheet) has something to select. */
+
 .annotation-marker {
   position: relative;
   display: inline-block;
@@ -12,9 +19,9 @@
 .annotation-icon {
   display: inline-block;
   cursor: default;
-  color: var(--vscode-textLink-foreground);
+  color: var(--annotation-accent, var(--vscode-textLink-foreground));
   font-size: 0.85em;
-  opacity: 0.65;
+  opacity: 0.7;
   padding: 0 3px;
   transition: opacity 0.12s ease;
 }
@@ -33,25 +40,25 @@
   position: absolute;
   top: 0;
   z-index: 40;
-  width: 220px;
-  max-height: 320px;
+  width: 230px;
+  max-height: 340px;
   overflow-y: auto;
   background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
   color: var(--vscode-editor-foreground);
   border: 1px solid var(--vscode-widget-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
-  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 22%);
+  padding: 5px;
   font-family: var(--vscode-font-family);
   font-size: 0.85em;
 }
 
 .annotation-marker-left .annotation-card {
-  right: calc(100% + 6px);
+  right: calc(100% + 8px);
 }
 
 .annotation-marker-right .annotation-card {
-  left: calc(100% + 6px);
+  left: calc(100% + 8px);
 }
 
 .annotation-marker.is-open .annotation-card,
@@ -59,23 +66,93 @@
   display: block;
 }
 
-.annotation-item {
+.annotation-card-list {
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  border-radius: 4px;
-  padding: 2px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.annotation-item + .annotation-item {
-  margin-top: 3px;
-  padding-top: 7px;
-  border-top: 1px solid var(--vscode-widget-border);
+.annotation-item {
+  border-radius: 6px;
+  border-left: 3px solid var(--annotation-item-color, var(--vscode-textLink-foreground));
+  background: color-mix(in srgb, var(--annotation-item-color, var(--vscode-textLink-foreground)) 7%, transparent);
+  padding: 4px 6px;
+}
+
+.annotation-item-header {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.annotation-item-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--annotation-item-color, var(--vscode-textLink-foreground));
+}
+
+.annotation-item-collapse {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 4px;
+}
+
+.annotation-item-preview {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.annotation-item.is-collapsed .annotation-item-preview {
+  display: block;
+}
+
+.annotation-item.is-collapsed .annotation-item-text {
+  display: none;
+}
+
+.annotation-item-spacer {
+  flex: 1;
+}
+
+.annotation-item.is-collapsed .annotation-item-spacer {
+  flex: none;
+}
+
+.annotation-item-delete {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 3px;
+}
+
+.annotation-item-delete:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgb(128 128 128 / 15%));
+  color: var(--vscode-errorForeground, #e51400);
 }
 
 .annotation-item-text {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
   resize: vertical;
   border: 1px solid transparent;
   border-radius: 3px;
@@ -97,19 +174,23 @@
   outline: none;
 }
 
-.annotation-item-delete {
-  flex: none;
-  border: none;
+.annotation-card-add {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px dashed var(--vscode-widget-border);
+  border-radius: 5px;
   background: transparent;
   color: var(--vscode-descriptionForeground);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 3px 5px;
-  border-radius: 3px;
+  font: inherit;
+  font-size: 0.9em;
+  padding: 4px 6px;
+  text-align: center;
 }
 
-.annotation-item-delete:hover {
-  background: var(--vscode-toolbar-hoverBackground, rgb(128 128 128 / 15%));
-  color: var(--vscode-errorForeground, #e51400);
+.annotation-card-add:hover {
+  border-color: var(--vscode-focusBorder);
+  color: var(--vscode-textLink-foreground);
+  background: var(--vscode-toolbar-hoverBackground, rgb(128 128 128 / 8%));
 }

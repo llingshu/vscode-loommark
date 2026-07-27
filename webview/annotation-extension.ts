@@ -13,10 +13,15 @@ import {
 } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from '@codemirror/view';
 
-// Toggles whether arrow indicators render at all. The underlying annotation source stays hidden
-// either way — this only controls the "always shown" arrow itself, matching "正常会一直显示（除非
-// 关闭显示）": turning it off hides the arrows, not the invisibility of the annotation blocks.
+// Toggles whether annotation markers render at all. The underlying annotation source stays
+// hidden either way — this only controls the "always shown" markers themselves.
 export const toggleAnnotationsVisible = StateEffect.define<void>();
+
+// A pure "recompute the decorations" signal, for state this StateField's own build function reads
+// but that doesn't live in the document text or in annotationsVisibleField — right now just
+// collapsedAnnotations (a plain module-level Set, not CodeMirror state of its own, the same way
+// TableWidget's pendingTableFocus isn't either).
+const refreshAnnotations = StateEffect.define<void>();
 
 const annotationsVisibleField = StateField.define<boolean>({
   create: () => true,
@@ -27,6 +32,26 @@ const annotationsVisibleField = StateField.define<boolean>({
     return value;
   },
 });
+
+// Same palette loommark.cardBackgroundColors/cardBorderColors ship with, reused here so an
+// annotation's color and a heading Card's accent read as the same visual language rather than two
+// unrelated color systems. Assigned by each annotation's position among all annotations in the
+// document (see colorForAnnotation) — stable as long as nothing *before* it is added or removed,
+// same caveat editor.ts's own per-level card colors have.
+const COLOR_PALETTE = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
+
+function colorForAnnotation(allAnnotations: AnnotationRange[], annotation: AnnotationRange): string {
+  const index = allAnnotations.indexOf(annotation);
+  return COLOR_PALETTE[(index < 0 ? 0 : index) % COLOR_PALETTE.length];
+}
+
+// Persisted across widget rebuilds (which happen on every edit — see annotationField below) by
+// keying on the annotation's own source offset, the same "identify a not-yet-recomputed thing by
+// where it used to be" approach TableWidget's pendingTableFocus already relies on elsewhere in
+// this kernel. Not robust to an edit shifting offsets *before* the annotation in question — an
+// acceptable, clearly-scoped limitation for a first pass, not a hidden one.
+const collapsedAnnotations = new Set<number>();
+let pendingFocusAnnotationFrom: number | undefined;
 
 // Completely hides an annotation block's own source — its delimiter lines and content alike —
 // the same way a table/image/math widget replaces its source with a widget, just with nothing to
@@ -53,41 +78,113 @@ class HiddenWidget extends WidgetType {
   }
 }
 
-// Below this many pixels of margin (the gap between the editor's own text column and the edge of
-// its scroller) on the widget's side, there isn't room to lay the card out permanently — it falls
-// back to an icon revealed on hover instead. Comfortably fits the card's own width (see .annotation-card
-// in annotation.css) plus the gap CSS places between it and the text column.
+const BAR_WIDTH = 3;
+const BAR_GAP = 1;
+
+// One thin color stripe per annotation attached from this side, stacked outward from the text
+// (closest to the text = first/oldest annotation) — the same multi-layer background-image/
+// position/size list technique buildHeadingCardDecorations already uses for nested Card accents,
+// reused here instead of inventing a second one.
+function stripeLayers(colors: string[], side: 'left' | 'right'): { images: string[]; positions: string[]; sizes: string[] } {
+  const images: string[] = [];
+  const positions: string[] = [];
+  const sizes: string[] = [];
+  colors.forEach((color, index) => {
+    const offset = index * (BAR_WIDTH + BAR_GAP);
+    images.push(`linear-gradient(${color}, ${color})`);
+    positions.push(side === 'left' ? `${offset}px 0` : `calc(100% - ${offset + BAR_WIDTH}px) 0`);
+    sizes.push(`${BAR_WIDTH}px 100%`);
+  });
+  return { images, positions, sizes };
+}
+
+// Colors every line of a target's span (its own line, or every line of a whole table/code/math/
+// compound-list-item block) with a thin accent stripe per attached annotation — the color-matched
+// "highlight" half of the Word/PDF-annotator pattern this is modeled on, standing in for a real
+// text highlight (simpler to get right across every target shape: a single line, a multi-line
+// block, a list item's own shift+enter continuation — see loommark-core's resolveAnnotationTarget/
+// listItemCompoundRange) than literally highlighting a run of inline text would be.
+function addTargetStripeDecorations(
+  ranges: Range<Decoration>[],
+  state: EditorState,
+  target: SourceRange,
+  leftColors: string[],
+  rightColors: string[],
+): void {
+  if (!leftColors.length && !rightColors.length) return;
+  const left = stripeLayers(leftColors, 'left');
+  const right = stripeLayers(rightColors, 'right');
+  const images = [...left.images, ...right.images];
+  const positions = [...left.positions, ...right.positions];
+  const sizes = [...left.sizes, ...right.sizes];
+  const style = [
+    `background-image: ${images.join(', ')}`,
+    `background-position: ${positions.join(', ')}`,
+    `background-size: ${sizes.join(', ')}`,
+    'background-repeat: no-repeat',
+  ].join('; ');
+
+  const startLine = state.doc.lineAt(target.from).number;
+  const endLine = state.doc.lineAt(target.to).number;
+  for (let lineNumber = startLine; lineNumber <= endLine; lineNumber++) {
+    const line = state.doc.line(lineNumber);
+    ranges.push(Decoration.line({
+      attributes: { class: 'cm-loommark-annotation-target', style },
+    }).range(line.from));
+  }
+}
+
+// Below this many pixels of margin (the gap between the editor's centered text column and the
+// workspace container around it) on the widget's side, there isn't room to lay the card out
+// permanently — it falls back to an icon revealed on hover instead. Comfortably fits the card's
+// own width (see .annotation-card in annotation.css) plus the gap CSS places around it.
 const PIN_THRESHOLD_PX = 232;
+
+// `collapsed` is captured once, when this is built in buildAnnotationDecorations — not read live
+// from collapsedAnnotations at comparison time. eq() below needs to tell "was this annotation
+// collapsed when the *previous* widget was constructed" apart from "is it collapsed *now*"; since
+// collapsedAnnotations is one shared Set, querying it live at eq() time would just compare the
+// same current value against itself and always report no change, which is exactly the bug this
+// snapshot avoids.
+type ColoredAnnotation = { annotation: AnnotationRange; color: string; collapsed: boolean };
 
 // The margin indicator: an icon when space is tight, the note card itself (always visible, no
 // hover needed) when there's room — re-measured live via ResizeObserver, since the available
 // margin changes with the window/editor width, not just once at render time. Each note is
 // directly editable (a <textarea>, not contentEditable — content can be genuinely multi-line, and
 // getting a clean, unambiguous string with real "\n"s back out of a multi-line contentEditable
-// region is inconsistent across browsers in a way a textarea's own .value never is) and has its
-// own delete control; edits commit on blur, matching how table cells already commit in this
-// editor, so the whole widget isn't torn down and rebuilt (losing focus) on every keystroke.
+// region is inconsistent across browsers in a way a textarea's own .value never is), collapsible,
+// and deletable; edits commit on blur, matching how table cells already commit in this editor, so
+// the whole widget isn't torn down and rebuilt (losing focus) on every keystroke.
 class AnnotationMarginWidget extends WidgetType {
   private resizeObserver: ResizeObserver | undefined;
 
   constructor(
     private readonly side: 'left' | 'right',
-    private readonly annotations: AnnotationRange[],
+    private readonly items: ColoredAnnotation[],
   ) {
     super();
   }
 
   eq(other: AnnotationMarginWidget): boolean {
     return this.side === other.side
-      && this.annotations.length === other.annotations.length
-      && this.annotations.every((annotation, index) => (
-        annotation.from === other.annotations[index].from && annotation.text === other.annotations[index].text
+      && this.items.length === other.items.length
+      && this.items.every(({ annotation, color, collapsed }, index) => (
+        annotation.from === other.items[index].annotation.from
+        && annotation.text === other.items[index].annotation.text
+        && color === other.items[index].color
+        // collapsed is a snapshot taken when each widget was built (see buildAnnotationDecorations),
+        // not a live read of the shared collapsedAnnotations Set here — comparing a live read
+        // against itself would trivially always match, since both sides would be querying the
+        // exact same current Set state at the same key, never detecting that it just changed.
+        && collapsed === other.items[index].collapsed
       ));
   }
 
   toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement('span');
     wrapper.className = `annotation-marker annotation-marker-${this.side}`;
+    wrapper.style.setProperty('--annotation-accent', this.items[0]?.color ?? COLOR_PALETTE[0]);
 
     const icon = document.createElement('span');
     icon.className = 'annotation-icon';
@@ -96,8 +193,27 @@ class AnnotationMarginWidget extends WidgetType {
 
     const card = document.createElement('div');
     card.className = 'annotation-card';
-    card.setAttribute('aria-label', `${this.annotations.length} annotation(s)`);
-    for (const annotation of this.annotations) card.append(this.renderItem(view, annotation));
+    card.setAttribute('aria-label', `${this.items.length} annotation(s)`);
+
+    const list = document.createElement('div');
+    list.className = 'annotation-card-list';
+    for (const { annotation, color, collapsed } of this.items) list.append(this.renderItem(view, annotation, color, collapsed));
+    card.append(list);
+
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'annotation-card-add';
+    addButton.textContent = '+ Add note';
+    addButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      const last = this.items[this.items.length - 1].annotation;
+      const marker = this.side === 'left' ? '<<<' : '>>>';
+      const insertAt = last.to + 1;
+      const insertText = `${marker}\n\n${marker}\n`;
+      pendingFocusAnnotationFrom = insertAt;
+      view.dispatch({ changes: { from: insertAt, insert: insertText } });
+    });
+    card.append(addButton);
 
     wrapper.append(icon, card);
     wrapper.addEventListener('mouseenter', () => wrapper.classList.add('is-open'));
@@ -129,12 +245,66 @@ class AnnotationMarginWidget extends WidgetType {
     const workspaceElement = view.dom.parentElement?.parentElement;
     if (workspaceElement) this.resizeObserver.observe(workspaceElement);
 
+    if (pendingFocusAnnotationFrom !== undefined) {
+      const focusFrom = pendingFocusAnnotationFrom;
+      const textarea = list.querySelector<HTMLTextAreaElement>(`[data-annotation-from="${focusFrom}"] .annotation-item-text`);
+      if (textarea) {
+        pendingFocusAnnotationFrom = undefined;
+        window.setTimeout(() => textarea.focus(), 0);
+      }
+    }
+
     return wrapper;
   }
 
-  private renderItem(view: EditorView, annotation: AnnotationRange): HTMLElement {
+  private renderItem(view: EditorView, annotation: AnnotationRange, color: string, collapsed: boolean): HTMLElement {
     const item = document.createElement('div');
     item.className = 'annotation-item';
+    item.dataset.annotationFrom = String(annotation.from);
+    item.style.setProperty('--annotation-item-color', color);
+    item.classList.toggle('is-collapsed', collapsed);
+
+    const header = document.createElement('div');
+    header.className = 'annotation-item-header';
+
+    const swatch = document.createElement('span');
+    swatch.className = 'annotation-item-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+
+    const collapseButton = document.createElement('button');
+    collapseButton.type = 'button';
+    collapseButton.className = 'annotation-item-collapse';
+    collapseButton.textContent = collapsed ? '▸' : '▾';
+    collapseButton.setAttribute('aria-label', collapsed ? 'Expand this annotation' : 'Collapse this annotation');
+    collapseButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      if (collapsedAnnotations.has(annotation.from)) collapsedAnnotations.delete(annotation.from);
+      else collapsedAnnotations.add(annotation.from);
+      view.dispatch({ effects: refreshAnnotations.of() });
+    });
+
+    const preview = document.createElement('span');
+    preview.className = 'annotation-item-preview';
+    preview.textContent = annotation.text.split('\n')[0] || '(empty)';
+
+    const spacer = document.createElement('span');
+    spacer.className = 'annotation-item-spacer';
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'annotation-item-delete';
+    deleteButton.textContent = '×';
+    deleteButton.setAttribute('aria-label', 'Delete this annotation');
+    deleteButton.addEventListener('mousedown', (event) => {
+      // mousedown, not click: fires before the textarea below it would otherwise steal focus.
+      event.preventDefault();
+      collapsedAnnotations.delete(annotation.from);
+      const to = Math.min(annotation.to + 1, view.state.doc.length);
+      view.dispatch({ changes: { from: annotation.from, to, insert: '' } });
+    });
+
+    header.append(swatch, collapseButton, preview, spacer, deleteButton);
+    item.append(header);
 
     const textarea = document.createElement('textarea');
     textarea.className = 'annotation-item-text';
@@ -155,20 +325,8 @@ class AnnotationMarginWidget extends WidgetType {
       // seeing keystrokes typed into this plain textarea.
       event.stopPropagation();
     });
+    item.append(textarea);
 
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'annotation-item-delete';
-    deleteButton.textContent = '×';
-    deleteButton.setAttribute('aria-label', 'Delete this annotation');
-    deleteButton.addEventListener('mousedown', (event) => {
-      // mousedown, not click: fires before the textarea below it would otherwise steal focus.
-      event.preventDefault();
-      const to = Math.min(annotation.to + 1, view.state.doc.length);
-      view.dispatch({ changes: { from: annotation.from, to, insert: '' } });
-    });
-
-    item.append(textarea, deleteButton);
     return item;
   }
 
@@ -181,7 +339,7 @@ class AnnotationMarginWidget extends WidgetType {
   }
 }
 
-type TargetGroup = { range: SourceRange; left: AnnotationRange[]; right: AnnotationRange[] };
+type TargetGroup = { range: SourceRange; left: ColoredAnnotation[]; right: ColoredAnnotation[] };
 
 function buildAnnotationDecorations(state: EditorState): DecorationSet {
   const source = state.doc.toString();
@@ -204,15 +362,27 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
         group = { range: target, left: [], right: [] };
         groups.set(key, group);
       }
-      group[annotation.side].push(annotation);
+      group[annotation.side].push({
+        annotation,
+        color: colorForAnnotation(annotations, annotation),
+        collapsed: collapsedAnnotations.has(annotation.from),
+      });
     }
     for (const group of groups.values()) {
-      // A whole-block target (a table/fenced-code/display-math block, spanning more than one
-      // line) is itself rendered as a block-level replace decoration by loommark-core's own
-      // fields — a plain inline point widget positioned at that exact boundary gets swallowed
-      // by it rather than rendering alongside it. Marking this widget block:true too gives it
-      // its own slot instead of competing for the same one; a single-line target doesn't have
-      // that conflict; and inline positioning (visually attached to the line's own text).
+      addTargetStripeDecorations(
+        ranges,
+        state,
+        group.range,
+        group.left.map((entry) => entry.color),
+        group.right.map((entry) => entry.color),
+      );
+      // A whole-block target (a table/fenced-code/display-math/compound-list-item block,
+      // spanning more than one line) is itself rendered as a block-level replace decoration by
+      // loommark-core's own fields — a plain inline point widget positioned at that exact
+      // boundary gets swallowed by it rather than rendering alongside it. Marking this widget
+      // block:true too gives it its own slot instead of competing for the same one; a
+      // single-line target doesn't have that conflict, and inline positioning (visually
+      // attached to the line's own text) reads better there anyway.
       const isWholeBlock = state.doc.lineAt(group.range.from).number !== state.doc.lineAt(group.range.to).number;
       if (group.left.length) {
         ranges.push(Decoration.widget({
@@ -237,7 +407,8 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
 const annotationField = StateField.define<DecorationSet>({
   create: buildAnnotationDecorations,
   update(value, transaction) {
-    if (transaction.docChanged || transaction.effects.some((effect) => effect.is(toggleAnnotationsVisible))) {
+    if (transaction.docChanged
+      || transaction.effects.some((effect) => effect.is(toggleAnnotationsVisible) || effect.is(refreshAnnotations))) {
       return buildAnnotationDecorations(transaction.state);
     }
     return value.map(transaction.changes);

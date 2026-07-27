@@ -35,5 +35,5 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-/image.png
+/image*.png
 /@eaDir/

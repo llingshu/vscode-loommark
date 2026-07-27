@@ -305,16 +305,28 @@ the note's content — can span multiple lines
 ```
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
-guide rails, heading sections, ...) sees it as present at all. The note stays permanently visible
-in the margin next to its attached line whenever there's enough room for it there; otherwise it
-collapses to a small arrow, revealed on hover. Click into a note to edit it directly, or use its ×
-to delete it — both take effect immediately, without ever needing to touch the hidden raw
-`<<</>>>` source by hand. Stacking several blocks back to back (either side) all attach to the same
-original line rather than to each other, and a block whose target line belongs to a
-table/fenced-code/display-math construct attaches to the whole thing, not just that one line.
+guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a
+thin color-coded accent stripe, matched to the same-colored note in the margin next to it — the
+same visual link Word/Google Docs comments and PDF annotation tools use, so it's clear which note
+belongs to which content even with several on screen at once. The note stays permanently visible
+in the margin whenever there's enough room for it there; otherwise it collapses to a small arrow,
+revealed on hover. Each note can be individually collapsed to a one-line preview, edited directly,
+or deleted with its own ×, and a card's "+ Add note" appends another note to the same attachment
+point — none of this ever needs touching the hidden raw `<<</>>>` source by hand. Stacking several
+blocks back to back (either side, or via "+ Add note") all attach to the same original line rather
+than to each other, and a block whose target line belongs to a table/fenced-code/display-math
+construct or a list item's own shift+enter continuation attaches to the whole thing, not just one
+line of it.
 
-This is still a first pass: it renders at the edge of the target's own text rather than in a
-dedicated CodeMirror gutter, so very long lines can push it around.
+This is still a first pass:
+
+- It renders at the edge of the target's own text rather than in a dedicated CodeMirror gutter, so
+  very long lines can push it around.
+- The color-coded stripe doesn't currently reach a table/fenced-code/display-math target — those
+  render as a widget that replaces their own source lines entirely, leaving nothing left to color;
+  the note itself still attaches and works normally there, just without the connecting stripe.
+- Colors are assigned by each annotation's position among all annotations in the document, so
+  adding or removing one earlier in the document can shift the colors of unrelated ones after it.
 
 ## Search And Replace
 
