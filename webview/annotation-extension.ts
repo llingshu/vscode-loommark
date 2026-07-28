@@ -157,9 +157,16 @@ const CARD_WIDTH = 230;
 const CARD_EDGE_GAP = 6;
 // The vertical rail's minimum clearance from its own stripe bar's edge (so the two don't draw on
 // top of each other — see the lane-assignment comment in measureGroupLayout below) and the extra
-// step between two rails that would otherwise overlap in time.
-const CONNECTOR_CLEARANCE = 4;
-const CONNECTOR_LANE_GAP = 6;
+// step between two rails that would otherwise overlap in time. Deliberately tight — just enough
+// to keep two overlapping connectors from drawing on top of each other (LANE_GAP alone must stay
+// >= the connector's own CSS width, currently 4px, or adjacent lanes would still overlap by the
+// difference) — not a wide, clearly-separated lane each. Connectors that aren't simultaneously in
+// flight share the same lane and the same rail x regardless of how many total lanes exist, so most
+// of a connector's own length still runs right alongside its neighbors as one tight bundle, only
+// spreading apart momentarily wherever several really are overlapping at once — the same "trunk
+// that thins as each branch peels off" reference the user asked for, not permanently-parallel rails.
+const CONNECTOR_CLEARANCE = 3;
+const CONNECTOR_LANE_GAP = 5;
 
 type ConnectorGeometry = {
   hLeft: number; hTop: number; hWidth: number;
