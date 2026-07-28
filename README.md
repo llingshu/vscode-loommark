@@ -307,7 +307,7 @@ the note's content — can span multiple lines
 Typing the 3rd `<` (or `>`) of a delimiter line on an otherwise-empty line auto-closes the block
 immediately, the same way a code fence or `$$` block auto-closes — a bare, unclosed opener can't
 run on and silently swallow every real paragraph up to the next `<<<`/`>>>` line later in the
-document. `Ctrl/Cmd+Alt+Left`/`Ctrl/Cmd+Alt+Right` wrap the line the cursor is on in a fresh
+document. `Ctrl/Cmd+Shift+Left`/`Ctrl/Cmd+Shift+Right` wrap the line the cursor is on in a fresh
 left-/right-margin note and focus it directly, without needing to type the fence by hand — the
 arrow you press is the side you get; `Ctrl/Cmd+Shift+A` toggles whether annotations render at all.
 
@@ -340,13 +340,18 @@ the whole thing, not just one line of it.
 A note only gets a connector — a short, color-matched line back to its stripe — when it actually
 needed to be displaced from its own natural row to avoid overlapping another card; several notes
 sharing one target inevitably need this (they can't all sit at an identical position), but a lone
-note usually won't draw one at all. The connector's rail sits at the note's own stripe position
+note usually won't draw one at all. The connector's rail sits near the note's own stripe position
 (near the text) rather than the card's edge, since the card's position can shift (resizing, pinning)
-in ways the stripe never does — several of these together read as a fan of color flowing down from
-the stack of stripes, each one further from the edge naturally having to travel further out to clear
-the ones ahead of it. Notes anchored close together on the same side never overlap: they pack top to
-bottom in document order, each pushed down only as far as clearing the previous one requires — the
-same margin-comment stacking Word and Google Docs use.
+in ways the stripe never does, clearing the stripe's own footprint first so it never draws over the
+color block it's pointing away from. Several connectors that are in flight at the same time —
+whether several notes on one target, or several separate single-note targets crowded together —
+each get assigned the innermost lane that's actually free, the same interval-scheduling a calendar
+view uses to lay out overlapping events side by side, so two unrelated connectors never draw on top
+of each other even when their spans overlap; together they read as a fan of nested arcs flowing down
+from the stack of stripes rather than one line converging on top of another. Notes anchored close
+together on the same side never overlap: they pack top to bottom in document order, each pushed down
+only as far as clearing the previous one requires — the same margin-comment stacking Word and
+Google Docs use.
 
 This is still a first pass:
 

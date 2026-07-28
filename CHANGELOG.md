@@ -15,7 +15,7 @@ All notable changes to LoomMark are documented here. This project follows
   Markdown construct — list numbering, guide rails, heading sections — not just to its own
   rendering. Typing a 3rd `<` or `>` on an empty line auto-closes the block immediately, so a bare
   opener can never accidentally run on and swallow real content up to the next `<<<`/`>>>` line
-  anywhere later in the document; `Ctrl/Cmd+Alt+Left`/`Right` wrap the current line in a fresh
+  anywhere later in the document; `Ctrl/Cmd+Shift+Left`/`Right` wrap the current line in a fresh
   left-/right-margin note and focus it directly, without typing the fence by hand — the arrow you
   press is the side you get. An opening delimiter can carry a fixed color as 6 hex digits
   (`<<<7c3aed`) so a note keeps the same color forever regardless of what's added or removed
@@ -35,9 +35,13 @@ All notable changes to LoomMark are documented here. This project follows
   when it actually needed to be displaced to avoid overlapping another card — several notes sharing
   one target inevitably need this, but a lone note usually won't draw one at all — anchored to the
   note's own stripe position (near the text, not the card's edge, since the card's position can
-  shift in ways the stripe never does); notes anchored close together on the same side never
-  overlap: they pack top to bottom in document order like Word/Google Docs margin comments. See the
-  README for the current limitations of this first pass.
+  shift in ways the stripe never does), clearing the stripe's own footprint first so it never draws
+  over the color block it's pointing away from; several connectors in flight at the same time —
+  whether several notes on one target, or several unrelated single-note targets crowded together —
+  each get assigned the innermost free lane via interval scheduling, so two overlapping connectors
+  never draw on top of each other. Notes anchored close together on the same side never overlap:
+  they pack top to bottom in document order like Word/Google Docs margin comments. See the README
+  for the current limitations of this first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of

@@ -155,6 +155,11 @@ const CARD_STACK_GAP = 8;
 // phase without needing a card's real rendered rect just to find its near edge.
 const CARD_WIDTH = 230;
 const CARD_EDGE_GAP = 6;
+// The vertical rail's minimum clearance from its own stripe bar's edge (so the two don't draw on
+// top of each other — see the lane-assignment comment in measureGroupLayout below) and the extra
+// step between two rails that would otherwise overlap in time.
+const CONNECTOR_CLEARANCE = 4;
+const CONNECTOR_LANE_GAP = 6;
 
 type ConnectorGeometry = {
   hLeft: number; hTop: number; hWidth: number;
@@ -255,6 +260,43 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     }
   }
 
+  // Only a card actually pushed away from its own natural row draws a connector at all — several
+  // notes on the exact same target inevitably need this (they can't all sit at an identical
+  // position), but a lone note usually won't. Two *unrelated* notes (different targets) can easily
+  // need one at the same time too, though, if enough separate single-note targets get crowded
+  // together — and since every "first note on its own target" bar sits at the same relative offset
+  // (stackIndex 0), their connectors would all land at the exact same x and draw right over each
+  // other without this: interval-scheduling lane assignment, the same technique a calendar view
+  // uses to lay out overlapping events side by side. Sorted by where each connector starts, each
+  // reuses the first lane whose previous occupant's own span has already ended above it; otherwise
+  // it opens a new lane one step further out. The result reads as a fan of nested arcs — the first
+  // connector in a cluster takes the innermost lane (closest to its own bar), each one after it
+  // that's still in flight at the same time steps one lane further toward the card, like a
+  // flattened rainbow — rather than every connector converging on one shared line.
+  type Connecting = { entry: RawEntry; top: number; spanFrom: number; spanTo: number };
+  const connecting: Connecting[] = [];
+  for (const entry of raw) {
+    const top = packedTop.get(entry) ?? entry.naturalTop;
+    if (top === null || entry.naturalTop === null || Math.abs(top - entry.naturalTop) <= 1) continue;
+    connecting.push({ entry, top, spanFrom: Math.min(entry.naturalTop, top), spanTo: Math.max(entry.naturalTop, top) });
+  }
+  connecting.sort((a, b) => a.spanFrom - b.spanFrom);
+  const laneOf = new Map<RawEntry, number>();
+  for (const side of ['left', 'right'] as const) {
+    const laneEnds: number[] = [];
+    for (const item of connecting) {
+      if (item.entry.side !== side) continue;
+      let lane = laneEnds.findIndex((end) => end <= item.spanFrom);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(item.spanTo);
+      } else {
+        laneEnds[lane] = item.spanTo;
+      }
+      laneOf.set(item.entry, lane);
+    }
+  }
+
   return raw.map((entry) => {
     const { card, connectorH, connectorV, stripeBar, stripeHit, side, naturalTop, barLeft, stripeTop, stripeHeight } = entry;
     // A card not part of the packed (pinned) stacking above just uses its own natural position —
@@ -264,20 +306,18 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
       return { card, connectorH, connectorV, stripeBar, stripeHit, offscreen: true, top: 0, barLeft, stripeTop, stripeHeight, connector: undefined };
     }
 
-    // Only drawn when packing actually pushed this card away from its own natural row — several
-    // notes on the exact same target inevitably need this, since they can't all sit at an
-    // identical position; a lone note usually won't. The connector's vertical run sits at the
-    // bar's own x (near the text, not the card — the card's position can shift with resizing or
-    // pinning changes, but the bar's x is always reliable) so it reads as a "rainbow" flowing
-    // down from the stripe rather than from the card: a bar further from the edge (a later,
-    // more-recently-added note on this target) naturally has to travel further out to clear the
-    // bars ahead of it, without any special-cased fan-out logic — it falls out of each bar
-    // already sitting at its own distinct x.
     let connector: ConnectorGeometry | undefined;
-    if (naturalTop !== null && Math.abs(top - naturalTop) > 1) {
+    const lane = laneOf.get(entry);
+    if (naturalTop !== null && lane !== undefined) {
       const cardNearEdge = side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
+      // The rail clears the bar's own footprint first (see CONNECTOR_CLEARANCE — without it, the
+      // vertical run would draw straight through the bar itself, on top of the very color block
+      // it's meant to be pointing away from), then steps further out per lane, in the same
+      // direction the horizontal run below already travels (toward the card).
+      const outward = side === 'left' ? -1 : 1;
+      const railX = barLeft + outward * (CONNECTOR_CLEARANCE + lane * CONNECTOR_LANE_GAP);
       connector = {
-        vLeft: barLeft,
+        vLeft: railX,
         vTop: Math.min(naturalTop, top),
         vHeight: Math.abs(top - naturalTop),
         hLeft: Math.min(barLeft, cardNearEdge),
@@ -763,11 +803,11 @@ export function annotationExtension(): Extension {
         },
       },
       {
-        key: 'Mod-Alt-ArrowLeft',
+        key: 'Mod-Shift-ArrowLeft',
         run: annotateCurrentLine('left'),
       },
       {
-        key: 'Mod-Alt-ArrowRight',
+        key: 'Mod-Shift-ArrowRight',
         run: annotateCurrentLine('right'),
       },
     ]),
