@@ -311,31 +311,37 @@ document.
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
 guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a
-thin color-coded accent stripe, matched to the same-colored note next to it — the same visual link
-Word/Google Docs comments and PDF annotation tools use, so it's clear which note belongs to which
-content even with several on screen at once. The note itself renders pinned flush to the true
-left/right edge of the editor — outside the editing area entirely, and unaffected by heading Card
-mode's own indentation, so notes on deeply nested headings still line up with everything else on
-the same side — whenever there's enough room for it there; otherwise it collapses to a small
-color-matched pill, revealed on hover. Each note can be individually collapsed to a one-line
-preview, edited directly, or deleted with its own trash-can button, and a card's "+ Add note"
-appends another note to the same attachment point — none of this ever needs touching the hidden raw
-`<<</>>>` source by hand. Stacking several blocks back to back (either side, or via "+ Add note")
+thin color-coded accent stripe — a real overlay, not a background painted onto the line itself, so
+it can never collide with (and erase) that line's own heading-Card background or border the way an
+earlier version of this feature briefly did. The stripe is also the note's hover/click target: there
+is no separate marker icon duplicating it. The note itself is a clean card tinted in its own color
+(not a neutral card with a colored accent bar) — pinned flush to the true left/right edge of the
+editor, outside the editing area entirely and unaffected by heading Card mode's own indentation, so
+notes on deeply nested headings still line up with everything else on the same side — whenever
+there's enough room for it there; otherwise it collapses to just the stripe, revealed on hover (or
+forced open regardless of available room via the right-click "Pin" below). Each note can be
+individually collapsed to a one-line preview or edited directly (drag its bottom-right corner to
+resize taller/shorter; content scrolls once it doesn't fit); delete, add another note at the same
+attachment point, and pin/unpin all live in a right-click menu on the card rather than cluttering it
+with always-visible buttons. Stacking several blocks back to back (either side, or via "Add note")
 all attach to the same original line rather than to each other, and a block whose target line
 belongs to a table/fenced-code/display-math construct or a list item's own shift+enter continuation
 attaches to the whole thing, not just one line of it.
 
-Every note is linked to its line by a thin, color-matched elbow connector (orthogonal, not diagonal,
-by design), the same visual language as the accent stripe. Notes anchored close together on the
-same side never overlap: they pack top to bottom in document order, each pushed down only as far as
-clearing the previous one requires — the same margin-comment stacking Word and Google Docs use — and
-the connector bends to follow wherever a packed note actually ended up.
+Every note is linked to its line by a short, color-matched connector — a brief "peel" off the card's
+own edge rather than a line running all the way back to the text (the stripe already marks the text;
+the connector only needs to show which stack position a card belongs to). Notes anchored close
+together on the same side never overlap: they pack top to bottom in document order, each pushed down
+only as far as clearing the previous one requires — the same margin-comment stacking Word and Google
+Docs use — and the connector bends to follow wherever a packed note actually ended up.
 
 This is still a first pass:
 
-- The color-coded stripe doesn't currently reach a table/fenced-code/display-math target — those
-  render as a widget that replaces their own source lines entirely, leaving nothing left to color;
-  the note itself still attaches and works normally there, just without the connecting stripe.
+- The color-coded stripe doesn't currently reach a table target — tables replace their whole source
+  with one opaque widget with no per-line element left to attach an overlay to (a fenced-code block
+  still has one, so those get a stripe normally). The note itself still attaches and works normally
+  on a table target, just without the connecting stripe, and — since there's nothing to hover — only
+  shows when pinned (automatically or via the right-click menu), not via hover-reveal.
 - Colors are assigned by each annotation's position among all annotations in the document, so
   adding or removing one earlier in the document can shift the colors of unrelated ones after it.
 

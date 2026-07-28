@@ -16,17 +16,20 @@ All notable changes to LoomMark are documented here. This project follows
   rendering. Typing a 3rd `<` or `>` on an empty line auto-closes the block immediately, so a bare
   opener can never accidentally run on and swallow real content up to the next `<<<`/`>>>` line
   anywhere later in the document. Stacking several blocks back to back (either side) all attach to
-  the same original line rather than to each other. A color-coded accent stripe links the attached
-  content to its same-colored note, which renders pinned flush to the true left/right edge of the
+  the same original line rather than to each other. A color-coded accent stripe — a real overlay
+  element, not a background painted onto the line itself — links the attached content to its
+  same-colored, cleanly-tinted note, which renders pinned flush to the true left/right edge of the
   editor — outside the editing area and unaffected by heading Card mode's own indentation — the
-  same way whenever there's room for it there, falling back to a small hover-revealed color-matched
-  pill otherwise; each note can be individually collapsed, edited directly, or deleted (a trash-can
-  button, not a close "×"), and a card's "+ Add note" attaches another note to the same point —
-  none of it ever needs touching the hidden raw source by hand. Every note is linked to its line by
-  a thin, color-matched elbow connector, and notes anchored close together never overlap: they pack
-  top to bottom in document order like Word/Google Docs margin comments, with the connector bending
-  to follow wherever a packed note actually ended up. See the README for the current limitations of
-  this first pass.
+  same way whenever there's room for it there (or forced open via a right-click "Pin" regardless),
+  falling back to a hover-revealed stripe otherwise (the stripe is the hover target itself — no
+  separate marker icon duplicating it); each note can be individually collapsed or edited directly,
+  and delete/add-note/pin live in a right-click menu rather than always-visible buttons. A card's
+  height is user-resizable, scrolling once content exceeds it. Every note is linked to its line by a
+  short color-matched connector — a brief peel off the card's edge, not a line reaching all the way
+  back to the text — and notes anchored close together never overlap: they pack top to bottom in
+  document order like Word/Google Docs margin comments, with the connector bending to follow
+  wherever a packed note actually ended up. See the README for the current limitations of this
+  first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of
