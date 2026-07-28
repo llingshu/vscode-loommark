@@ -24,12 +24,15 @@ All notable changes to LoomMark are documented here. This project follows
   falling back to a hover-revealed stripe otherwise (the stripe is the hover target itself — no
   separate marker icon duplicating it); each note can be individually collapsed or edited directly,
   and delete/add-note/pin live in a right-click menu rather than always-visible buttons. A card's
-  height is user-resizable, scrolling once content exceeds it. Every note is linked to its line by a
-  short color-matched connector — a brief peel off the card's edge, not a line reaching all the way
-  back to the text — and notes anchored close together never overlap: they pack top to bottom in
-  document order like Word/Google Docs margin comments, with the connector bending to follow
-  wherever a packed note actually ended up. See the README for the current limitations of this
-  first pass.
+  height is user-resizable, scrolling once content exceeds it, with a scrollbar themed to match.
+  Several notes on the same target each get their own card, stacked in the margin like any other,
+  rather than being crammed into one shared card. A note only draws a connector back to its stripe
+  when it actually needed to be displaced to avoid overlapping another card — several notes sharing
+  one target inevitably need this, but a lone note usually won't draw one at all — anchored to the
+  note's own stripe position (near the text, not the card's edge, since the card's position can
+  shift in ways the stripe never does); notes anchored close together on the same side never
+  overlap: they pack top to bottom in document order like Word/Google Docs margin comments. See the
+  README for the current limitations of this first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of

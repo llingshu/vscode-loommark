@@ -7,15 +7,16 @@
   display: contents;
 }
 
-/* One thin bar per stacked annotation on this target, stacked inward from the target line's own
-   box edge — a real overlay element, not a background-image on the line itself (see
-   findLineElement's comment in annotation-extension.ts for why: a second decoration writing that
-   line's `style` attribute silently erased loommark-core's own heading-card background/border).
-   Position/size is set inline by applyGroupLayout; only the fixed width and color live here. */
+/* One bar per note attached to a target, stacked inward from the target line's own box edge —
+   a real overlay element, not a background-image on the line itself (see findLineElement's
+   comment in annotation-extension.ts for why: a second decoration writing that line's `style`
+   attribute silently erased loommark-core's own heading-card background/border). Position/size is
+   set inline by applyGroupLayout; only the fixed width and color live here. */
 .annotation-stripe-bar {
   position: absolute;
   z-index: 38;
-  width: 3px;
+  width: 4px;
+  border-radius: 2px;
   background: var(--annotation-stripe-color, var(--vscode-textLink-foreground));
   pointer-events: none;
 }
@@ -24,11 +25,11 @@
   display: none;
 }
 
-/* The actual hover/right-click target for a group — wider than the visible stripe bars themselves
-   (see STRIPE_HIT_PADDING) so revealing a card doesn't need pixel-precise aim at a 3px line, but
-   still only at the line's own edge, not spanning the full line width — it must never cover the
-   middle of the text, or it would swallow normal click-to-place-cursor / text-selection there.
-   Invisible; geometry set inline by applyGroupLayout. */
+/* The actual hover/right-click target for a note — wider than the visible stripe bar itself (see
+   STRIPE_HIT_PADDING) so revealing a card doesn't need pixel-precise aim at a thin line, but still
+   only at the line's own edge, not spanning the full line width — it must never cover the middle
+   of the text, or it would swallow normal click-to-place-cursor / text-selection there. Invisible;
+   geometry set inline by applyGroupLayout. */
 .annotation-stripe-hit {
   position: absolute;
   z-index: 37;
@@ -62,6 +63,40 @@
   font-size: 0.85em;
 }
 
+/* A collapsed card is just its one-line header — the fixed height/resize handle from the expanded
+   state would otherwise leave a tall mostly-empty box. */
+.annotation-card.is-collapsed {
+  height: auto;
+  min-height: 0;
+  resize: none;
+  overflow: visible;
+}
+
+/* Firefox. The Chromium (VS Code's own Electron) styling lives in the ::-webkit-scrollbar rules
+   below — without both, the native scrollbar defaults to a stark white track/thumb that clashes
+   with the now-colored card. */
+.annotation-card {
+  scrollbar-width: thin;
+  scrollbar-color: var(--annotation-accent, var(--vscode-scrollbarSlider-background)) transparent;
+}
+
+.annotation-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.annotation-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.annotation-card::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--annotation-accent, var(--vscode-scrollbarSlider-background)) 55%, transparent);
+  border-radius: 4px;
+}
+
+.annotation-card::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--annotation-accent, var(--vscode-scrollbarSlider-background)) 80%, transparent);
+}
+
 .annotation-card-left {
   left: 6px;
 }
@@ -82,14 +117,87 @@
   display: none;
 }
 
-/* A short "peel" off the card's own edge (see PEEL_LENGTH) plus a vertical rail running along
-   that same edge — not a line reaching all the way back to the text. The stripe bars (same color)
-   are what actually mark the annotated content; the connector only needs to associate a card's
-   *stack position* with where it naturally belongs, which a short nub does without a line
-   stretching across however much empty margin a wide window happens to have. Kept orthogonal
-   (horizontal-then-vertical, no diagonal) — a right-angle bend stays legible even where several
-   of these overlap near a stack of cards, the same tradeoff Word/Google Docs' own margin-comment
-   connectors make. Geometry is set inline by applyGroupLayout; only display and color live here. */
+.annotation-card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.annotation-card-collapse {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 4px;
+  opacity: 0.75;
+}
+
+.annotation-card-collapse:hover {
+  opacity: 1;
+}
+
+.annotation-card-preview {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.annotation-card.is-collapsed .annotation-card-preview {
+  display: block;
+}
+
+.annotation-card.is-collapsed .annotation-card-text {
+  display: none;
+}
+
+.annotation-card-text {
+  display: block;
+  width: 100%;
+  height: calc(100% - 24px);
+  box-sizing: border-box;
+  margin-top: 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  line-height: 1.4;
+  padding: 3px 5px;
+  resize: none;
+}
+
+.annotation-card-text:hover {
+  border-color: var(--vscode-widget-border);
+}
+
+/* Deliberately no background change here: this used to switch to var(--vscode-editor-background)
+   (typically white) on focus, which clashed hard against the now-colored card — clicking to edit
+   would flash a white box in the middle of an otherwise clean colored surface. Just the border
+   highlights, matching how the rest of the card already looks. */
+.annotation-card-text:focus {
+  border-color: var(--vscode-focusBorder);
+  outline: none;
+}
+
+/* A short connector, drawn only when a note's own collision-avoidance packing (see
+   measureGroupLayout) actually pushed its card away from its natural row — several notes sharing
+   one target inevitably need this, since they can't all sit at an identical position, but a lone
+   note usually doesn't. Anchored to the stripe bar's own x (near the text) rather than the card's
+   edge, since the card's position can shift (resizing, pinning) in ways the bar's x never does;
+   several of these together read as a rainbow flowing down from the stack of bars rather than
+   converging on the card. Kept orthogonal (horizontal-then-vertical, no diagonal) — a right-angle
+   bend stays legible even where several overlap, the same tradeoff Word/Google Docs' own
+   margin-comment connectors make. Geometry is set inline by applyGroupLayout; only display and
+   color live here. */
 .annotation-connector-h,
 .annotation-connector-v {
   display: none;
@@ -108,101 +216,17 @@
   width: 2px;
 }
 
-/* is-visible (set by applyGroupLayout) only means "geometry is known, not offscreen" — actual
-   display additionally requires the sibling .annotation-card to be showing right now, via :has(),
-   so hovering the card open/closed (a plain class toggle with no layout pass of its own) keeps the
-   connector in sync automatically instead of needing its own separate event wiring. A connector
-   permanently drawn to a hidden hover-only card would look like a stray, disconnected line. */
+/* is-visible (set by applyGroupLayout) only means "this note is currently displaced, geometry is
+   known" — actual display additionally requires the sibling .annotation-card to be showing right
+   now, via :has(), so hovering the card open/closed (a plain class toggle with no layout pass of
+   its own) keeps the connector in sync automatically instead of needing its own separate event
+   wiring. A connector permanently drawn to a hidden hover-only card would look like a stray,
+   disconnected line. */
 .annotation-group:has(> .annotation-card.is-open) .annotation-connector-h.is-visible,
 .annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-h.is-visible,
 .annotation-group:has(> .annotation-card.is-open) .annotation-connector-v.is-visible,
 .annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-v.is-visible {
   display: block;
-}
-
-.annotation-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.annotation-item {
-  border-radius: 6px;
-  border-left: 3px solid var(--annotation-item-color, var(--vscode-textLink-foreground));
-  padding: 4px 6px;
-}
-
-.annotation-item-header {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.annotation-item-swatch {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--annotation-item-color, var(--vscode-textLink-foreground));
-}
-
-.annotation-item-collapse {
-  flex: none;
-  border: none;
-  background: transparent;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer;
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 4px;
-}
-
-.annotation-item-preview {
-  display: none;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--vscode-descriptionForeground);
-  font-style: italic;
-}
-
-.annotation-item.is-collapsed .annotation-item-preview {
-  display: block;
-}
-
-.annotation-item.is-collapsed .annotation-item-text {
-  display: none;
-}
-
-.annotation-item-text {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 4px;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
-  line-height: 1.4;
-  padding: 3px 5px;
-  resize: none;
-}
-
-.annotation-item-text:hover {
-  border-color: var(--vscode-widget-border);
-}
-
-/* Deliberately no background change here: this used to switch to var(--vscode-editor-background)
-   (typically white) on focus, which clashed hard against the now-colored card — clicking to edit
-   would flash a white box in the middle of an otherwise clean colored surface. Just the border
-   highlights, matching how the rest of the card already looks. */
-.annotation-item-text:focus {
-  border-color: var(--vscode-focusBorder);
-  outline: none;
 }
 
 /* Right-click menu replacing the old always-visible delete/add-note/pin buttons — see
