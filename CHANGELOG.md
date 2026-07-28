@@ -15,9 +15,12 @@ All notable changes to LoomMark are documented here. This project follows
   Markdown construct — list numbering, guide rails, heading sections — not just to its own
   rendering. Typing a 3rd `<` or `>` on an empty line auto-closes the block immediately, so a bare
   opener can never accidentally run on and swallow real content up to the next `<<<`/`>>>` line
-  anywhere later in the document; `Ctrl/Cmd+Alt+A` wraps the current line in a fresh note and
-  focuses it directly, without typing the fence by hand. Stacking several blocks back to back
-  (either side) all attach to
+  anywhere later in the document; `Ctrl/Cmd+Alt+Left`/`Right` wrap the current line in a fresh
+  left-/right-margin note and focus it directly, without typing the fence by hand — the arrow you
+  press is the side you get. An opening delimiter can carry a fixed color as 6 hex digits
+  (`<<<7c3aed`) so a note keeps the same color forever regardless of what's added or removed
+  around it; every note created through this extension writes one in automatically. Stacking
+  several blocks back to back (either side) all attach to
   the same original line rather than to each other. A color-coded accent stripe — a real overlay
   element, not a background painted onto the line itself — links the attached content to its
   same-colored, cleanly-tinted note, which renders pinned flush to the true left/right edge of the

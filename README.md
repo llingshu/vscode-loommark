@@ -307,9 +307,15 @@ the note's content — can span multiple lines
 Typing the 3rd `<` (or `>`) of a delimiter line on an otherwise-empty line auto-closes the block
 immediately, the same way a code fence or `$$` block auto-closes — a bare, unclosed opener can't
 run on and silently swallow every real paragraph up to the next `<<<`/`>>>` line later in the
-document. `Ctrl/Cmd+Alt+A` wraps the line the cursor is on in a fresh left-margin note and focuses
-it, without needing to type the fence by hand; `Ctrl/Cmd+Shift+A` toggles whether annotations
-render at all.
+document. `Ctrl/Cmd+Alt+Left`/`Ctrl/Cmd+Alt+Right` wrap the line the cursor is on in a fresh
+left-/right-margin note and focus it directly, without needing to type the fence by hand — the
+arrow you press is the side you get; `Ctrl/Cmd+Shift+A` toggles whether annotations render at all.
+
+An opening delimiter can carry a fixed color as 6 hex digits with no space (`<<<7c3aed`) so a note
+keeps the same color forever regardless of what else gets added or removed around it — every note
+created through this extension (the shortcuts above, auto-close, or a card's own "+ Add note")
+writes one in automatically, picking the next color in rotation. Only a `<<<`/`>>>` typed bare by
+hand (or from before this existed) falls back to the old by-position assignment.
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
 guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a
@@ -349,8 +355,9 @@ This is still a first pass:
   still has one, so those get a stripe normally). The note itself still attaches and works normally
   on a table target, just without the connecting stripe, and — since there's nothing to hover — only
   shows when pinned (automatically or via the right-click menu), not via hover-reveal.
-- Colors are assigned by each annotation's position among all annotations in the document, so
-  adding or removing one earlier in the document can shift the colors of unrelated ones after it.
+- A bare (untagged) annotation's color is still assigned by its position among all other untagged
+  annotations in the document, so adding or removing one earlier in the document can shift the
+  colors of unrelated ones after it — tag it (see above) to pin its color permanently instead.
 
 ## Search And Replace
 

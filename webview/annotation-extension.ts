@@ -34,14 +34,29 @@ const annotationsVisibleField = StateField.define<boolean>({
 
 // Same palette loommark.cardBackgroundColors/cardBorderColors ship with, reused here so an
 // annotation's color and a heading Card's accent read as the same visual language rather than two
-// unrelated color systems. Assigned by each annotation's position among all annotations in the
-// document (see colorForAnnotation) — stable as long as nothing *before* it is added or removed,
-// same caveat editor.ts's own per-level card colors have.
+// unrelated color systems. An annotation created through this extension (the context menu's
+// "+ Add note", either arrow-key shortcut, or auto-close-on-typing) gets one of these written
+// directly into its opening delimiter as a fixed 6-hex-digit tag (loommark-core's
+// AnnotationRange.color — see newAnnotationColorTag below), so it keeps the same color forever
+// after. Only an annotation that predates this (or was typed by hand without one) falls back to
+// colorForAnnotation's by-position assignment, which — as before — can still shift if an earlier,
+// still-untagged annotation is added or removed.
 const COLOR_PALETTE = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
 
 function colorForAnnotation(allAnnotations: AnnotationRange[], annotation: AnnotationRange): string {
+  if (annotation.color) return `#${annotation.color}`;
   const index = allAnnotations.indexOf(annotation);
   return COLOR_PALETTE[(index < 0 ? 0 : index) % COLOR_PALETTE.length];
+}
+
+// The 6-hex-digit tag (no `#`) to write into a brand-new annotation's opening delimiter — see
+// AnnotationRange.color in loommark-core. Picks the next color in rotation by how many
+// annotations already exist in the document; since the new one is tagged from the moment it's
+// created, this exact choice only has to be *a* reasonable spread, not track any particular
+// position precisely — unlike an untagged annotation's color, it won't recompute or drift later.
+function newAnnotationColorTag(source: string): string {
+  const count = annotationRanges(source).length;
+  return COLOR_PALETTE[count % COLOR_PALETTE.length].slice(1);
 }
 
 // Persisted across widget rebuilds (which happen on every edit — see annotationField below) by
@@ -119,11 +134,12 @@ function findLineElement(view: EditorView, pos: number): HTMLElement | null {
   return element?.closest('.cm-line') ?? null;
 }
 
-// One thin stripe bar per annotation attached to a target, stacked inward from that side's own
+// One stripe bar per annotation attached to a target, stacked inward from that side's own
 // line-box edge (index 0 = outermost, closest to the edge = first/oldest annotation on this
 // target) — a real overlay element (see findLineElement's comment for why), not a
-// background-image layer.
-const BAR_WIDTH = 4;
+// background-image layer. Deliberately bold enough to actually catch the eye rather than read as
+// a hairline — this is the primary always-visible indicator now that there's no separate marker.
+const BAR_WIDTH = 6;
 const BAR_GAP = 2;
 // Extra hit-area around a stripe bar so hovering to reveal a card doesn't require pixel-precise
 // aim at a few-px-wide line — the bar stays thin, only the invisible hover target backing it is
@@ -502,7 +518,8 @@ class AnnotationMarginWidget extends WidgetType {
     const insertNewNote = () => {
       const marker = this.side === 'left' ? '<<<' : '>>>';
       const insertAt = this.annotation.to + 1;
-      const insertText = `${marker}\n\n${marker}\n`;
+      const tag = newAnnotationColorTag(view.state.doc.toString());
+      const insertText = `${marker}${tag}\n\n${marker}\n`;
       pendingFocusAnnotationFrom = insertAt;
       view.dispatch({ changes: { from: insertAt, insert: insertText } });
     };
@@ -691,9 +708,10 @@ const completeAnnotationDelimiters = EditorView.inputHandler.of((view, from, to,
   const indent = before.match(/^ {0,3}/)?.[0] ?? '';
   if (before !== `${indent}${text}${text}`) return false;
 
+  const tag = newAnnotationColorTag(view.state.doc.toString());
   view.dispatch({
-    changes: { from, to, insert: `${text}\n\n${indent}${text}${text}${text}` },
-    selection: { anchor: from + 1 },
+    changes: { from, to, insert: `${text}${tag}\n\n${indent}${text}${text}${text}` },
+    selection: { anchor: from + 1 + tag.length },
     userEvent: 'input.type',
   });
   return true;
@@ -707,21 +725,27 @@ const repositionOnGeometryChange = EditorView.updateListener.of((update) => {
   if (update.geometryChanged || update.docChanged) repositionAnnotationGroups(update.view);
 });
 
-// Wraps the line the cursor is currently on in a fresh, empty left-margin annotation block and
-// focuses its textarea — the keyboard equivalent of typing `<<<`/`<<<` by hand around that line,
-// for when reaching for the mouse (or remembering the exact fence syntax) is more friction than
-// the annotation itself is worth. Inserting `\n<<<\n\n<<<` right at the current line's own end
-// (not a whole separate line below it) keeps the block immediately attached to that line, matching
-// how "annotates the line directly above" already works everywhere else in this syntax; a leading
-// `\n` starts the new block on its own line without disturbing the current line's own content, and
-// any text that already followed ends up after the block, unchanged.
-function annotateCurrentLine(view: EditorView): boolean {
-  const line = view.state.doc.lineAt(view.state.selection.main.head);
-  const insertAt = line.to;
-  const focusFrom = insertAt + 1;
-  pendingFocusAnnotationFrom = focusFrom;
-  view.dispatch({ changes: { from: insertAt, insert: '\n<<<\n\n<<<' } });
-  return true;
+// Wraps the line the cursor is currently on in a fresh, empty margin annotation block and focuses
+// its textarea — the keyboard equivalent of typing `<<<`/`<<<` (or `>>>`/`>>>`) by hand around
+// that line, for when reaching for the mouse (or remembering the exact fence syntax) is more
+// friction than the annotation itself is worth. Bound to the arrow that matches the side it
+// creates (Left/Right) rather than one key for both, so the direction you press is the side you
+// get, with nothing to additionally remember. Inserting `\n<<<\n\n<<<` right at the current line's
+// own end (not a whole separate line below it) keeps the block immediately attached to that line,
+// matching how "annotates the line directly above" already works everywhere else in this syntax;
+// a leading `\n` starts the new block on its own line without disturbing the current line's own
+// content, and any text that already followed ends up after the block, unchanged.
+function annotateCurrentLine(side: 'left' | 'right') {
+  return (view: EditorView): boolean => {
+    const marker = side === 'left' ? '<<<' : '>>>';
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const insertAt = line.to;
+    const focusFrom = insertAt + 1;
+    const tag = newAnnotationColorTag(view.state.doc.toString());
+    pendingFocusAnnotationFrom = focusFrom;
+    view.dispatch({ changes: { from: insertAt, insert: `\n${marker}${tag}\n\n${marker}` } });
+    return true;
+  };
 }
 
 export function annotationExtension(): Extension {
@@ -739,8 +763,12 @@ export function annotationExtension(): Extension {
         },
       },
       {
-        key: 'Mod-Alt-a',
-        run: annotateCurrentLine,
+        key: 'Mod-Alt-ArrowLeft',
+        run: annotateCurrentLine('left'),
+      },
+      {
+        key: 'Mod-Alt-ArrowRight',
+        run: annotateCurrentLine('right'),
       },
     ]),
   ];
