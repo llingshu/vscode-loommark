@@ -181,18 +181,28 @@
   resize: none;
 }
 
-/* A short connector, drawn only when a note's own collision-avoidance packing (see
-   measureGroupLayout) actually pushed its card away from its natural row — several notes sharing
-   one target inevitably need this, since they can't all sit at an identical position, but a lone
-   note usually doesn't. Anchored to the stripe bar's own x (near the text) rather than the card's
-   edge, since the card's position can shift (resizing, pinning) in ways the bar's x never does;
-   several of these together read as a rainbow flowing down from the stack of bars rather than
-   converging on the card. Kept orthogonal (horizontal-then-vertical, no diagonal) — a right-angle
-   bend stays legible even where several overlap, the same tradeoff Word/Google Docs' own
-   margin-comment connectors make. Geometry is set inline by applyGroupLayout; only display and
-   color live here. */
-.annotation-connector-h,
-.annotation-connector-v {
+/* A connector, drawn only when a note's own collision-avoidance packing (see measureGroupLayout)
+   actually pushed its card away from its natural row — several notes sharing one target inevitably
+   need this, since they can't all sit at an identical position, but a lone note usually doesn't.
+   display:contents so its own children (one div per routed segment, rebuilt each measure pass) can
+   still position:absolute against .loommark-workspace as if this wrapper weren't there. Anchored to
+   the stripe bar's own x (near the text) rather than the card's edge, since the card's position can
+   shift (resizing, pinning) in ways the bar's x never does. Where several connectors overlap in
+   height, each one's route is only pushed out to a further lane for as long as a competitor is
+   actually active next to it (see measureGroupLayout's per-slice lane assignment) — so a route runs
+   tight alongside its neighbors and steps back inward the moment whichever one it was avoiding
+   peels off toward its own card, rather than staying at a permanently separate offset for its whole
+   length. */
+.annotation-connector-path {
+  display: contents;
+}
+
+/* One rendered piece of a routed connector — a straight vertical/horizontal run, a horizontal jog
+   where a route changes lane, or the final horizontal reach into the card's edge. Kept orthogonal
+   (no diagonal) — a right-angle bend stays legible even where several overlap, the same tradeoff
+   Word/Google Docs' own margin-comment connectors make. Geometry (left/top/width/height) is set
+   inline by applyGroupLayout; only display and color live here. */
+.annotation-connector-segment {
   display: none;
   position: absolute;
   z-index: 39;
@@ -201,24 +211,15 @@
   pointer-events: none;
 }
 
-.annotation-connector-h {
-  height: 4px;
-}
-
-.annotation-connector-v {
-  width: 4px;
-}
-
 /* is-visible (set by applyGroupLayout) only means "this note is currently displaced, geometry is
    known" — actual display additionally requires the sibling .annotation-card to be showing right
    now, via :has(), so hovering the card open/closed (a plain class toggle with no layout pass of
    its own) keeps the connector in sync automatically instead of needing its own separate event
    wiring. A connector permanently drawn to a hidden hover-only card would look like a stray,
-   disconnected line. */
-.annotation-group:has(> .annotation-card.is-open) .annotation-connector-h.is-visible,
-.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-h.is-visible,
-.annotation-group:has(> .annotation-card.is-open) .annotation-connector-v.is-visible,
-.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-v.is-visible {
+   disconnected line. Segments live one level inside .annotation-connector-path now (which is itself
+   display:contents), so the :has() match is against a descendant, not a direct child. */
+.annotation-group:has(> .annotation-card.is-open) .annotation-connector-segment.is-visible,
+.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-segment.is-visible {
   display: block;
 }
 

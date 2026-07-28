@@ -38,8 +38,11 @@ All notable changes to LoomMark are documented here. This project follows
   shift in ways the stripe never does), clearing the stripe's own footprint first so it never draws
   over the color block it's pointing away from; several connectors in flight at the same time —
   whether several notes on one target, or several unrelated single-note targets crowded together —
-  each get assigned the innermost free lane via interval scheduling, so two overlapping connectors
-  never draw on top of each other. Notes anchored close together on the same side never overlap:
+  route through a shared bundle of lanes reassigned per height range, so each one only steps out to
+  a further lane for as long as a competitor is actually active alongside it, and shifts back inward
+  the moment that competitor peels off toward its own card — several together read as a bundle of
+  nested arcs (thickest near the text, thinning out as each branch departs) rather than fixed
+  parallel lines that never converge. Notes anchored close together on the same side never overlap:
   they pack top to bottom in document order like Word/Google Docs margin comments. See the README
   for the current limitations of this first pass.
 

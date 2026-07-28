@@ -345,10 +345,13 @@ note usually won't draw one at all. The connector's rail sits near the note's ow
 in ways the stripe never does, clearing the stripe's own footprint first so it never draws over the
 color block it's pointing away from. Several connectors that are in flight at the same time —
 whether several notes on one target, or several separate single-note targets crowded together —
-each get assigned the innermost lane that's actually free, the same interval-scheduling a calendar
-view uses to lay out overlapping events side by side, so two unrelated connectors never draw on top
-of each other even when their spans overlap; together they read as a fan of nested arcs flowing down
-from the stack of stripes rather than one line converging on top of another. Notes anchored close
+share a bundle of lanes reassigned per height range (the same interval-scheduling a calendar view
+uses to lay out overlapping events side by side, applied per slice rather than once for a
+connector's whole length): each one only steps out to a further lane for as long as a competitor is
+actually active alongside it, and shifts back inward the moment that competitor peels off toward its
+own card. Together they read as a bundle of nested arcs — thickest near the text, thinning out one
+branch at a time as each connector reaches its card — rather than a set of permanently separate
+parallel lines. Notes anchored close
 together on the same side never overlap: they pack top to bottom in document order, each pushed down
 only as far as clearing the previous one requires — the same margin-comment stacking Word and
 Google Docs use.

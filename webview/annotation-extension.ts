@@ -155,28 +155,23 @@ const CARD_STACK_GAP = 8;
 // phase without needing a card's real rendered rect just to find its near edge.
 const CARD_WIDTH = 230;
 const CARD_EDGE_GAP = 6;
-// The vertical rail's minimum clearance from its own stripe bar's edge (so the two don't draw on
-// top of each other — see the lane-assignment comment in measureGroupLayout below) and the extra
-// step between two rails that would otherwise overlap in time. Deliberately tight — just enough
-// to keep two overlapping connectors from drawing on top of each other (LANE_GAP alone must stay
-// >= the connector's own CSS width, currently 4px, or adjacent lanes would still overlap by the
-// difference) — not a wide, clearly-separated lane each. Connectors that aren't simultaneously in
-// flight share the same lane and the same rail x regardless of how many total lanes exist, so most
-// of a connector's own length still runs right alongside its neighbors as one tight bundle, only
-// spreading apart momentarily wherever several really are overlapping at once — the same "trunk
-// that thins as each branch peels off" reference the user asked for, not permanently-parallel rails.
+// The rail's minimum clearance from its own stripe bar's edge (so the two don't draw on top of
+// each other — see the lane-assignment comment in measureGroupLayout below) and the step between
+// two rails that are simultaneously in use. Both deliberately tight — LANE_GAP only needs to stay
+// >= the connector's own thickness (CONNECTOR_THICKNESS) to guarantee no overlap, not a wide,
+// clearly-separated lane each.
 const CONNECTOR_CLEARANCE = 3;
 const CONNECTOR_LANE_GAP = 5;
+const CONNECTOR_THICKNESS = 4;
 
-type ConnectorGeometry = {
-  hLeft: number; hTop: number; hWidth: number;
-  vLeft: number; vTop: number; vHeight: number;
-};
+// A single straight piece of a connector — several of these, laid end to end, make up one note's
+// full route from its natural row to wherever it actually ended up. See measureGroupLayout's
+// per-side lane-assignment comment for why a route needs more than one piece at all.
+type ConnectorSegment = { left: number; top: number; width: number; height: number };
 
 type GroupLayoutResult = {
   card: HTMLElement;
-  connectorH: HTMLElement;
-  connectorV: HTMLElement;
+  connectorPath: HTMLElement;
   stripeBar: HTMLElement;
   stripeHit: HTMLElement;
   offscreen: boolean;
@@ -184,7 +179,7 @@ type GroupLayoutResult = {
   barLeft: number;
   stripeTop: number;
   stripeHeight: number;
-  connector: ConnectorGeometry | undefined;
+  segments: ConnectorSegment[];
 };
 
 // Reads every currently-live annotation group's natural position and, for cards pinned open,
@@ -206,7 +201,7 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
   const scrollTop = workspaceElement.scrollTop;
 
   type RawEntry = {
-    card: HTMLElement; connectorH: HTMLElement; connectorV: HTMLElement;
+    card: HTMLElement; connectorPath: HTMLElement;
     stripeBar: HTMLElement; stripeHit: HTMLElement;
     side: 'left' | 'right'; naturalTop: number | null; barLeft: number;
     stripeTop: number; stripeHeight: number; height: number;
@@ -215,8 +210,7 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
   const groups = Array.from(workspaceElement.querySelectorAll<HTMLElement>(':scope > .annotation-group'));
   const raw: RawEntry[] = groups.map((group) => {
     const card = group.querySelector<HTMLElement>('.annotation-card')!;
-    const connectorH = group.querySelector<HTMLElement>('.annotation-connector-h')!;
-    const connectorV = group.querySelector<HTMLElement>('.annotation-connector-v')!;
+    const connectorPath = group.querySelector<HTMLElement>('.annotation-connector-path')!;
     const stripeBar = group.querySelector<HTMLElement>('.annotation-stripe-bar')!;
     const stripeHit = group.querySelector<HTMLElement>('.annotation-stripe-hit')!;
     const side: 'left' | 'right' = group.dataset.side === 'right' ? 'right' : 'left';
@@ -251,7 +245,7 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     // Only cards actually pinned open occupy stacking space; an on-hover-only popup is transient
     // and doesn't need collision avoidance against a card that might not even be showing right now.
     const height = card.classList.contains('is-pinned') ? card.getBoundingClientRect().height : 0;
-    return { card, connectorH, connectorV, stripeBar, stripeHit, side, naturalTop, barLeft, stripeTop, stripeHeight, height };
+    return { card, connectorPath, stripeBar, stripeHit, side, naturalTop, barLeft, stripeTop, stripeHeight, height };
   });
 
   const packedTop = new Map<RawEntry, number>();
@@ -270,16 +264,22 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
   // Only a card actually pushed away from its own natural row draws a connector at all — several
   // notes on the exact same target inevitably need this (they can't all sit at an identical
   // position), but a lone note usually won't. Two *unrelated* notes (different targets) can easily
-  // need one at the same time too, though, if enough separate single-note targets get crowded
-  // together — and since every "first note on its own target" bar sits at the same relative offset
-  // (stackIndex 0), their connectors would all land at the exact same x and draw right over each
-  // other without this: interval-scheduling lane assignment, the same technique a calendar view
-  // uses to lay out overlapping events side by side. Sorted by where each connector starts, each
-  // reuses the first lane whose previous occupant's own span has already ended above it; otherwise
-  // it opens a new lane one step further out. The result reads as a fan of nested arcs — the first
-  // connector in a cluster takes the innermost lane (closest to its own bar), each one after it
-  // that's still in flight at the same time steps one lane further toward the card, like a
-  // flattened rainbow — rather than every connector converging on one shared line.
+  // need one at the same time too, if enough separate single-note targets get crowded together —
+  // and since every "first note on its own target" bar sits at the same relative offset
+  // (stackIndex 0), their connectors would land at the exact same x and draw right over each other
+  // without lane assignment. But a single fixed lane for a connector's *entire* run — assigned once
+  // by how much it overlaps everyone else across its whole length — routes it at that same
+  // outward offset even long after whatever it was avoiding has already ended, which reads as
+  // several permanently-parallel lines rather than one bundle that thins out as each branch peels
+  // away. So lanes are assigned per height range instead: the whole set of "connector starts or
+  // ends here" heights on a side splits it into slices, and within each slice, only whichever
+  // connectors are actually active right then compete for lanes — ranked by how much run they have
+  // left (the one closest to peeling off takes the innermost lane, so it doesn't need runway it's
+  // about to stop needing), the same interval-scheduling a calendar view uses to lay out
+  // overlapping events side by side. Each note's own consecutive same-lane slices are merged back
+  // into as few straight pieces as possible, with a short horizontal jog wherever its lane actually
+  // changes — so a note's route runs tight alongside its neighbors except exactly where, and for
+  // as long as, avoiding them actually requires it.
   type Connecting = { entry: RawEntry; top: number; spanFrom: number; spanTo: number };
   const connecting: Connecting[] = [];
   for (const entry of raw) {
@@ -287,63 +287,80 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     if (top === null || entry.naturalTop === null || Math.abs(top - entry.naturalTop) <= 1) continue;
     connecting.push({ entry, top, spanFrom: Math.min(entry.naturalTop, top), spanTo: Math.max(entry.naturalTop, top) });
   }
-  connecting.sort((a, b) => a.spanFrom - b.spanFrom);
-  const laneOf = new Map<RawEntry, number>();
+
+  const segmentsByEntry = new Map<RawEntry, ConnectorSegment[]>();
+  const cardNearEdgeFor = (side: 'left' | 'right') =>
+    side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
+
   for (const side of ['left', 'right'] as const) {
-    const laneEnds: number[] = [];
-    for (const item of connecting) {
-      if (item.entry.side !== side) continue;
-      let lane = laneEnds.findIndex((end) => end <= item.spanFrom);
-      if (lane === -1) {
-        lane = laneEnds.length;
-        laneEnds.push(item.spanTo);
-      } else {
-        laneEnds[lane] = item.spanTo;
+    const items = connecting.filter((item) => item.entry.side === side);
+    if (!items.length) continue;
+    const outward = side === 'left' ? -1 : 1;
+    const railX = (item: Connecting, lane: number) => item.entry.barLeft + outward * (CONNECTOR_CLEARANCE + lane * CONNECTOR_LANE_GAP);
+
+    // Every height any connector on this side starts or ends at, sorted — the boundaries between
+    // slices where the set of "who's active" can change.
+    const breakpoints = Array.from(new Set(items.flatMap((item) => [item.spanFrom, item.spanTo]))).sort((a, b) => a - b);
+
+    // Each item's own sequence of {from, to, lane} runs, consecutive same-lane slices already
+    // merged as they're built.
+    const runsByItem = new Map<Connecting, { from: number; to: number; lane: number }[]>(items.map((item) => [item, []]));
+    for (let i = 0; i + 1 < breakpoints.length; i++) {
+      const sliceFrom = breakpoints[i];
+      const sliceTo = breakpoints[i + 1];
+      if (sliceTo <= sliceFrom) continue;
+      const active = items
+        .filter((item) => item.spanFrom <= sliceFrom && item.spanTo >= sliceTo)
+        .sort((a, b) => a.spanTo - b.spanTo);
+      active.forEach((item, lane) => {
+        const runs = runsByItem.get(item)!;
+        const last = runs[runs.length - 1];
+        if (last && last.lane === lane && last.to === sliceFrom) last.to = sliceTo;
+        else runs.push({ from: sliceFrom, to: sliceTo, lane });
+      });
+    }
+
+    for (const item of items) {
+      const runs = runsByItem.get(item)!;
+      if (!runs.length) continue;
+      const segments: ConnectorSegment[] = [];
+      for (let i = 0; i < runs.length; i++) {
+        const run = runs[i];
+        const x = railX(item, run.lane);
+        segments.push({ left: x, top: run.from, width: CONNECTOR_THICKNESS, height: run.to - run.from });
+        const next = runs[i + 1];
+        if (next && next.lane !== run.lane) {
+          const nextX = railX(item, next.lane);
+          segments.push({ left: Math.min(x, nextX), top: run.to, width: Math.abs(nextX - x), height: CONNECTOR_THICKNESS });
+        }
       }
-      laneOf.set(item.entry, lane);
+      const lastRun = runs[runs.length - 1];
+      const lastX = railX(item, lastRun.lane);
+      const cardNearEdge = cardNearEdgeFor(side);
+      segments.push({ left: Math.min(lastX, cardNearEdge), top: item.top, width: Math.abs(cardNearEdge - lastX), height: CONNECTOR_THICKNESS });
+      segmentsByEntry.set(item.entry, segments);
     }
   }
 
   return raw.map((entry) => {
-    const { card, connectorH, connectorV, stripeBar, stripeHit, side, naturalTop, barLeft, stripeTop, stripeHeight } = entry;
+    const { card, connectorPath, stripeBar, stripeHit, barLeft, stripeTop, stripeHeight } = entry;
     // A card not part of the packed (pinned) stacking above just uses its own natural position —
     // covers the hover-only fallback, which doesn't get displaced by neighbors at all.
-    const top = packedTop.get(entry) ?? naturalTop;
+    const top = packedTop.get(entry) ?? entry.naturalTop;
     if (top === null) {
-      return { card, connectorH, connectorV, stripeBar, stripeHit, offscreen: true, top: 0, barLeft, stripeTop, stripeHeight, connector: undefined };
+      return { card, connectorPath, stripeBar, stripeHit, offscreen: true, top: 0, barLeft, stripeTop, stripeHeight, segments: [] };
     }
-
-    let connector: ConnectorGeometry | undefined;
-    const lane = laneOf.get(entry);
-    if (naturalTop !== null && lane !== undefined) {
-      const cardNearEdge = side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
-      // The rail clears the bar's own footprint first (see CONNECTOR_CLEARANCE — without it, the
-      // vertical run would draw straight through the bar itself, on top of the very color block
-      // it's meant to be pointing away from), then steps further out per lane, in the same
-      // direction the horizontal run below already travels (toward the card).
-      const outward = side === 'left' ? -1 : 1;
-      const railX = barLeft + outward * (CONNECTOR_CLEARANCE + lane * CONNECTOR_LANE_GAP);
-      connector = {
-        vLeft: railX,
-        vTop: Math.min(naturalTop, top),
-        vHeight: Math.abs(top - naturalTop),
-        hLeft: Math.min(barLeft, cardNearEdge),
-        hTop: top,
-        hWidth: Math.abs(cardNearEdge - barLeft),
-      };
-    }
-    return { card, connectorH, connectorV, stripeBar, stripeHit, offscreen: false, top, barLeft, stripeTop, stripeHeight, connector };
+    return { card, connectorPath, stripeBar, stripeHit, offscreen: false, top, barLeft, stripeTop, stripeHeight, segments: segmentsByEntry.get(entry) ?? [] };
   });
 }
 
 function applyGroupLayout(results: GroupLayoutResult[]): void {
-  for (const { card, connectorH, connectorV, stripeBar, stripeHit, offscreen, top, barLeft, stripeTop, stripeHeight, connector } of results) {
+  for (const { card, connectorPath, stripeBar, stripeHit, offscreen, top, barLeft, stripeTop, stripeHeight, segments } of results) {
     card.classList.toggle('is-offscreen', offscreen);
     stripeBar.classList.toggle('is-offscreen', offscreen);
     stripeHit.classList.toggle('is-offscreen', offscreen);
     if (offscreen) {
-      connectorH.classList.remove('is-visible');
-      connectorV.classList.remove('is-visible');
+      for (const el of Array.from(connectorPath.children)) el.classList.remove('is-visible');
       continue;
     }
     card.style.top = `${top}px`;
@@ -356,15 +373,25 @@ function applyGroupLayout(results: GroupLayoutResult[]): void {
     stripeHit.style.width = `${BAR_WIDTH + STRIPE_HIT_PADDING * 2}px`;
     stripeHit.style.height = `${stripeHeight}px`;
 
-    connectorH.classList.toggle('is-visible', !!connector);
-    connectorV.classList.toggle('is-visible', !!connector);
-    if (!connector) continue;
-    connectorH.style.left = `${connector.hLeft}px`;
-    connectorH.style.top = `${connector.hTop}px`;
-    connectorH.style.width = `${connector.hWidth}px`;
-    connectorV.style.left = `${connector.vLeft}px`;
-    connectorV.style.top = `${connector.vTop}px`;
-    connectorV.style.height = `${connector.vHeight}px`;
+    // The path's own element count tracks each result's own segment count exactly (rebuilt fresh
+    // every measure pass from the current lane assignment) — reusing existing elements where
+    // possible instead of always clearing + recreating avoids a flash of "no connector" every time
+    // the DOM is touched, e.g. while a neighboring note's typing is triggering nearby relayouts.
+    const existing = Array.from(connectorPath.children) as HTMLElement[];
+    segments.forEach((segment, index) => {
+      let el = existing[index];
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'annotation-connector-segment';
+        connectorPath.appendChild(el);
+      }
+      el.style.left = `${segment.left}px`;
+      el.style.top = `${segment.top}px`;
+      el.style.width = `${segment.width}px`;
+      el.style.height = `${segment.height}px`;
+      el.classList.add('is-visible');
+    });
+    for (let i = segments.length; i < existing.length; i++) existing[i].remove();
   }
 }
 
@@ -549,12 +576,9 @@ class AnnotationMarginWidget extends WidgetType {
     });
     card.append(textarea);
 
-    const connectorH = document.createElement('div');
-    connectorH.className = 'annotation-connector-h';
-    connectorH.style.setProperty('--annotation-connector-color', this.color);
-    const connectorV = document.createElement('div');
-    connectorV.className = 'annotation-connector-v';
-    connectorV.style.setProperty('--annotation-connector-color', this.color);
+    const connectorPath = document.createElement('div');
+    connectorPath.className = 'annotation-connector-path';
+    connectorPath.style.setProperty('--annotation-connector-color', this.color);
 
     const stripeBar = document.createElement('div');
     stripeBar.className = 'annotation-stripe-bar';
@@ -614,7 +638,7 @@ class AnnotationMarginWidget extends WidgetType {
     card.addEventListener('mouseenter', openCard);
     card.addEventListener('mouseleave', scheduleClose);
 
-    group.append(card, connectorH, connectorV, stripeBar, stripeHit);
+    group.append(card, connectorPath, stripeBar, stripeHit);
     const workspaceElement = findWorkspaceElement(view);
     (workspaceElement ?? anchor).append(group);
     this.group = group;
