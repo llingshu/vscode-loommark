@@ -317,19 +317,19 @@ content even with several on screen at once. The note itself renders pinned flus
 left/right edge of the editor — outside the editing area entirely, and unaffected by heading Card
 mode's own indentation, so notes on deeply nested headings still line up with everything else on
 the same side — whenever there's enough room for it there; otherwise it collapses to a small
-arrow, revealed on hover. Each note can be individually collapsed to a one-line preview, edited
-directly, or deleted with its own trash-can button, and a card's "+ Add note" appends another note
-to the same attachment point — none of this ever needs touching the hidden raw `<<</>>>` source by
-hand. Stacking several blocks back to back (either side, or via "+ Add note") all attach to the
-same original line rather than to each other, and a block whose target line belongs to a
-table/fenced-code/display-math construct or a list item's own shift+enter continuation attaches to
-the whole thing, not just one line of it.
+color-matched pill, revealed on hover. Each note can be individually collapsed to a one-line
+preview, edited directly, or deleted with its own trash-can button, and a card's "+ Add note"
+appends another note to the same attachment point — none of this ever needs touching the hidden raw
+`<<</>>>` source by hand. Stacking several blocks back to back (either side, or via "+ Add note")
+all attach to the same original line rather than to each other, and a block whose target line
+belongs to a table/fenced-code/display-math construct or a list item's own shift+enter continuation
+attaches to the whole thing, not just one line of it.
 
-Notes anchored close together on the same side never overlap: they pack top to bottom in document
-order, each pushed down only as far as clearing the previous one requires — the same margin-comment
-stacking Word and Google Docs use. A note whose packed position ends up away from its own line gets
-a thin, color-matched elbow connector (orthogonal, not diagonal, by design) linking the two, so it's
-still obvious which line a displaced note belongs to.
+Every note is linked to its line by a thin, color-matched elbow connector (orthogonal, not diagonal,
+by design), the same visual language as the accent stripe. Notes anchored close together on the
+same side never overlap: they pack top to bottom in document order, each pushed down only as far as
+clearing the previous one requires — the same margin-comment stacking Word and Google Docs use — and
+the connector bends to follow wherever a packed note actually ended up.
 
 This is still a first pass:
 

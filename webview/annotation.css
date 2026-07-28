@@ -1,11 +1,11 @@
 /* .annotation-marker is a small inline indicator that stays right at the target's own (possibly
-   heading-indented) text position — that's fine, it's just a tiny arrow. The actual .annotation-card
-   is deliberately NOT a child of the marker: AnnotationMarginWidget.toDOM appends it straight onto
-   `.loommark-workspace` instead (position:relative, overflow-y:auto — see loommark-core's
-   style.css), so it can sit flush against the true left/right edge of the whole editor, outside any
-   heading Card's own border/indentation, consistently aligned across every annotation on that side,
-   regardless of how deeply its target line is nested. Its `top` is computed in JS (see
-   repositionAnnotationCards) via view.coordsAtPos, not by CSS.
+   heading-indented) text position — that's fine, it's just a tiny colored pill. The actual
+   .annotation-card is deliberately NOT a child of the marker: AnnotationMarginWidget.toDOM appends
+   it straight onto `.loommark-workspace` instead (position:relative, overflow-y:auto — see
+   loommark-core's style.css), so it can sit flush against the true left/right edge of the whole
+   editor, outside any heading Card's own border/indentation, consistently aligned across every
+   annotation on that side, regardless of how deeply its target line is nested. Its `top` is
+   computed in JS (see repositionAnnotationCards) via view.coordsAtPos, not by CSS.
 
    .cm-loommark-annotation-target has no rules of its own here — its whole visual effect (a thin
    color stripe per attached annotation) comes from the inline background-image/position/size
@@ -28,13 +28,20 @@
   vertical-align: baseline;
 }
 
+/* A small solid pill in the annotation's own color rather than a directional arrow glyph — a
+   connector line (see .annotation-connector-h/-v below) runs from roughly here to the card, so the
+   marker itself only needs to read as "something is anchored at this exact point," not carry
+   meaning of its own. */
 .annotation-icon {
   display: inline-block;
+  width: 5px;
+  height: 14px;
+  vertical-align: text-bottom;
+  margin: 0 2px;
+  border-radius: 2px;
+  background: var(--annotation-accent, var(--vscode-textLink-foreground));
   cursor: default;
-  color: var(--annotation-accent, var(--vscode-textLink-foreground));
-  font-size: 0.85em;
-  opacity: 0.7;
-  padding: 0 3px;
+  opacity: 0.75;
   transition: opacity 0.12s ease;
 }
 
@@ -85,14 +92,14 @@
   display: none;
 }
 
-/* Only drawn when a card's own collision-avoidance packing (see measureCardLayout) pushed it away
-   from its natural target position — an elbow from the target's actual (possibly heading-indented)
+/* Every annotation gets one of these: an elbow from the target's actual (possibly heading-indented)
    on-screen position, across to a vertical "rail" at the card's own near edge, then down/up to
-   wherever the card actually ended up. Kept orthogonal (horizontal-then-vertical, no diagonal) by
-   request — a diagonal line reads faster but a right-angle one stays legible even with several
-   overlapping ranges of travel, the same tradeoff Word/Google Docs' own margin-comment connectors
-   make. Geometry (left/top/width/height) is set inline by applyCardLayout; only display and color
-   live here. */
+   wherever the card actually ended up (which is just its natural row when nothing pushed it — a
+   near-zero-height vertical segment, so it reads as a plain short leader line in the common case).
+   Kept orthogonal (horizontal-then-vertical, no diagonal) by request — a diagonal line reads faster
+   but a right-angle one stays legible even with several overlapping ranges of travel, the same
+   tradeoff Word/Google Docs' own margin-comment connectors make. Geometry (left/top/width/height)
+   is set inline by applyCardLayout; only display and color live here. */
 .annotation-connector-h,
 .annotation-connector-v {
   display: none;
@@ -113,8 +120,15 @@
   width: 2px;
 }
 
-.annotation-connector-h.is-visible,
-.annotation-connector-v.is-visible {
+/* is-visible (set by applyCardLayout) only means "geometry is known, not offscreen" — actual
+   display additionally requires the sibling .annotation-card to be showing right now, via :has(),
+   so hovering the card open/closed (a plain class toggle with no layout pass of its own) keeps the
+   connector in sync automatically instead of needing its own separate event wiring. A connector
+   permanently drawn to a hidden hover-only card would look like a stray, disconnected line. */
+.annotation-group:has(> .annotation-card.is-open) .annotation-connector-h.is-visible,
+.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-h.is-visible,
+.annotation-group:has(> .annotation-card.is-open) .annotation-connector-v.is-visible,
+.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-v.is-visible {
   display: block;
 }
 

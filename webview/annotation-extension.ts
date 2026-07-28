@@ -188,10 +188,14 @@ type CardLayoutResult = {
 // and, for cards pinned open, packs them top-to-bottom without overlap — the same margin-comment
 // stacking Word/Google Docs use: sorted by natural (document) order, each card pushed down only as
 // far as clearing the previous one requires, never pulled earlier than its own natural position.
-// A card whose packed position ends up away from its natural one gets an elbow connector (a
-// horizontal reach from the target's own on-screen position — which does track heading indentation,
-// deliberately, since that's genuinely where the annotated text is — to a vertical "rail" running
-// along the card's near edge) so it's still visually obvious which line a displaced card belongs to.
+// Every card gets an elbow connector (a horizontal reach from the target's own on-screen position —
+// which does track heading indentation, deliberately, since that's genuinely where the annotated
+// text is — to a vertical "rail" running along the card's near edge, then to wherever the card
+// actually ended up) linking it back to its line, matching a hand-drawn reference the user provided
+// showing every marker connected to its card this way, not only ones displaced by stacking.
+// applyCardLayout still only shows a connector while its own card is actually visible (see
+// .annotation-group:has(...) in annotation.css) — a permanently-drawn line to a hidden hover-only
+// card would look broken.
 // Reads from each group's own data-* attributes rather than closing over one widget instance, so a
 // single listener (registered once in annotationExtension) can lay out every card regardless of
 // which widget last rebuilt it.
@@ -245,7 +249,7 @@ function measureCardLayout(view: EditorView): CardLayoutResult[] {
     if (top === null) return { card, connectorH, connectorV, offscreen: true, top: 0, connector: undefined };
 
     let connector: ConnectorGeometry | undefined;
-    if (naturalTop !== null && markerX !== null && Math.abs(top - naturalTop) > 1) {
+    if (naturalTop !== null && markerX !== null) {
       const railX = side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
       connector = {
         hLeft: Math.min(markerX, railX),
@@ -347,9 +351,11 @@ class AnnotationMarginWidget extends WidgetType {
     wrapper.className = `annotation-marker annotation-marker-${this.side}`;
     wrapper.style.setProperty('--annotation-accent', this.items[0]?.color ?? COLOR_PALETTE[0]);
 
+    // A small solid pill in the annotation's own color, not a directional arrow glyph — matching a
+    // hand-drawn reference the user provided where the marker at the text edge is a colored block
+    // that a connector line runs from, not an icon that has to be legible at font size.
     const icon = document.createElement('span');
     icon.className = 'annotation-icon';
-    icon.textContent = this.side === 'left' ? '◂' : '▸';
     icon.setAttribute('aria-hidden', 'true');
 
     // The card (and its two connector-line elements) are deliberately NOT appended under wrapper:
