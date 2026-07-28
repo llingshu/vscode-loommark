@@ -156,12 +156,14 @@ const CARD_STACK_GAP = 8;
 const CARD_WIDTH = 230;
 const CARD_EDGE_GAP = 6;
 // The rail's minimum clearance from its own stripe bar's edge (so the two don't draw on top of
-// each other — see the lane-assignment comment in measureGroupLayout below) and the step between
-// two rails that are simultaneously in use. Both deliberately tight — LANE_GAP only needs to stay
-// >= the connector's own thickness (CONNECTOR_THICKNESS) to guarantee no overlap, not a wide,
-// clearly-separated lane each.
+// each other) and the step between two rails simultaneously in use. LANE_GAP must clear the
+// connector's own thickness by a wide enough visible margin that two adjacent lanes read as two
+// separate lines rather than one merged band — a gap only 1px wider than the thickness (as this
+// used to be) is indistinguishable from touching at normal zoom, which is exactly what made the
+// per-slice reconvergence fix look like no change at all: the lanes were computed correctly but
+// the on-screen gap between them was imperceptible.
 const CONNECTOR_CLEARANCE = 3;
-const CONNECTOR_LANE_GAP = 5;
+const CONNECTOR_LANE_GAP = 10;
 const CONNECTOR_THICKNESS = 4;
 
 // A single straight piece of a connector — several of these, laid end to end, make up one note's
