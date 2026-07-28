@@ -159,37 +159,137 @@ function findWorkspaceElement(view: EditorView): HTMLElement | undefined {
   return view.dom.parentElement?.parentElement ?? undefined;
 }
 
-type CardMeasurement = { card: HTMLElement; top: number | null };
+// Gap kept between two stacked cards on the same side, and the thickness of a displacement
+// connector line — both purely cosmetic, no CSS counterpart to stay in sync with.
+const CARD_STACK_GAP = 8;
+// These two must stay in sync with .annotation-card's width and .annotation-card-left/-right's
+// edge offset in annotation.css: the connector's vertical "rail" is computed analytically here
+// (rather than measured) so measureCardLayout can run entirely inside CodeMirror's read phase
+// without needing a card's real rendered rect just to find its near edge.
+const CARD_WIDTH = 230;
+const CARD_EDGE_GAP = 6;
 
-function measureCardPositions(view: EditorView): CardMeasurement[] {
+type ConnectorGeometry = {
+  hLeft: number; hTop: number; hWidth: number;
+  vLeft: number; vTop: number; vHeight: number;
+  color: string;
+};
+
+type CardLayoutResult = {
+  card: HTMLElement;
+  connectorH: HTMLElement;
+  connectorV: HTMLElement;
+  offscreen: boolean;
+  top: number;
+  connector: ConnectorGeometry | undefined;
+};
+
+// Reads every currently-live annotation group's natural position (view.coordsAtPos at its target)
+// and, for cards pinned open, packs them top-to-bottom without overlap — the same margin-comment
+// stacking Word/Google Docs use: sorted by natural (document) order, each card pushed down only as
+// far as clearing the previous one requires, never pulled earlier than its own natural position.
+// A card whose packed position ends up away from its natural one gets an elbow connector (a
+// horizontal reach from the target's own on-screen position — which does track heading indentation,
+// deliberately, since that's genuinely where the annotated text is — to a vertical "rail" running
+// along the card's near edge) so it's still visually obvious which line a displaced card belongs to.
+// Reads from each group's own data-* attributes rather than closing over one widget instance, so a
+// single listener (registered once in annotationExtension) can lay out every card regardless of
+// which widget last rebuilt it.
+function measureCardLayout(view: EditorView): CardLayoutResult[] {
   const workspaceElement = findWorkspaceElement(view);
   if (!workspaceElement) return [];
   const workspaceRect = workspaceElement.getBoundingClientRect();
-  const cards = Array.from(workspaceElement.querySelectorAll<HTMLElement>(':scope > .annotation-card'));
-  return cards.map((card) => {
-    const targetFrom = Number(card.dataset.targetFrom);
-    if (!Number.isFinite(targetFrom)) return { card, top: null };
-    const coords = view.coordsAtPos(targetFrom);
-    return { card, top: coords ? coords.top - workspaceRect.top + workspaceElement.scrollTop : null };
+  const scrollLeft = workspaceElement.scrollLeft;
+  const scrollTop = workspaceElement.scrollTop;
+
+  type RawEntry = {
+    card: HTMLElement; connectorH: HTMLElement; connectorV: HTMLElement;
+    side: 'left' | 'right'; color: string; naturalTop: number | null; markerX: number | null; height: number;
+  };
+
+  const groups = Array.from(workspaceElement.querySelectorAll<HTMLElement>(':scope > .annotation-group'));
+  const raw: RawEntry[] = groups.map((group) => {
+    const card = group.querySelector<HTMLElement>('.annotation-card')!;
+    const connectorH = group.querySelector<HTMLElement>('.annotation-connector-h')!;
+    const connectorV = group.querySelector<HTMLElement>('.annotation-connector-v')!;
+    const side: 'left' | 'right' = group.dataset.side === 'right' ? 'right' : 'left';
+    const color = group.dataset.color || COLOR_PALETTE[0];
+    const targetFrom = Number(group.dataset.targetFrom);
+    const coords = Number.isFinite(targetFrom) ? view.coordsAtPos(targetFrom) : null;
+    const naturalTop = coords ? coords.top - workspaceRect.top + scrollTop : null;
+    const markerX = coords ? (side === 'left' ? coords.left : coords.right) - workspaceRect.left + scrollLeft : null;
+    // Only cards actually pinned open occupy stacking space; an on-hover-only popup is transient
+    // and doesn't need collision avoidance against a card that might not even be showing right now.
+    const height = card.classList.contains('is-pinned') ? card.getBoundingClientRect().height : 0;
+    return { card, connectorH, connectorV, side, color, naturalTop, markerX, height };
+  });
+
+  const packedTop = new Map<RawEntry, number>();
+  for (const side of ['left', 'right'] as const) {
+    const onSide = raw
+      .filter((entry) => entry.side === side && entry.naturalTop !== null && entry.card.classList.contains('is-pinned'))
+      .sort((a, b) => a.naturalTop! - b.naturalTop!);
+    let cursor = -Infinity;
+    for (const entry of onSide) {
+      const top = Math.max(entry.naturalTop!, cursor);
+      packedTop.set(entry, top);
+      cursor = top + entry.height + CARD_STACK_GAP;
+    }
+  }
+
+  return raw.map((entry) => {
+    const { card, connectorH, connectorV, side, color, naturalTop, markerX } = entry;
+    // A card not part of the packed (pinned) stacking above just uses its own natural position —
+    // covers the hover-only fallback, which doesn't get displaced by neighbors at all.
+    const top = packedTop.get(entry) ?? naturalTop;
+    if (top === null) return { card, connectorH, connectorV, offscreen: true, top: 0, connector: undefined };
+
+    let connector: ConnectorGeometry | undefined;
+    if (naturalTop !== null && markerX !== null && Math.abs(top - naturalTop) > 1) {
+      const railX = side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
+      connector = {
+        hLeft: Math.min(markerX, railX),
+        hTop: naturalTop,
+        hWidth: Math.abs(railX - markerX),
+        vLeft: railX,
+        vTop: Math.min(naturalTop, top),
+        vHeight: Math.abs(top - naturalTop),
+        color,
+      };
+    }
+    return { card, connectorH, connectorV, offscreen: false, top, connector };
   });
 }
 
-function applyCardPositions(measurements: CardMeasurement[]): void {
-  for (const { card, top } of measurements) {
-    card.classList.toggle('is-offscreen', top === null);
-    if (top !== null) card.style.top = `${top}px`;
+function applyCardLayout(results: CardLayoutResult[]): void {
+  for (const { card, connectorH, connectorV, offscreen, top, connector } of results) {
+    card.classList.toggle('is-offscreen', offscreen);
+    if (offscreen) {
+      connectorH.classList.remove('is-visible');
+      connectorV.classList.remove('is-visible');
+      continue;
+    }
+    card.style.top = `${top}px`;
+
+    connectorH.classList.toggle('is-visible', !!connector);
+    connectorV.classList.toggle('is-visible', !!connector);
+    if (!connector) continue;
+    connectorH.style.left = `${connector.hLeft}px`;
+    connectorH.style.top = `${connector.hTop}px`;
+    connectorH.style.width = `${connector.hWidth}px`;
+    connectorH.style.setProperty('--annotation-connector-color', connector.color);
+    connectorV.style.left = `${connector.vLeft}px`;
+    connectorV.style.top = `${connector.vTop}px`;
+    connectorV.style.height = `${connector.vHeight}px`;
+    connectorV.style.setProperty('--annotation-connector-color', connector.color);
   }
 }
 
-// Repositions every currently-live annotation card's `top` from scratch via view.coordsAtPos, so a
-// card stays glued to its target line even when something *else* in the document reflows the page
-// (a resize-driven rewrap, an edit above the target shifting later lines down) without this
-// specific widget's own eq() reporting a change (see AnnotationMarginWidget.eq — content/color/
-// collapsed unchanged means CodeMirror reuses the old, now-stale-positioned DOM node as-is).
-// Reads position from each card's own data-target-from attribute rather than closing over any one
-// widget instance, so a single listener (registered once in annotationExtension) can refresh every
-// card regardless of which widget last rebuilt it.
-//
+// requestMeasure's own key coalesces same-key requests queued within a frame down to one, so
+// several widgets each calling this in the same toDOM pass (e.g. a left and a right group both
+// rebuilding on the same edit) run one shared layout pass instead of one redundant pass per widget.
+const annotationLayoutMeasureKey = {};
+
 // Split into measure (read) + apply (write) and run through view.requestMeasure rather than
 // reading view.coordsAtPos directly: called synchronously from inside toDOM, coordsAtPos throws
 // ("Reading the editor layout isn't allowed during an update") since toDOM itself runs mid-update,
@@ -197,7 +297,7 @@ function applyCardPositions(measurements: CardMeasurement[]): void {
 // CodeMirror considers it safe, and the write to right after — the same phased read/write batching
 // CodeMirror's own built-in panels and tooltips rely on for this exact situation.
 function repositionAnnotationCards(view: EditorView): void {
-  view.requestMeasure({ read: measureCardPositions, write: applyCardPositions });
+  view.requestMeasure({ key: annotationLayoutMeasureKey, read: measureCardLayout, write: applyCardLayout });
 }
 
 // The margin indicator: an icon when space is tight, the note card itself (always visible, no
@@ -210,7 +310,7 @@ function repositionAnnotationCards(view: EditorView): void {
 // the whole widget isn't torn down and rebuilt (losing focus) on every keystroke.
 class AnnotationMarginWidget extends WidgetType {
   private resizeObserver: ResizeObserver | undefined;
-  private card: HTMLElement | undefined;
+  private group: HTMLElement | undefined;
 
   constructor(
     private readonly side: 'left' | 'right',
@@ -252,14 +352,28 @@ class AnnotationMarginWidget extends WidgetType {
     icon.textContent = this.side === 'left' ? '◂' : '▸';
     icon.setAttribute('aria-hidden', 'true');
 
-    // The card is deliberately NOT appended under wrapper: wrapper stays inline at the target's
-    // own (possibly heading-indented) text position, but the card itself is appended straight onto
-    // the workspace container so its position is independent of that indentation entirely — see
-    // findWorkspaceElement/repositionAnnotationCards above.
+    // The card (and its two connector-line elements) are deliberately NOT appended under wrapper:
+    // wrapper stays inline at the target's own (possibly heading-indented) text position, but the
+    // card itself is appended straight onto the workspace container so its position is independent
+    // of that indentation entirely — see findWorkspaceElement/repositionAnnotationCards above.
+    // group itself is `display: contents` (see annotation.css) purely so all three still resolve
+    // their position:absolute containing block through to .loommark-workspace, while still being
+    // removable as one unit in destroy().
+    const group = document.createElement('div');
+    group.className = 'annotation-group';
+    group.dataset.targetFrom = String(this.targetPos);
+    group.dataset.side = this.side;
+    const color = this.items[0]?.color ?? COLOR_PALETTE[0];
+    group.dataset.color = color;
+
     const card = document.createElement('div');
     card.className = `annotation-card annotation-card-${this.side}`;
-    card.dataset.targetFrom = String(this.targetPos);
     card.setAttribute('aria-label', `${this.items.length} annotation(s)`);
+
+    const connectorH = document.createElement('div');
+    connectorH.className = 'annotation-connector-h';
+    const connectorV = document.createElement('div');
+    connectorV.className = 'annotation-connector-v';
 
     const list = document.createElement('div');
     list.className = 'annotation-card-list';
@@ -299,9 +413,10 @@ class AnnotationMarginWidget extends WidgetType {
     card.addEventListener('mouseleave', scheduleClose);
 
     wrapper.append(icon);
+    group.append(card, connectorH, connectorV);
     const workspaceElement = findWorkspaceElement(view);
-    (workspaceElement ?? wrapper).append(card);
-    this.card = card;
+    (workspaceElement ?? wrapper).append(group);
+    this.group = group;
 
     // The gap that matters is between the text column (createLoomMarkEditor's own
     // .loommark-editor-root, centered and width-capped — view.dom's parent) and the workspace
@@ -422,7 +537,7 @@ class AnnotationMarginWidget extends WidgetType {
 
   destroy(): void {
     this.resizeObserver?.disconnect();
-    this.card?.remove();
+    this.group?.remove();
   }
 
   ignoreEvent(): boolean {

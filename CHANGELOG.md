@@ -22,8 +22,10 @@ All notable changes to LoomMark are documented here. This project follows
   same way whenever there's room for it there, falling back to a small hover-revealed arrow
   otherwise; each note can be individually collapsed, edited directly, or deleted (a trash-can
   button, not a close "×"), and a card's "+ Add note" attaches another note to the same point —
-  none of it ever needs touching the hidden raw source by hand. See the README for the current
-  limitations of this first pass.
+  none of it ever needs touching the hidden raw source by hand. Notes anchored close together never
+  overlap: they pack top to bottom in document order like Word/Google Docs margin comments, and a
+  note displaced from its own line by that packing gets a thin, color-matched elbow connector back
+  to it. See the README for the current limitations of this first pass.
 
 The webview now consumes `@llingshu/loommark-core`, a separately-published, portable CodeMirror 6
 Markdown kernel extracted from this project's own editor, rather than maintaining its own copy of

@@ -325,6 +325,12 @@ same original line rather than to each other, and a block whose target line belo
 table/fenced-code/display-math construct or a list item's own shift+enter continuation attaches to
 the whole thing, not just one line of it.
 
+Notes anchored close together on the same side never overlap: they pack top to bottom in document
+order, each pushed down only as far as clearing the previous one requires — the same margin-comment
+stacking Word and Google Docs use. A note whose packed position ends up away from its own line gets
+a thin, color-matched elbow connector (orthogonal, not diagonal, by design) linking the two, so it's
+still obvious which line a displaced note belongs to.
+
 This is still a first pass:
 
 - The color-coded stripe doesn't currently reach a table/fenced-code/display-math target — those
@@ -332,8 +338,6 @@ This is still a first pass:
   the note itself still attaches and works normally there, just without the connecting stripe.
 - Colors are assigned by each annotation's position among all annotations in the document, so
   adding or removing one earlier in the document can shift the colors of unrelated ones after it.
-- Several notes anchored close together on the same side can visually overlap — there's no
-  collision-avoidance layout yet to space them apart.
 
 ## Search And Replace
 

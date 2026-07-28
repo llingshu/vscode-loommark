@@ -13,6 +13,15 @@
    same multi-layer-gradient technique buildHeadingCardDecorations already uses for nested Card
    accents. The class exists only so a future rule (or a user stylesheet) has something to select. */
 
+/* display:contents removes .annotation-group's own box entirely (it never renders as an element in
+   its own right) while keeping .annotation-card/-connector-h/-connector-v as its DOM children —
+   they still resolve position:absolute against .loommark-workspace exactly as if group weren't
+   there at all. It exists purely so toDOM/destroy can create/remove the card and its two connector
+   segments as one unit instead of tracking three separate references. */
+.annotation-group {
+  display: contents;
+}
+
 .annotation-marker {
   position: relative;
   display: inline-block;
@@ -74,6 +83,39 @@
    leaving a card frozen at a wrong position until it scrolls back into range. */
 .annotation-card.is-offscreen {
   display: none;
+}
+
+/* Only drawn when a card's own collision-avoidance packing (see measureCardLayout) pushed it away
+   from its natural target position — an elbow from the target's actual (possibly heading-indented)
+   on-screen position, across to a vertical "rail" at the card's own near edge, then down/up to
+   wherever the card actually ended up. Kept orthogonal (horizontal-then-vertical, no diagonal) by
+   request — a diagonal line reads faster but a right-angle one stays legible even with several
+   overlapping ranges of travel, the same tradeoff Word/Google Docs' own margin-comment connectors
+   make. Geometry (left/top/width/height) is set inline by applyCardLayout; only display and color
+   live here. */
+.annotation-connector-h,
+.annotation-connector-v {
+  display: none;
+  position: absolute;
+  z-index: 39;
+  background: var(--annotation-connector-color, var(--vscode-textLink-foreground));
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* applyCardLayout sets the variable dimension (width for -h, height for -v) plus left/top inline;
+   the fixed line thickness lives here instead of being recomputed every layout pass. */
+.annotation-connector-h {
+  height: 2px;
+}
+
+.annotation-connector-v {
+  width: 2px;
+}
+
+.annotation-connector-h.is-visible,
+.annotation-connector-v.is-visible {
+  display: block;
 }
 
 .annotation-card-list {

@@ -25,5 +25,11 @@ tsconfig.json
 dist/*.map
 dist/*.json
 assets/*.svg
-image*.png
+# Reference screenshots pasted into chat land here under whatever name the attachment step gives
+# them (image.png, image2.png, a typo'd iamge.png, ...) — never a name worth guessing in advance.
+# vsce matches .vscodeignore patterns with minimatch, not gitignore rules: a leading "/" would need
+# a literal leading "/" in the file's own relative path (which it never has) to match at all, so
+# this is deliberately un-anchored — bare "*.png" already can't cross a "/" in minimatch, so it
+# still only matches root-level files, leaving the real shipped assets/icon.png alone.
+*.png
 @eaDir/**

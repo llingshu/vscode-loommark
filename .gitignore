@@ -35,5 +35,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-/image*.png
+# Reference screenshots pasted into chat land here under whatever name the attachment step gives
+# them (image.png, image2.png, a typo'd iamge.png, ...) — never a name worth guessing in advance.
+# The only real tracked PNG (assets/icon.png) lives in a subdirectory, so this is root-only.
+/*.png
 /@eaDir/
