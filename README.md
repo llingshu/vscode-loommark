@@ -307,7 +307,9 @@ the note's content — can span multiple lines
 Typing the 3rd `<` (or `>`) of a delimiter line on an otherwise-empty line auto-closes the block
 immediately, the same way a code fence or `$$` block auto-closes — a bare, unclosed opener can't
 run on and silently swallow every real paragraph up to the next `<<<`/`>>>` line later in the
-document.
+document. `Ctrl/Cmd+Alt+A` wraps the line the cursor is on in a fresh left-margin note and focuses
+it, without needing to type the fence by hand; `Ctrl/Cmd+Shift+A` toggles whether annotations
+render at all.
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
 guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a

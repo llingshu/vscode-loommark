@@ -707,6 +707,23 @@ const repositionOnGeometryChange = EditorView.updateListener.of((update) => {
   if (update.geometryChanged || update.docChanged) repositionAnnotationGroups(update.view);
 });
 
+// Wraps the line the cursor is currently on in a fresh, empty left-margin annotation block and
+// focuses its textarea — the keyboard equivalent of typing `<<<`/`<<<` by hand around that line,
+// for when reaching for the mouse (or remembering the exact fence syntax) is more friction than
+// the annotation itself is worth. Inserting `\n<<<\n\n<<<` right at the current line's own end
+// (not a whole separate line below it) keeps the block immediately attached to that line, matching
+// how "annotates the line directly above" already works everywhere else in this syntax; a leading
+// `\n` starts the new block on its own line without disturbing the current line's own content, and
+// any text that already followed ends up after the block, unchanged.
+function annotateCurrentLine(view: EditorView): boolean {
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  const insertAt = line.to;
+  const focusFrom = insertAt + 1;
+  pendingFocusAnnotationFrom = focusFrom;
+  view.dispatch({ changes: { from: insertAt, insert: '\n<<<\n\n<<<' } });
+  return true;
+}
+
 export function annotationExtension(): Extension {
   return [
     annotationsVisibleField,
@@ -720,6 +737,10 @@ export function annotationExtension(): Extension {
           view.dispatch({ effects: toggleAnnotationsVisible.of() });
           return true;
         },
+      },
+      {
+        key: 'Mod-Alt-a',
+        run: annotateCurrentLine,
       },
     ]),
   ];

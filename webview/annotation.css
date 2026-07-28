@@ -158,13 +158,19 @@
   display: none;
 }
 
+/* No border in any state (default, hover, or focus) — the card's own border already frames the
+   whole note, and a focus ring on the textarea inside it just reads as visual clutter on top of
+   that. Deliberately no background change on focus either: this used to switch to
+   var(--vscode-editor-background) (typically white), which clashed hard against the now-colored
+   card — clicking to edit would flash a white box in the middle of an otherwise clean surface. */
 .annotation-card-text {
   display: block;
   width: 100%;
   height: calc(100% - 24px);
   box-sizing: border-box;
   margin-top: 4px;
-  border: 1px solid transparent;
+  border: none;
+  outline: none;
   border-radius: 3px;
   background: transparent;
   color: inherit;
@@ -173,19 +179,6 @@
   line-height: 1.4;
   padding: 3px 5px;
   resize: none;
-}
-
-.annotation-card-text:hover {
-  border-color: var(--vscode-widget-border);
-}
-
-/* Deliberately no background change here: this used to switch to var(--vscode-editor-background)
-   (typically white) on focus, which clashed hard against the now-colored card — clicking to edit
-   would flash a white box in the middle of an otherwise clean colored surface. Just the border
-   highlights, matching how the rest of the card already looks. */
-.annotation-card-text:focus {
-  border-color: var(--vscode-focusBorder);
-  outline: none;
 }
 
 /* A short connector, drawn only when a note's own collision-avoidance packing (see
