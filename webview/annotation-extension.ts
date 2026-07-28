@@ -159,6 +159,22 @@ function findWorkspaceElement(view: EditorView): HTMLElement | undefined {
   return view.dom.parentElement?.parentElement ?? undefined;
 }
 
+// The .cm-loommark-annotation-target stripe (see addTargetStripeDecorations above) is a background
+// on the *whole line box*, positioned at that box's own left/right edge — not at wherever the
+// line's actual text happens to end. coordsAtPos(target.to), by contrast, gives the position right
+// after the last real character, which for a short line can sit far short of the line box's own
+// right edge. Anchoring the connector to coordsAtPos instead of the line box produced a marker
+// miles from where the stripe visually was, and — for a short line under a right-side annotation —
+// an absurdly long connector reaching almost back to the line's own left edge to get there. Finding
+// the actual `.cm-line` element and using its own rendered edge keeps the connector and the stripe
+// pointing at literally the same place, and both still shift together under heading indentation
+// since indentation is CSS padding/margin on that same line box.
+function findLineElement(view: EditorView, pos: number): HTMLElement | null {
+  const { node } = view.domAtPos(pos);
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  return element?.closest('.cm-line') ?? null;
+}
+
 // Gap kept between two stacked cards on the same side, and the thickness of a displacement
 // connector line — both purely cosmetic, no CSS counterpart to stay in sync with.
 const CARD_STACK_GAP = 8;
@@ -221,7 +237,10 @@ function measureCardLayout(view: EditorView): CardLayoutResult[] {
     const targetFrom = Number(group.dataset.targetFrom);
     const coords = Number.isFinite(targetFrom) ? view.coordsAtPos(targetFrom) : null;
     const naturalTop = coords ? coords.top - workspaceRect.top + scrollTop : null;
-    const markerX = coords ? (side === 'left' ? coords.left : coords.right) - workspaceRect.left + scrollLeft : null;
+    const lineRect = Number.isFinite(targetFrom) ? findLineElement(view, targetFrom)?.getBoundingClientRect() : undefined;
+    const markerX = lineRect
+      ? (side === 'left' ? lineRect.left : lineRect.right) - workspaceRect.left + scrollLeft
+      : null;
     // Only cards actually pinned open occupy stacking space; an on-hover-only popup is transient
     // and doesn't need collision avoidance against a card that might not even be showing right now.
     const height = card.classList.contains('is-pinned') ? card.getBoundingClientRect().height : 0;
@@ -251,13 +270,20 @@ function measureCardLayout(view: EditorView): CardLayoutResult[] {
     let connector: ConnectorGeometry | undefined;
     if (naturalTop !== null && markerX !== null) {
       const railX = side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
+      // Bend right at the marker, not near the card: the vertical run sits at markerX (touching the
+      // marker/stripe with no overshoot) and covers the whole natural-to-packed height difference,
+      // then a short horizontal run at the card's own row carries it the rest of the way to the
+      // card's edge. Reversed from a naive "reach across, then drop down" routing on request — this
+      // way a card pushed far down by stacking doesn't drag a long horizontal line down with it
+      // through unrelated content; the long leg (if any) stays in the narrow lane right next to the
+      // text, and only a short, flat run crosses into the margin.
       connector = {
-        hLeft: Math.min(markerX, railX),
-        hTop: naturalTop,
-        hWidth: Math.abs(railX - markerX),
-        vLeft: railX,
+        vLeft: markerX,
         vTop: Math.min(naturalTop, top),
         vHeight: Math.abs(top - naturalTop),
+        hLeft: Math.min(markerX, railX),
+        hTop: top,
+        hWidth: Math.abs(railX - markerX),
         color,
       };
     }
