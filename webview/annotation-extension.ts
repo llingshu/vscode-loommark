@@ -276,12 +276,13 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
   // away. So lanes are assigned per height range instead: the whole set of "connector starts or
   // ends here" heights on a side splits it into slices, and within each slice, only whichever
   // connectors are actually active right then compete for lanes — ranked by how much run they have
-  // left (the one closest to peeling off takes the innermost lane, so it doesn't need runway it's
-  // about to stop needing), the same interval-scheduling a calendar view uses to lay out
-  // overlapping events side by side. Each note's own consecutive same-lane slices are merged back
-  // into as few straight pieces as possible, with a short horizontal jog wherever its lane actually
-  // changes — so a note's route runs tight alongside its neighbors except exactly where, and for
-  // as long as, avoiding them actually requires it.
+  // left (whichever will stay in flight *longest* keeps the innermost lane, hugging the text edge
+  // undisturbed, while whichever is about to peel off soonest is the one that steps outward to make
+  // room for it — a brief guest taking a detour past a resident that isn't going anywhere), the same
+  // interval-scheduling a calendar view uses to lay out overlapping events side by side. Each note's
+  // own consecutive same-lane slices are merged back into as few straight pieces as possible, with a
+  // short horizontal jog wherever its lane actually changes — so a note's route runs tight alongside
+  // its neighbors except exactly where, and for as long as, avoiding them actually requires it.
   type Connecting = { entry: RawEntry; top: number; spanFrom: number; spanTo: number };
   const connecting: Connecting[] = [];
   for (const entry of raw) {
@@ -313,7 +314,7 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
       if (sliceTo <= sliceFrom) continue;
       const active = items
         .filter((item) => item.spanFrom <= sliceFrom && item.spanTo >= sliceTo)
-        .sort((a, b) => a.spanTo - b.spanTo);
+        .sort((a, b) => b.spanTo - a.spanTo);
       active.forEach((item, lane) => {
         const runs = runsByItem.get(item)!;
         const last = runs[runs.length - 1];
