@@ -201,13 +201,19 @@
    where a route changes lane, or the final horizontal reach into the card's edge. Kept orthogonal
    (no diagonal) — a right-angle bend stays legible even where several overlap, the same tradeoff
    Word/Google Docs' own margin-comment connectors make. Geometry (left/top/width/height) is set
-   inline by applyGroupLayout; only display and color live here. */
+   inline by applyGroupLayout; only display and color live here.
+
+   Fully opaque, not translucent: a reconverging note's jog segment and the peeling note's own
+   horizontal reach segment routinely land at the exact same height by design (that's the whole
+   point of reconvergence — one note's trunk continues straight through the exact row where its
+   neighbor branches off). Two 80%-opacity colors crossing there blended into a muddy smear neither
+   color, reading as visual noise rather than a clean crossing. Full opacity means whichever segment
+   is later in DOM order (paints on top at the shared z-index) cleanly wins the crossing instead. */
 .annotation-connector-segment {
   display: none;
   position: absolute;
   z-index: 39;
   background: var(--annotation-connector-color, var(--vscode-textLink-foreground));
-  opacity: 0.8;
   pointer-events: none;
 }
 
