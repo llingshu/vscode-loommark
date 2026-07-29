@@ -156,14 +156,15 @@ const CARD_STACK_GAP = 8;
 const CARD_WIDTH = 230;
 const CARD_EDGE_GAP = 6;
 // The rail's minimum clearance from its own stripe bar's edge (so the two don't draw on top of
-// each other) and the step between two rails simultaneously in use. LANE_GAP must clear the
-// connector's own thickness by a wide enough visible margin that two adjacent lanes read as two
-// separate lines rather than one merged band — a gap only 1px wider than the thickness (as this
-// used to be) is indistinguishable from touching at normal zoom, which is exactly what made the
-// per-slice reconvergence fix look like no change at all: the lanes were computed correctly but
-// the on-screen gap between them was imperceptible.
+// each other) and the step between two rails simultaneously in use. LANE_GAP equals THICKNESS
+// exactly, so adjacent lanes sit flush against each other — a real rainbow's bands touch directly
+// with no white sliver between colors, and any actual white gap between two lanes reads as a
+// visible defect rather than a deliberate separation, especially right at a turn where it can look
+// like a notch cut into the corner. (An earlier version widened this gap to make simultaneous
+// connectors distinguishable at all, since a too-small gap is genuinely invisible at normal zoom —
+// but the fix for "invisible" is contiguous bands of different color, not empty space between them.)
 const CONNECTOR_CLEARANCE = 3;
-const CONNECTOR_LANE_GAP = 10;
+const CONNECTOR_LANE_GAP = 4;
 const CONNECTOR_THICKNESS = 4;
 
 // A single straight piece of a connector — several of these, laid end to end, make up one note's
