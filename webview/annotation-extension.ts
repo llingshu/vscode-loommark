@@ -334,14 +334,26 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
         segments.push({ left: x, top: run.from, width: CONNECTOR_THICKNESS, height: run.to - run.from });
         const next = runs[i + 1];
         if (next && next.lane !== run.lane) {
+          // The outgoing rail's own vertical segment ends exactly at this row (doesn't extend into
+          // the jog's row band), and the jog's width as "distance between rail centers" only
+          // reaches the incoming rail's near edge — leaving the outgoing rail's own THICKNESS-wide
+          // trailing edge uncovered by anything: a THICKNESS x THICKNESS square hole at that corner.
+          // Extending the far edge by one more THICKNESS bridges it (the incoming side ends up
+          // redundantly double-covered by its own next vertical segment, which is harmless).
           const nextX = railX(item, next.lane);
-          segments.push({ left: Math.min(x, nextX), top: run.to, width: Math.abs(nextX - x), height: CONNECTOR_THICKNESS });
+          const jogLeft = Math.min(x, nextX);
+          const jogRight = Math.max(x, nextX) + CONNECTOR_THICKNESS;
+          segments.push({ left: jogLeft, top: run.to, width: jogRight - jogLeft, height: CONNECTOR_THICKNESS });
         }
       }
       const lastRun = runs[runs.length - 1];
       const lastX = railX(item, lastRun.lane);
       const cardNearEdge = cardNearEdgeFor(side);
-      segments.push({ left: Math.min(lastX, cardNearEdge), top: item.top, width: Math.abs(cardNearEdge - lastX), height: CONNECTOR_THICKNESS });
+      // Same corner-coverage issue as the jog above, but only on the rail side — cardNearEdge is a
+      // flat card edge, not a thickness-wide rail, so it needs no equivalent extension.
+      const reachLeft = Math.min(lastX, cardNearEdge);
+      const reachRight = Math.max(lastX + CONNECTOR_THICKNESS, cardNearEdge);
+      segments.push({ left: reachLeft, top: item.top, width: reachRight - reachLeft, height: CONNECTOR_THICKNESS });
       segmentsByEntry.set(item.entry, segments);
     }
   }
