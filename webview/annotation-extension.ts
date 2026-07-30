@@ -43,8 +43,12 @@ const collapsedAnnotations = new Set<string>();
 let pendingFocusAnnotationFrom: number | undefined;
 let lockedAnnotationKey: string | undefined;
 
-// A user can force an individual note's card to stay permanently visible via Pin/Unpin,
-// regardless of how much margin is available. Numbered notes are keyed by their stable ID.
+// A user can force a target's combined card to stay permanently visible via Pin/Unpin, regardless
+// of how much margin is available. Keyed by the target (side + its from/to range, see pinKey)
+// rather than by which notes currently belong to it, so pinning survives adding or deleting a note
+// in that same group — keying by member identity instead would change the key itself the moment
+// membership changes (add-note/delete-note both rebuild the group with a different member list),
+// silently dropping the pin right as the user does the thing "+ Add note" exists for.
 const manuallyPinnedKeys = new Set<string>();
 
 // Completely hides an annotation block's own source — its delimiter lines and content alike —
@@ -441,11 +445,13 @@ class AnnotationMarginWidget extends WidgetType {
     super();
   }
 
+  // Identifies the *target*, not the current set of notes attached to it — targetFrom/targetTo
+  // already shift under upstream edits the same way a single annotation's own .from does (see the
+  // constructor's own comment on targetFrom/targetTo), and unlike a member-identity-based key,
+  // staying keyed on the target means adding or deleting a note in this group never changes the
+  // key underneath an existing pin/lock.
   private get pinKey(): string {
-    const identities = this.members
-      .map(({ annotation }) => annotation.id !== undefined ? `id:${annotation.id}` : `at:${annotation.from}`)
-      .join(',');
-    return `group:${this.side}:${identities}`;
+    return `group:${this.side}:${this.targetFrom}:${this.targetTo}`;
   }
 
   eq(other: AnnotationMarginWidget): boolean {
