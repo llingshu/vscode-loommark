@@ -47,6 +47,23 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Built-in diagnostics command for inspecting the Webview, synchronization state, links, completion,
   and code-block decorations.
 
+## Changelog
+
+### 0.5.0
+
+- Extracted the reusable CodeMirror Markdown editor kernel into the open-source
+  [`@llingshu/loommark-core`](https://github.com/llingshu/loommark-core) package. LoomMark now
+  concentrates on VS Code integration while other hosts can use the same source-preserving editor
+  behavior without copying the implementation.
+- Added experimental annotation blocks: source-backed `<<<[N]` and `>>>[N]` notes attach to the
+  preceding document line or block, retain persistent IDs and optional fixed colors, and render as
+  responsive left/right margin cards.
+- Improved dense annotation handling: notes sharing a target merge into one card, display a compact
+  target badge, collapse based on per-side visible density, and reveal a minimal connector only for
+  the active note.
+- Added `source` as an ordered-list label mode, alongside the default `cycle` and hierarchical
+  `decimal` modes.
+
 ## Source Fidelity
 
 The `TextDocument` owned by VS Code is the persistence authority. LoomMark follows these rules:
@@ -329,8 +346,9 @@ directly; its height follows short content and scrolls once long content reaches
 Delete, add another note at the same attachment point, and pin/unpin live in the visible ellipsis
 menu (and remain available by right-click). Stacking several blocks back
 to back (either side, or via "Add note") all attach to the same original line rather than to each
-other — each still gets its own separate card, stacked in the margin like any other, rather than
-being crammed into one shared card — and a block whose target line belongs to a
+other. Notes sharing that target and side render in one compact card, with the first persistent ID
+shown on the target badge and the remaining notes available inside the card. A block whose target
+line belongs to a
 table/fenced-code/display-math construct or a list item's own shift+enter continuation attaches to
 the whole thing, not just one line of it.
 
@@ -348,11 +366,8 @@ connector's whole length): each one only steps out to a further lane for as long
 actually active alongside it, and shifts back inward the moment that competitor peels off toward its
 own card. Together they read as a bundle of nested arcs — thickest near the text, thinning out one
 branch at a time as each connector reaches its card — rather than a set of permanently separate
-parallel lines. Notes anchored close
-together on the same side never overlap: they pack top to bottom in document order, each pushed down
-only as far as clearing the previous one requires — the same margin-comment stacking Word and
-Google Docs use. Multiple notes on the same target rest as compact numbered preview rows; the active
-note expands in place, keeping dense annotation areas scannable without losing the stable mapping.
+parallel lines. Notes anchored close together on the same side pack in document order, and the
+active grouped card expands in place while dense areas collapse to their target badges.
 
 This is still a first pass:
 
