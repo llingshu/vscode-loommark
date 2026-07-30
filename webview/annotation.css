@@ -7,7 +7,7 @@
   display: contents;
 }
 
-/* One bar per note attached to a target, stacked inward from the target line's own box edge —
+/* One bar per target-side annotation group, aligned to the target line's own box edge —
    a real overlay element, not a background-image on the line itself (see findLineElement's
    comment in annotation-extension.ts for why: a second decoration writing that line's `style`
    attribute silently erased loommark-core's own heading-card background/border). Position/size is
@@ -15,8 +15,8 @@
 .annotation-stripe-bar {
   position: absolute;
   z-index: 38;
-  width: 6px;
-  border-radius: 3px;
+  width: 4px;
+  border-radius: 2px;
   background: var(--annotation-stripe-color, var(--vscode-textLink-foreground));
   pointer-events: none;
 }
@@ -41,31 +41,63 @@
   display: none;
 }
 
+.annotation-target-badge {
+  position: absolute;
+  z-index: 39;
+  min-width: 18px;
+  max-width: 96px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--annotation-accent) 62%, var(--vscode-widget-border));
+  border-radius: 9px;
+  background: var(--vscode-editor-background);
+  color: var(--annotation-accent);
+  font: 600 10px/16px var(--vscode-editor-font-family, var(--vscode-font-family));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.annotation-target-badge:hover,
+.annotation-target-badge:focus-visible {
+  background: color-mix(in srgb, var(--annotation-accent) 12%, var(--vscode-editor-background));
+  outline: none;
+}
+
+.annotation-target-badge.is-offscreen {
+  display: none;
+}
+
 .annotation-card {
   display: none;
   position: absolute;
   top: 0;
   z-index: 40;
-  width: 230px;
-  height: 200px;
-  min-height: 52px;
+  width: clamp(210px, 18vw, 280px);
+  height: auto;
+  min-height: 48px;
   max-height: 70vh;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden;
   resize: vertical;
-  background: color-mix(in srgb, var(--annotation-accent, var(--vscode-textLink-foreground)) 16%, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  background: color-mix(in srgb, var(--annotation-accent, var(--vscode-textLink-foreground)) 9%, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
   color: var(--vscode-editor-foreground);
-  border: 1px solid var(--annotation-accent, var(--vscode-widget-border));
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 22%);
-  padding: 5px;
-  font-family: var(--vscode-font-family);
-  font-size: 0.85em;
+  border: 1px solid color-mix(in srgb, var(--annotation-accent, var(--vscode-widget-border)) 45%, var(--vscode-widget-border));
+  border-left: 3px solid var(--annotation-accent, var(--vscode-widget-border));
+  border-radius: 6px;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 18%);
+  padding: 6px 7px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: var(--vscode-editor-font-size, 13px);
 }
 
 /* A collapsed card is just its one-line header — the fixed height/resize handle from the expanded
    state would otherwise leave a tall mostly-empty box. */
-.annotation-card.is-collapsed {
+.annotation-card.is-collapsed,
+.annotation-card.is-density-collapsed:not(.is-active):not(.is-locked):not(:focus-within) {
   height: auto;
   min-height: 0;
   resize: none;
@@ -107,7 +139,16 @@
 
 .annotation-card.is-open,
 .annotation-card.is-pinned {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* A combined card may contain several independently editable notes. Let the card, rather than
+   only its first textarea, scroll once it reaches its height cap. */
+.annotation-card.has-multiple.is-open,
+.annotation-card.has-multiple.is-pinned {
   display: block;
+  overflow: auto;
 }
 
 /* Target line scrolled out of the viewport CodeMirror currently measures — nothing to report, so
@@ -120,7 +161,11 @@
 .annotation-card-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  min-height: 24px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .annotation-card-collapse {
@@ -135,26 +180,63 @@
   opacity: 0.75;
 }
 
+.annotation-card-id {
+  flex: none;
+  color: var(--annotation-accent);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.annotation-card-menu {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: 600 16px/20px var(--vscode-font-family);
+  cursor: pointer;
+  opacity: 0.68;
+}
+
+.annotation-card-menu:hover,
+.annotation-card-menu:focus-visible {
+  background: var(--vscode-toolbar-hoverBackground, rgb(128 128 128 / 15%));
+  opacity: 1;
+  outline: none;
+}
+
 .annotation-card-collapse:hover {
   opacity: 1;
 }
 
 .annotation-card-preview {
   display: none;
-  flex: 1;
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-style: italic;
-  opacity: 0.8;
+  opacity: 0.76;
 }
 
-.annotation-card.is-collapsed .annotation-card-preview {
+.annotation-card.is-collapsed .annotation-card-preview,
+.annotation-card.is-density-collapsed:not(.is-active):not(.is-locked):not(:focus-within) .annotation-card-preview {
   display: block;
 }
 
-.annotation-card.is-collapsed .annotation-card-text {
+.annotation-card.is-collapsed .annotation-card-text,
+.annotation-card.is-density-collapsed:not(.is-active):not(.is-locked):not(:focus-within) .annotation-card-text {
+  display: none;
+}
+
+.annotation-card.is-collapsed .annotation-card-section,
+.annotation-card.is-density-collapsed:not(.is-active):not(.is-locked):not(:focus-within) .annotation-card-section {
   display: none;
 }
 
@@ -166,9 +248,10 @@
 .annotation-card-text {
   display: block;
   width: 100%;
-  height: calc(100% - 24px);
+  min-height: 54px;
+  max-height: calc(70vh - 38px);
   box-sizing: border-box;
-  margin-top: 4px;
+  margin-top: 6px;
   border: none;
   outline: none;
   border-radius: 3px;
@@ -177,38 +260,90 @@
   font: inherit;
   font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
   line-height: 1.4;
-  padding: 3px 5px;
+  padding: 4px 5px;
   resize: none;
+  overflow: auto;
 }
 
-/* A connector, drawn only when a note's own collision-avoidance packing (see measureGroupLayout)
-   actually pushed its card away from its natural row — several notes sharing one target inevitably
-   need this, since they can't all sit at an identical position, but a lone note usually doesn't.
-   display:contents so its own children (one div per routed segment, rebuilt each measure pass) can
-   still position:absolute against .loommark-workspace as if this wrapper weren't there. Anchored to
-   the stripe bar's own x (near the text) rather than the card's edge, since the card's position can
-   shift (resizing, pinning) in ways the bar's x never does. Where several connectors overlap in
-   height, each one's route is only pushed out to a further lane for as long as a competitor is
-   actually active next to it (see measureGroupLayout's per-slice lane assignment) — so a route runs
-   tight alongside its neighbors and steps back inward the moment whichever one it was avoiding
-   peels off toward its own card, rather than staying at a permanently separate offset for its whole
-   length. */
+.annotation-card:focus-within {
+  border-color: color-mix(in srgb, var(--annotation-accent) 72%, var(--vscode-focusBorder));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--annotation-accent) 35%, var(--vscode-focusBorder)), 0 5px 16px rgb(0 0 0 / 18%);
+}
+
+.annotation-card-text:focus {
+  background: color-mix(in srgb, var(--vscode-editor-background) 42%, transparent);
+}
+
+.annotation-card-section {
+  min-width: 0;
+  padding-top: 5px;
+}
+
+.annotation-card-section + .annotation-card-section {
+  margin-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--annotation-section-accent) 28%, var(--vscode-widget-border));
+}
+
+.annotation-card-section-label {
+  display: block;
+  padding: 0 5px 2px;
+  color: var(--annotation-section-accent);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.annotation-card-section .annotation-card-text {
+  display: none;
+  margin-top: 0;
+}
+
+.annotation-card-section.is-editing .annotation-card-rendered {
+  display: none;
+}
+
+.annotation-card-section.is-editing .annotation-card-text {
+  display: block;
+}
+
+.annotation-card-rendered {
+  min-height: 1.5em;
+  padding: 4px 5px;
+  border-radius: 3px;
+  color: inherit;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.annotation-card-rendered:hover,
+.annotation-card-rendered:focus-visible {
+  background: color-mix(in srgb, var(--vscode-editor-background) 42%, transparent);
+  outline: none;
+}
+
+.annotation-card-rendered code {
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--vscode-textCodeBlock-background) 70%, transparent);
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+
+.annotation-card-rendered a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: underline;
+}
+
+/* A connector exists only when stacking pushes a card away from its target. Its direct, one-jog
+   route is only exposed for the active or locked card, so no multi-line lane avoidance is needed.
+   display:contents lets its pieces keep the workspace as their absolute containing block. */
 .annotation-connector-path {
   display: contents;
 }
 
-/* One rendered piece of a routed connector — a straight vertical/horizontal run, a horizontal jog
-   where a route changes lane, or the final horizontal reach into the card's edge. Kept orthogonal
-   (no diagonal) — a right-angle bend stays legible even where several overlap, the same tradeoff
-   Word/Google Docs' own margin-comment connectors make. Geometry (left/top/width/height) is set
-   inline by applyGroupLayout; only display and color live here.
-
-   Fully opaque, not translucent: a reconverging note's jog segment and the peeling note's own
-   horizontal reach segment routinely land at the exact same height by design (that's the whole
-   point of reconvergence — one note's trunk continues straight through the exact row where its
-   neighbor branches off). Two 80%-opacity colors crossing there blended into a muddy smear neither
-   color, reading as visual noise rather than a clean crossing. Full opacity means whichever segment
-   is later in DOM order (paints on top at the shared z-index) cleanly wins the crossing instead. */
+/* One straight piece of the active card's orthogonal connector. Geometry is assigned by
+   applyGroupLayout; only display and color live here. */
 .annotation-connector-segment {
   display: none;
   position: absolute;
@@ -224,8 +359,8 @@
    wiring. A connector permanently drawn to a hidden hover-only card would look like a stray,
    disconnected line. Segments live one level inside .annotation-connector-path now (which is itself
    display:contents), so the :has() match is against a descendant, not a direct child. */
-.annotation-group:has(> .annotation-card.is-open) .annotation-connector-segment.is-visible,
-.annotation-group:has(> .annotation-card.is-pinned) .annotation-connector-segment.is-visible {
+.annotation-group:has(> .annotation-card.is-active) .annotation-connector-segment.is-visible,
+.annotation-group:has(> .annotation-card.is-locked) .annotation-connector-segment.is-visible {
   display: block;
 }
 

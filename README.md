@@ -91,7 +91,7 @@ editor for an individual document, or disable `loommark.openByDefault`.
 | `loommark.theme` | `vscode` | Select `vscode`, `crepe`, `frame`, or `nord`. |
 | `loommark.table` | `rich` | Edit table cells in place (`rich`) or expand to Markdown source on cursor entry (`source`). |
 | `loommark.tableStyle` | `grid` | Render tables as a bordered `grid` or a booktabs-style three-line `ruled` table. |
-| `loommark.orderedListStyle` | `cycle` | Number nested ordered lists by cycling arabic/letters/roman numerals per level (`cycle`) or `1, 2, 2.1, 2.2` (`decimal`). |
+| `loommark.orderedListStyle` | `cycle` | Cycle arabic/letters/roman numbering (`cycle`), or show the source marker (`source`) or hierarchical `decimal` numbering. |
 | `loommark.listGuides` | `true` | Show connector lines between nested list items and their continuation content. |
 | `loommark.cardMode` | `card` | Heading section visualization: `off`, `tint`, `accent`, or `card`. Also cycled from the editor title bar. |
 | `loommark.cardBackgroundColors` | six-hue palette | Colors to cycle per heading level for the Card background fill. Empty draws no background. |
@@ -267,13 +267,10 @@ Shift+Enter at the end of a list item's own marker line indents the new line to 
 same reason — pressing it again from that new (now correctly indented) line just continues
 matching its indent, without adding another level.
 
-Nested ordered lists are renumbered for display only; the source keeps whatever number was typed.
-`loommark.orderedListStyle` chooses `cycle` (default: arabic, then letters, then lowercase roman
-numerals per level — `1, a, i` — repeating every three levels) or `decimal`
-(`1, 2, 2.1, 2.2, 2.2.1`). Because the rendered number can differ from what is actually typed,
-it never reveals the literal source the way other hidden markup does — moving the cursor onto the
-line keeps showing the same label instead of swapping to a different-looking raw number. Click a
-label to edit the source number.
+Nested ordered lists use `cycle` by default (arabic, then letters, then lowercase roman numerals
+per level — `1, a, i` — repeating every three levels). `loommark.orderedListStyle` can instead
+choose `source` to show the Markdown marker exactly as written, or `decimal`
+(`1, 2, 2.1, 2.2, 2.2.1`). Click a label to edit its source number.
 
 `loommark.listGuides` (default on) draws a connector line between a list item, its nested
 children, and any indented continuation content underneath it (a paragraph, blockquote, or code
@@ -294,12 +291,12 @@ tags.
 
 ## Annotations (experimental)
 
-A block opened and closed by a line containing only `<<<` attaches a left-margin note to the line
+A block opened by `<<<[N]color` and closed by a bare `<<<` attaches a left-margin note to the line
 (or table/code/math block) directly above it; `>>>` attaches a right-margin note the same way:
 
 ```
 this line gets a note
-<<<
+<<<[1]7c3aed
 the note's content — can span multiple lines
 <<<
 ```
@@ -311,15 +308,15 @@ document. `Ctrl/Cmd+Shift+Left`/`Ctrl/Cmd+Shift+Right` wrap the line the cursor 
 left-/right-margin note and focus it directly, without needing to type the fence by hand — the
 arrow you press is the side you get; `Ctrl/Cmd+Shift+A` toggles whether annotations render at all.
 
-An opening delimiter can carry a fixed color as 6 hex digits with no space (`<<<7c3aed`) so a note
-keeps the same color forever regardless of what else gets added or removed around it — every note
-created through this extension (the shortcuts above, auto-close, or a card's own "+ Add note")
-writes one in automatically, picking the next color in rotation. Only a `<<<`/`>>>` typed bare by
-hand (or from before this existed) falls back to the old by-position assignment.
+`[N]` is the note's persistent identity and the optional 6 hex digits after it are its fixed color.
+Every note created through the extension writes both automatically, using the current document's
+largest ID plus one and the next palette color. IDs are never renumbered when another note is moved
+or deleted. Older bare (`<<<`) and color-only (`<<<7c3aed`) blocks remain valid for compatibility.
 
 The block never renders as part of the document — no other Markdown construct (list numbering,
 guide rails, heading sections, ...) sees it as present at all. The attached line (or block) gets a
-thin color-coded accent stripe — a real overlay, not a background painted onto the line itself, so
+thin color-coded accent stripe and numbered badge — real overlays, not a background painted onto
+the line itself, so
 it can never collide with (and erase) that line's own heading-Card background or border the way an
 earlier version of this feature briefly did. The stripe is also the note's hover/click target: there
 is no separate marker icon duplicating it. Each note is its own clean card tinted in its own color,
@@ -328,17 +325,17 @@ unaffected by heading Card mode's own indentation, so notes on deeply nested hea
 with everything else on the same side — whenever there's enough room for it there; otherwise it
 collapses to just the stripe, revealed on hover (or forced open regardless of available room via the
 right-click "Pin" below). A note can be individually collapsed to a one-line preview or edited
-directly (drag its bottom-right corner to resize taller/shorter; content scrolls once it doesn't
-fit); delete, add another note at the same attachment point, and pin/unpin all live in a right-click
-menu on the card rather than cluttering it with always-visible buttons. Stacking several blocks back
+directly; its height follows short content and scrolls once long content reaches the viewport limit.
+Delete, add another note at the same attachment point, and pin/unpin live in the visible ellipsis
+menu (and remain available by right-click). Stacking several blocks back
 to back (either side, or via "Add note") all attach to the same original line rather than to each
 other — each still gets its own separate card, stacked in the margin like any other, rather than
 being crammed into one shared card — and a block whose target line belongs to a
 table/fenced-code/display-math construct or a list item's own shift+enter continuation attaches to
 the whole thing, not just one line of it.
 
-A note only gets a connector — a short, color-matched line back to its stripe — when it actually
-needed to be displaced from its own natural row to avoid overlapping another card; several notes
+A note only gets a connector — a short, color-matched line back to its stripe — while it is hovered,
+focused, or click-locked and it actually needed to be displaced from its natural row; several notes
 sharing one target inevitably need this (they can't all sit at an identical position), but a lone
 note usually won't draw one at all. The connector's rail sits near the note's own stripe position
 (near the text) rather than the card's edge, since the card's position can shift (resizing, pinning)
@@ -354,7 +351,8 @@ branch at a time as each connector reaches its card — rather than a set of per
 parallel lines. Notes anchored close
 together on the same side never overlap: they pack top to bottom in document order, each pushed down
 only as far as clearing the previous one requires — the same margin-comment stacking Word and
-Google Docs use.
+Google Docs use. Multiple notes on the same target rest as compact numbered preview rows; the active
+note expands in place, keeping dense annotation areas scannable without losing the stable mapping.
 
 This is still a first pass:
 

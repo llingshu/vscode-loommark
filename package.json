@@ -2,7 +2,7 @@
   "name": "loommark",
   "displayName": "LoomMark",
   "description": "A source-backed, live-rendering WYSIWYG Markdown editor for VS Code.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "llingshu",
   "license": "MIT",
   "icon": "assets/icon.png",
@@ -165,10 +165,12 @@
         "loommark.orderedListStyle": {
           "type": "string",
           "enum": [
+            "source",
             "decimal",
             "cycle"
           ],
           "enumDescriptions": [
+            "Show the ordered marker exactly as written in Markdown source.",
             "Hierarchical decimal numbering: 1, 2, 2.1, 2.2, 2.2.1.",
             "Alternates arabic numerals, letters, and lowercase roman numerals per nesting level (1, a, i), then repeats."
           ],

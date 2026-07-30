@@ -106,9 +106,12 @@ function editorConfiguration(
     : 'both';
   const table: TableMode = configuration.get<string>('table', 'rich') === 'source' ? 'source' : 'rich';
   const tableStyle: TableStyle = configuration.get<string>('tableStyle', 'grid') === 'ruled' ? 'ruled' : 'grid';
-  const orderedListStyle: OrderedListStyle = configuration.get<string>('orderedListStyle', 'cycle') === 'decimal'
+  const configuredOrderedListStyle = configuration.get<string>('orderedListStyle', 'cycle');
+  const orderedListStyle: OrderedListStyle = configuredOrderedListStyle === 'decimal'
     ? 'decimal'
-    : 'cycle';
+    : configuredOrderedListStyle === 'cycle'
+      ? 'cycle'
+      : 'source';
   const configuredCardMode = configuration.get<string>('cardMode', 'card');
   const cardMode: CardMode = CARD_MODE_ORDER.includes(configuredCardMode as CardMode)
     ? configuredCardMode as CardMode

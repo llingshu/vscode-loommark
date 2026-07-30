@@ -1,5 +1,10 @@
 import {
   annotationRanges,
+  annotationColor,
+  containsPosition,
+  fencedCodeRanges,
+  nextAnnotationOpeningTag,
+  renderAnnotationInlineMarkdown,
   resolveAnnotationTarget,
   type AnnotationRange,
 } from '@llingshu/loommark-core';
@@ -32,45 +37,14 @@ const annotationsVisibleField = StateField.define<boolean>({
   },
 });
 
-// Same palette loommark.cardBackgroundColors/cardBorderColors ship with, reused here so an
-// annotation's color and a heading Card's accent read as the same visual language rather than two
-// unrelated color systems. An annotation created through this extension (the context menu's
-// "+ Add note", either arrow-key shortcut, or auto-close-on-typing) gets one of these written
-// directly into its opening delimiter as a fixed 6-hex-digit tag (loommark-core's
-// AnnotationRange.color — see newAnnotationColorTag below), so it keeps the same color forever
-// after. Only an annotation that predates this (or was typed by hand without one) falls back to
-// colorForAnnotation's by-position assignment, which — as before — can still shift if an earlier,
-// still-untagged annotation is added or removed.
-const COLOR_PALETTE = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
-
-function colorForAnnotation(allAnnotations: AnnotationRange[], annotation: AnnotationRange): string {
-  if (annotation.color) return `#${annotation.color}`;
-  const index = allAnnotations.indexOf(annotation);
-  return COLOR_PALETTE[(index < 0 ? 0 : index) % COLOR_PALETTE.length];
-}
-
-// The 6-hex-digit tag (no `#`) to write into a brand-new annotation's opening delimiter — see
-// AnnotationRange.color in loommark-core. Picks the next color in rotation by how many
-// annotations already exist in the document; since the new one is tagged from the moment it's
-// created, this exact choice only has to be *a* reasonable spread, not track any particular
-// position precisely — unlike an untagged annotation's color, it won't recompute or drift later.
-function newAnnotationColorTag(source: string): string {
-  const count = annotationRanges(source).length;
-  return COLOR_PALETTE[count % COLOR_PALETTE.length].slice(1);
-}
-
-// Persisted across widget rebuilds (which happen on every edit — see annotationField below) by
-// keying on the annotation's own source offset, the same "identify a not-yet-recomputed thing by
-// where it used to be" approach TableWidget's pendingTableFocus already relies on elsewhere in
-// this kernel. Not robust to an edit shifting offsets *before* the annotation in question — an
-// acceptable, clearly-scoped limitation for a first pass, not a hidden one.
-const collapsedAnnotations = new Set<number>();
+// Persisted across widget rebuilds. Numbered annotations use their stable source ID; legacy
+// unnumbered blocks fall back to side+offset and retain the older upstream-edit limitation.
+const collapsedAnnotations = new Set<string>();
 let pendingFocusAnnotationFrom: number | undefined;
+let lockedAnnotationKey: string | undefined;
 
-// A user can force an individual note's card to stay permanently visible via the right-click
-// "Pin"/"Unpin" action, regardless of how much margin is actually available — keyed by
-// `${side}:${annotation.from}` since every note is now its own independent card. Checked alongside
-// the margin-availability computation in AnnotationMarginWidget's updatePinned.
+// A user can force an individual note's card to stay permanently visible via Pin/Unpin,
+// regardless of how much margin is available. Numbered notes are keyed by their stable ID.
 const manuallyPinnedKeys = new Set<string>();
 
 // Completely hides an annotation block's own source — its delimiter lines and content alike —
@@ -103,7 +77,7 @@ class HiddenWidget extends WidgetType {
 // permanently — it falls back to a hover-revealed popup instead. Comfortably fits the card's own
 // width (see .annotation-card in annotation.css) plus the gap CSS places around it. A manual
 // "Pin" (see manuallyPinnedKeys) overrides this regardless of actual available room.
-const PIN_THRESHOLD_PX = 232;
+const PIN_THRESHOLD_PX = 292;
 
 // The workspace container (createLoomMarkEditor's own `.loommark-workspace`, position:relative,
 // overflow-y:auto — view.dom's grandparent) is the one element wide enough, and un-indented
@@ -139,7 +113,7 @@ function findLineElement(view: EditorView, pos: number): HTMLElement | null {
 // target) — a real overlay element (see findLineElement's comment for why), not a
 // background-image layer. Deliberately bold enough to actually catch the eye rather than read as
 // a hairline — this is the primary always-visible indicator now that there's no separate marker.
-const BAR_WIDTH = 6;
+const BAR_WIDTH = 4;
 const BAR_GAP = 2;
 // Extra hit-area around a stripe bar so hovering to reveal a card doesn't require pixel-precise
 // aim at a few-px-wide line — the bar stays thin, only the invisible hover target backing it is
@@ -148,24 +122,13 @@ const STRIPE_HIT_PADDING = 6;
 
 // Gap kept between two stacked cards on the same side — purely cosmetic, no CSS counterpart to
 // stay in sync with.
-const CARD_STACK_GAP = 8;
-// These two must stay in sync with .annotation-card's width and .annotation-card-left/-right's
-// edge offset in annotation.css: the connector's reach toward the card is computed analytically
-// here (rather than measured) so measureGroupLayout can run entirely inside CodeMirror's read
-// phase without needing a card's real rendered rect just to find its near edge.
-const CARD_WIDTH = 230;
+const CARD_STACK_GAP = 10;
 const CARD_EDGE_GAP = 6;
-// The rail's minimum clearance from its own stripe bar's edge (so the two don't draw on top of
-// each other) and the step between two rails simultaneously in use. LANE_GAP equals THICKNESS
-// exactly, so adjacent lanes sit flush against each other — a real rainbow's bands touch directly
-// with no white sliver between colors, and any actual white gap between two lanes reads as a
-// visible defect rather than a deliberate separation, especially right at a turn where it can look
-// like a notch cut into the corner. (An earlier version widened this gap to make simultaneous
-// connectors distinguishable at all, since a too-small gap is genuinely invisible at normal zoom —
-// but the fix for "invisible" is contiguous bands of different color, not empty space between them.)
+// A connector only appears for the active or locked card. A fixed, short outward jog is therefore
+// clearer than routing a bundle of simultaneously visible lines around one another.
 const CONNECTOR_CLEARANCE = 3;
-const CONNECTOR_LANE_GAP = 4;
-const CONNECTOR_THICKNESS = 4;
+const CONNECTOR_THICKNESS = 3;
+const SIDE_DENSITY_COLLAPSE_THRESHOLD = 5;
 
 // A single straight piece of a connector — several of these, laid end to end, make up one note's
 // full route from its natural row to wherever it actually ended up. See measureGroupLayout's
@@ -177,11 +140,15 @@ type GroupLayoutResult = {
   connectorPath: HTMLElement;
   stripeBar: HTMLElement;
   stripeHit: HTMLElement;
+  targetBadge: HTMLElement;
   offscreen: boolean;
   top: number;
   barLeft: number;
   stripeTop: number;
   stripeHeight: number;
+  targetBadgeLeft: number;
+  targetBadgeTop: number;
+  densityCollapsed: boolean;
   segments: ConnectorSegment[];
 };
 
@@ -205,9 +172,10 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
 
   type RawEntry = {
     card: HTMLElement; connectorPath: HTMLElement;
-    stripeBar: HTMLElement; stripeHit: HTMLElement;
+    stripeBar: HTMLElement; stripeHit: HTMLElement; targetBadge: HTMLElement;
     side: 'left' | 'right'; naturalTop: number | null; barLeft: number;
-    stripeTop: number; stripeHeight: number; height: number;
+    stripeTop: number; stripeHeight: number; targetBadgeLeft: number; targetBadgeTop: number;
+    height: number; cardWidth: number; noteCount: number; densityCollapsed: boolean;
   };
 
   const groups = Array.from(workspaceElement.querySelectorAll<HTMLElement>(':scope > .annotation-group'));
@@ -216,8 +184,10 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     const connectorPath = group.querySelector<HTMLElement>('.annotation-connector-path')!;
     const stripeBar = group.querySelector<HTMLElement>('.annotation-stripe-bar')!;
     const stripeHit = group.querySelector<HTMLElement>('.annotation-stripe-hit')!;
+    const targetBadge = group.querySelector<HTMLElement>('.annotation-target-badge')!;
     const side: 'left' | 'right' = group.dataset.side === 'right' ? 'right' : 'left';
     const stackIndex = Number(group.dataset.stackIndex) || 0;
+    const noteCount = Math.max(1, Number(group.dataset.noteCount) || 1);
     const targetFrom = Number(group.dataset.targetFrom);
     const targetTo = Number(group.dataset.targetTo);
     const topLineRect = Number.isFinite(targetFrom) ? findLineElement(view, targetFrom)?.getBoundingClientRect() : undefined;
@@ -245,11 +215,33 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
       : side === 'left'
         ? (topLineRect.left - workspaceRect.left + scrollLeft) + stackIndex * (BAR_WIDTH + BAR_GAP)
         : (topLineRect.right - workspaceRect.left + scrollLeft) - (stackIndex + 1) * BAR_WIDTH - stackIndex * BAR_GAP;
+    const targetBadgeLeft = !topLineRect ? 0
+      : side === 'left'
+        ? (topLineRect.left - workspaceRect.left + scrollLeft) - 12
+        : (topLineRect.right - workspaceRect.left + scrollLeft) + 12;
+    // A target can own several annotations on the same side. Stacking their number chips down the
+    // margin keeps each ID legible instead of letting later chips disappear beyond the page edge.
+    const targetBadgeTop = stripeTop + 10 + stackIndex * 20;
     // Only cards actually pinned open occupy stacking space; an on-hover-only popup is transient
     // and doesn't need collision avoidance against a card that might not even be showing right now.
-    const height = card.classList.contains('is-pinned') ? card.getBoundingClientRect().height : 0;
-    return { card, connectorPath, stripeBar, stripeHit, side, naturalTop, barLeft, stripeTop, stripeHeight, height };
+    const cardRect = card.getBoundingClientRect();
+    const height = card.classList.contains('is-pinned') ? cardRect.height : 0;
+    return { card, connectorPath, stripeBar, stripeHit, targetBadge, side, naturalTop, barLeft, stripeTop, stripeHeight, targetBadgeLeft, targetBadgeTop, height, cardWidth: cardRect.width, noteCount, densityCollapsed: false };
   });
+
+  // Density is a property of the currently visible page, not of one target line. Two notes on an
+  // otherwise empty side remain open; a side only becomes compact when that side itself is busy.
+  const visibleBottom = scrollTop + workspaceRect.height;
+  for (const side of ['left', 'right'] as const) {
+    const visibleCount = raw.filter((entry) => entry.side === side
+      && entry.naturalTop !== null
+      && entry.stripeTop <= visibleBottom
+      && entry.stripeTop + Math.max(entry.stripeHeight, 1) >= scrollTop)
+      .reduce((count, entry) => count + entry.noteCount, 0);
+    if (visibleCount < SIDE_DENSITY_COLLAPSE_THRESHOLD) continue;
+    raw.filter((entry) => entry.side === side && entry.card.classList.contains('is-pinned'))
+      .forEach((entry) => { entry.densityCollapsed = true; });
+  }
 
   const packedTop = new Map<RawEntry, number>();
   for (const side of ['left', 'right'] as const) {
@@ -264,117 +256,46 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     }
   }
 
-  // Only a card actually pushed away from its own natural row draws a connector at all — several
-  // notes on the exact same target inevitably need this (they can't all sit at an identical
-  // position), but a lone note usually won't. Two *unrelated* notes (different targets) can easily
-  // need one at the same time too, if enough separate single-note targets get crowded together —
-  // and since every "first note on its own target" bar sits at the same relative offset
-  // (stackIndex 0), their connectors would land at the exact same x and draw right over each other
-  // without lane assignment. But a single fixed lane for a connector's *entire* run — assigned once
-  // by how much it overlaps everyone else across its whole length — routes it at that same
-  // outward offset even long after whatever it was avoiding has already ended, which reads as
-  // several permanently-parallel lines rather than one bundle that thins out as each branch peels
-  // away. So lanes are assigned per height range instead: the whole set of "connector starts or
-  // ends here" heights on a side splits it into slices, and within each slice, only whichever
-  // connectors are actually active right then compete for lanes — ranked by how much run they have
-  // left (whichever will stay in flight *longest* keeps the innermost lane, hugging the text edge
-  // undisturbed, while whichever is about to peel off soonest is the one that steps outward to make
-  // room for it — a brief guest taking a detour past a resident that isn't going anywhere), the same
-  // interval-scheduling a calendar view uses to lay out overlapping events side by side. Each note's
-  // own consecutive same-lane slices are merged back into as few straight pieces as possible, with a
-  // short horizontal jog wherever its lane actually changes — so a note's route runs tight alongside
-  // its neighbors except exactly where, and for as long as, avoiding them actually requires it.
-  type Connecting = { entry: RawEntry; top: number; spanFrom: number; spanTo: number };
-  const connecting: Connecting[] = [];
+  const segmentsByEntry = new Map<RawEntry, ConnectorSegment[]>();
   for (const entry of raw) {
     const top = packedTop.get(entry) ?? entry.naturalTop;
     if (top === null || entry.naturalTop === null || Math.abs(top - entry.naturalTop) <= 1) continue;
-    connecting.push({ entry, top, spanFrom: Math.min(entry.naturalTop, top), spanTo: Math.max(entry.naturalTop, top) });
-  }
-
-  const segmentsByEntry = new Map<RawEntry, ConnectorSegment[]>();
-  const cardNearEdgeFor = (side: 'left' | 'right') =>
-    side === 'left' ? CARD_EDGE_GAP + CARD_WIDTH : workspaceRect.width - CARD_EDGE_GAP - CARD_WIDTH;
-
-  for (const side of ['left', 'right'] as const) {
-    const items = connecting.filter((item) => item.entry.side === side);
-    if (!items.length) continue;
-    const outward = side === 'left' ? -1 : 1;
-    const railX = (item: Connecting, lane: number) => item.entry.barLeft + outward * (CONNECTOR_CLEARANCE + lane * CONNECTOR_LANE_GAP);
-
-    // Every height any connector on this side starts or ends at, sorted — the boundaries between
-    // slices where the set of "who's active" can change.
-    const breakpoints = Array.from(new Set(items.flatMap((item) => [item.spanFrom, item.spanTo]))).sort((a, b) => a - b);
-
-    // Each item's own sequence of {from, to, lane} runs, consecutive same-lane slices already
-    // merged as they're built.
-    const runsByItem = new Map<Connecting, { from: number; to: number; lane: number }[]>(items.map((item) => [item, []]));
-    for (let i = 0; i + 1 < breakpoints.length; i++) {
-      const sliceFrom = breakpoints[i];
-      const sliceTo = breakpoints[i + 1];
-      if (sliceTo <= sliceFrom) continue;
-      const active = items
-        .filter((item) => item.spanFrom <= sliceFrom && item.spanTo >= sliceTo)
-        .sort((a, b) => b.spanTo - a.spanTo);
-      active.forEach((item, lane) => {
-        const runs = runsByItem.get(item)!;
-        const last = runs[runs.length - 1];
-        if (last && last.lane === lane && last.to === sliceFrom) last.to = sliceTo;
-        else runs.push({ from: sliceFrom, to: sliceTo, lane });
-      });
-    }
-
-    for (const item of items) {
-      const runs = runsByItem.get(item)!;
-      if (!runs.length) continue;
-      const segments: ConnectorSegment[] = [];
-      for (let i = 0; i < runs.length; i++) {
-        const run = runs[i];
-        const x = railX(item, run.lane);
-        segments.push({ left: x, top: run.from, width: CONNECTOR_THICKNESS, height: run.to - run.from });
-        const next = runs[i + 1];
-        if (next && next.lane !== run.lane) {
-          // The outgoing rail's own vertical segment ends exactly at this row (doesn't extend into
-          // the jog's row band), and the jog's width as "distance between rail centers" only
-          // reaches the incoming rail's near edge — leaving the outgoing rail's own THICKNESS-wide
-          // trailing edge uncovered by anything: a THICKNESS x THICKNESS square hole at that corner.
-          // Extending the far edge by one more THICKNESS bridges it (the incoming side ends up
-          // redundantly double-covered by its own next vertical segment, which is harmless).
-          const nextX = railX(item, next.lane);
-          const jogLeft = Math.min(x, nextX);
-          const jogRight = Math.max(x, nextX) + CONNECTOR_THICKNESS;
-          segments.push({ left: jogLeft, top: run.to, width: jogRight - jogLeft, height: CONNECTOR_THICKNESS });
-        }
-      }
-      const lastRun = runs[runs.length - 1];
-      const lastX = railX(item, lastRun.lane);
-      const cardNearEdge = cardNearEdgeFor(side);
-      // Same corner-coverage issue as the jog above, but only on the rail side — cardNearEdge is a
-      // flat card edge, not a thickness-wide rail, so it needs no equivalent extension.
-      const reachLeft = Math.min(lastX, cardNearEdge);
-      const reachRight = Math.max(lastX + CONNECTOR_THICKNESS, cardNearEdge);
-      segments.push({ left: reachLeft, top: item.top, width: reachRight - reachLeft, height: CONNECTOR_THICKNESS });
-      segmentsByEntry.set(item.entry, segments);
-    }
+    const outward = entry.side === 'left' ? -1 : 1;
+    const railX = entry.barLeft + outward * CONNECTOR_CLEARANCE;
+    const startY = entry.stripeTop + Math.min(entry.stripeHeight / 2, 11);
+    const endY = top + 16;
+    const cardNearEdge = entry.side === 'left'
+      ? CARD_EDGE_GAP + entry.cardWidth
+      : workspaceRect.width - CARD_EDGE_GAP - entry.cardWidth;
+    const horizontal = (from: number, to: number, y: number): ConnectorSegment => ({
+      left: Math.min(from, to), top: y, width: Math.abs(to - from) + CONNECTOR_THICKNESS, height: CONNECTOR_THICKNESS,
+    });
+    segmentsByEntry.set(entry, [
+      horizontal(entry.barLeft, railX, startY),
+      { left: railX, top: Math.min(startY, endY), width: CONNECTOR_THICKNESS, height: Math.abs(endY - startY) + CONNECTOR_THICKNESS },
+      horizontal(railX, cardNearEdge, endY),
+    ]);
   }
 
   return raw.map((entry) => {
-    const { card, connectorPath, stripeBar, stripeHit, barLeft, stripeTop, stripeHeight } = entry;
+    const { card, connectorPath, stripeBar, stripeHit, targetBadge, barLeft, stripeTop, stripeHeight, targetBadgeLeft, targetBadgeTop, densityCollapsed } = entry;
     // A card not part of the packed (pinned) stacking above just uses its own natural position —
     // covers the hover-only fallback, which doesn't get displaced by neighbors at all.
     const top = packedTop.get(entry) ?? entry.naturalTop;
     if (top === null) {
-      return { card, connectorPath, stripeBar, stripeHit, offscreen: true, top: 0, barLeft, stripeTop, stripeHeight, segments: [] };
+      return { card, connectorPath, stripeBar, stripeHit, targetBadge, offscreen: true, top: 0, barLeft, stripeTop, stripeHeight, targetBadgeLeft, targetBadgeTop, densityCollapsed, segments: [] };
     }
-    return { card, connectorPath, stripeBar, stripeHit, offscreen: false, top, barLeft, stripeTop, stripeHeight, segments: segmentsByEntry.get(entry) ?? [] };
+    return { card, connectorPath, stripeBar, stripeHit, targetBadge, offscreen: false, top, barLeft, stripeTop, stripeHeight, targetBadgeLeft, targetBadgeTop, densityCollapsed, segments: segmentsByEntry.get(entry) ?? [] };
   });
 }
 
 function applyGroupLayout(results: GroupLayoutResult[]): void {
-  for (const { card, connectorPath, stripeBar, stripeHit, offscreen, top, barLeft, stripeTop, stripeHeight, segments } of results) {
+  for (const { card, connectorPath, stripeBar, stripeHit, targetBadge, offscreen, top, barLeft, stripeTop, stripeHeight, targetBadgeLeft, targetBadgeTop, densityCollapsed, segments } of results) {
+    card.classList.toggle('is-density-collapsed', densityCollapsed);
     card.classList.toggle('is-offscreen', offscreen);
     stripeBar.classList.toggle('is-offscreen', offscreen);
     stripeHit.classList.toggle('is-offscreen', offscreen);
+    targetBadge.classList.toggle('is-offscreen', offscreen || stripeHeight === 0);
     if (offscreen) {
       for (const el of Array.from(connectorPath.children)) el.classList.remove('is-visible');
       continue;
@@ -388,6 +309,8 @@ function applyGroupLayout(results: GroupLayoutResult[]): void {
     stripeHit.style.top = `${stripeTop}px`;
     stripeHit.style.width = `${BAR_WIDTH + STRIPE_HIT_PADDING * 2}px`;
     stripeHit.style.height = `${stripeHeight}px`;
+    targetBadge.style.left = `${targetBadgeLeft}px`;
+    targetBadge.style.top = `${targetBadgeTop}px`;
 
     // The path's own element count tracks each result's own segment count exactly (rebuilt fresh
     // every measure pass from the current lane assignment) — reusing existing elements where
@@ -475,7 +398,11 @@ function showContextMenu(x: number, y: number, items: { label: string; onSelect:
   activeContextMenu = { menu, dismiss, onKey };
 }
 
-// The margin indicator for exactly one note: the card itself when there's room (always visible,
+type ColoredAnnotation = { annotation: AnnotationRange; color: string; collapsed: boolean };
+
+// The margin indicator for one target-side group: notes sharing a target on the same side become
+// sections inside one card, keeping the margin quiet even when a line has many annotations.
+// The card itself when there's room (always visible,
 // no hover needed), a hover-revealed popup otherwise — re-measured live via ResizeObserver, since
 // the available margin changes with the window/editor width, not just once at render time, and a
 // manual "Pin" (see manuallyPinnedKeys) can force it open regardless. Several notes attached to
@@ -497,6 +424,7 @@ class AnnotationMarginWidget extends WidgetType {
     private readonly annotation: AnnotationRange,
     private readonly color: string,
     private readonly collapsed: boolean,
+    private readonly members: ColoredAnnotation[],
     // The full target range this note's stripe/card/connector is attached to — carried along so
     // toDOM can record it for repositionAnnotationGroups to read back later (both endpoints, since
     // the stripe needs the target's whole vertical extent, not just one end of it), and so eq()
@@ -514,7 +442,10 @@ class AnnotationMarginWidget extends WidgetType {
   }
 
   private get pinKey(): string {
-    return `${this.side}:${this.annotation.from}`;
+    const identities = this.members
+      .map(({ annotation }) => annotation.id !== undefined ? `id:${annotation.id}` : `at:${annotation.from}`)
+      .join(',');
+    return `group:${this.side}:${identities}`;
   }
 
   eq(other: AnnotationMarginWidget): boolean {
@@ -524,8 +455,17 @@ class AnnotationMarginWidget extends WidgetType {
       && this.stackIndex === other.stackIndex
       && this.annotation.from === other.annotation.from
       && this.annotation.text === other.annotation.text
+      && this.annotation.id === other.annotation.id
       && this.color === other.color
-      && this.collapsed === other.collapsed;
+      && this.collapsed === other.collapsed
+      && this.members.length === other.members.length
+      && this.members.every(({ annotation, color }, index) => {
+        const otherMember = other.members[index];
+        return otherMember?.annotation.from === annotation.from
+          && otherMember.annotation.text === annotation.text
+          && otherMember.annotation.id === annotation.id
+          && otherMember.color === color;
+      });
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -545,12 +485,15 @@ class AnnotationMarginWidget extends WidgetType {
     group.dataset.targetTo = String(this.targetTo);
     group.dataset.side = this.side;
     group.dataset.stackIndex = String(this.stackIndex);
+    group.dataset.noteCount = String(this.members.length);
 
     const card = document.createElement('div');
     card.className = `annotation-card annotation-card-${this.side}`;
     card.setAttribute('aria-label', 'Annotation');
     card.style.setProperty('--annotation-accent', this.color);
     card.classList.toggle('is-collapsed', this.collapsed);
+    card.classList.toggle('is-locked', lockedAnnotationKey === this.pinKey);
+    card.classList.toggle('has-multiple', this.members.length > 1);
 
     const header = document.createElement('div');
     header.className = 'annotation-card-header';
@@ -561,36 +504,84 @@ class AnnotationMarginWidget extends WidgetType {
     collapseButton.setAttribute('aria-label', this.collapsed ? 'Expand this annotation' : 'Collapse this annotation');
     collapseButton.addEventListener('mousedown', (event) => {
       event.preventDefault();
-      if (collapsedAnnotations.has(this.annotation.from)) collapsedAnnotations.delete(this.annotation.from);
-      else collapsedAnnotations.add(this.annotation.from);
+      const keys = this.members.map(({ annotation }) => annotation.id !== undefined ? `id:${annotation.id}` : `${this.side}:${annotation.from}`);
+      const collapse = !keys.every((key) => collapsedAnnotations.has(key));
+      keys.forEach((key) => {
+        if (collapse) collapsedAnnotations.add(key);
+        else collapsedAnnotations.delete(key);
+      });
       view.dispatch({ effects: refreshAnnotations.of() });
     });
     const preview = document.createElement('span');
     preview.className = 'annotation-card-preview';
-    preview.textContent = this.annotation.text.split('\n')[0] || '(empty)';
-    header.append(collapseButton, preview);
+    const firstPreview = this.members[0].annotation.text.split('\n')[0] || '(empty)';
+    preview.textContent = this.members.length === 1 ? firstPreview : `${firstPreview} +${this.members.length - 1}`;
+    const idBadge = document.createElement('span');
+    idBadge.className = 'annotation-card-id';
+    // Every section below already names its note. Repeating a long ID list in the compact header
+    // would squeeze the menu out of view, so the header only identifies the first section.
+    idBadge.textContent = this.annotation.id !== undefined ? `[${this.annotation.id}]` : '';
+    idBadge.hidden = this.annotation.id === undefined;
+    const menuButton = document.createElement('button');
+    menuButton.type = 'button';
+    menuButton.className = 'annotation-card-menu';
+    menuButton.textContent = '⋯';
+    menuButton.title = 'Annotation actions';
+    menuButton.setAttribute('aria-label', 'Annotation actions');
+    header.append(collapseButton, idBadge, preview, menuButton);
     card.append(header);
 
-    const textarea = document.createElement('textarea');
-    textarea.className = 'annotation-card-text';
-    textarea.value = this.annotation.text;
-    textarea.rows = Math.max(1, this.annotation.text.split('\n').length);
-    textarea.spellcheck = false;
-    textarea.addEventListener('blur', () => {
-      const next = textarea.value;
-      if (next === this.annotation.text) return;
-      view.dispatch({ changes: { from: this.annotation.contentFrom, to: this.annotation.contentTo, insert: next } });
-    });
-    textarea.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        textarea.value = this.annotation.text;
-        textarea.blur();
-      }
-      // Prevent this editor's own keymap (Enter/Tab/arrow handling meant for the document) from
-      // seeing keystrokes typed into this plain textarea.
-      event.stopPropagation();
-    });
-    card.append(textarea);
+    const textareas: HTMLTextAreaElement[] = [];
+    for (const { annotation, color } of this.members) {
+      const section = document.createElement('section');
+      section.className = 'annotation-card-section';
+      section.style.setProperty('--annotation-section-accent', color);
+      const sectionLabel = document.createElement('span');
+      sectionLabel.className = 'annotation-card-section-label';
+      sectionLabel.textContent = annotation.id !== undefined ? `[${annotation.id}]` : 'Note';
+      const rendered = document.createElement('div');
+      rendered.className = 'annotation-card-rendered';
+      rendered.tabIndex = 0;
+      rendered.setAttribute('role', 'button');
+      rendered.setAttribute('aria-label', 'Edit annotation');
+      renderAnnotationInlineMarkdown(rendered, annotation.text);
+      const textarea = document.createElement('textarea');
+      textarea.className = 'annotation-card-text';
+      textarea.value = annotation.text;
+      textarea.rows = Math.min(8, Math.max(2, annotation.text.split('\n').length));
+      textarea.spellcheck = false;
+      textarea.addEventListener('blur', () => {
+        const next = textarea.value;
+        section.classList.remove('is-editing');
+        if (next !== annotation.text) {
+          view.dispatch({ changes: { from: annotation.contentFrom, to: annotation.contentTo, insert: next } });
+        }
+      });
+      textarea.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          textarea.value = annotation.text;
+          textarea.blur();
+        }
+        event.stopPropagation();
+      });
+      const startEditing = () => {
+        section.classList.add('is-editing');
+        window.setTimeout(() => textarea.focus(), 0);
+      };
+      rendered.addEventListener('mousedown', (event) => {
+        if ((event.target as HTMLElement).closest('a')) return;
+        event.preventDefault();
+        startEditing();
+      });
+      rendered.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        startEditing();
+      });
+      section.append(sectionLabel, rendered, textarea);
+      card.append(section);
+      textareas.push(textarea);
+    }
 
     const connectorPath = document.createElement('div');
     connectorPath.className = 'annotation-connector-path';
@@ -601,11 +592,23 @@ class AnnotationMarginWidget extends WidgetType {
     stripeBar.style.setProperty('--annotation-stripe-color', this.color);
     const stripeHit = document.createElement('div');
     stripeHit.className = 'annotation-stripe-hit';
+    const targetBadge = document.createElement('button');
+    targetBadge.type = 'button';
+    targetBadge.className = 'annotation-target-badge';
+    const targetLabels = this.members.map(({ annotation }) => annotation.id !== undefined ? String(annotation.id) : '•');
+    // The target marker is an entry point to the combined card, not a complete index. Keeping
+    // only the first ID makes it stable and legible even when a line owns many notes.
+    targetBadge.textContent = targetLabels[0];
+    targetBadge.title = targetLabels.length === 1
+      ? `Annotation ${targetLabels[0]}`
+      : `Annotations ${targetLabels.join(', ')}`;
+    targetBadge.setAttribute('aria-label', targetBadge.title);
+    targetBadge.style.setProperty('--annotation-accent', this.color);
 
     const insertNewNote = () => {
       const marker = this.side === 'left' ? '<<<' : '>>>';
-      const insertAt = this.annotation.to + 1;
-      const tag = newAnnotationColorTag(view.state.doc.toString());
+      const insertAt = Math.max(...this.members.map(({ annotation }) => annotation.to)) + 1;
+      const tag = nextAnnotationOpeningTag(view.state.doc.toString());
       const insertText = `${marker}${tag}\n\n${marker}\n`;
       pendingFocusAnnotationFrom = insertAt;
       view.dispatch({ changes: { from: insertAt, insert: insertText } });
@@ -618,24 +621,38 @@ class AnnotationMarginWidget extends WidgetType {
       repositionAnnotationGroups(view);
     };
 
-    const deleteAnnotation = () => {
-      collapsedAnnotations.delete(this.annotation.from);
-      manuallyPinnedKeys.delete(this.pinKey);
-      const to = Math.min(this.annotation.to + 1, view.state.doc.length);
-      view.dispatch({ changes: { from: this.annotation.from, to, insert: '' } });
+    const deleteAnnotation = (annotation: AnnotationRange) => {
+      collapsedAnnotations.delete(annotation.id !== undefined ? `id:${annotation.id}` : `${this.side}:${annotation.from}`);
+      if (lockedAnnotationKey === this.pinKey) lockedAnnotationKey = undefined;
+      const to = Math.min(annotation.to + 1, view.state.doc.length);
+      view.dispatch({ changes: { from: annotation.from, to, insert: '' } });
     };
 
-    const openMenu = (event: MouseEvent) => {
-      event.preventDefault();
-      showContextMenu(event.clientX, event.clientY, [
-        { label: 'Delete this note', onSelect: deleteAnnotation },
+    const showActions = (x: number, y: number) => {
+      const deleteActions = this.members.map(({ annotation }) => ({
+        label: annotation.id !== undefined ? `Delete [${annotation.id}]` : 'Delete note',
+        onSelect: () => deleteAnnotation(annotation),
+      }));
+      showContextMenu(x, y, [
+        ...deleteActions,
         { label: '+ Add note', onSelect: insertNewNote },
         { label: manuallyPinnedKeys.has(this.pinKey) ? 'Unpin' : 'Pin', onSelect: togglePinned },
       ]);
     };
+    const openMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      showActions(event.clientX, event.clientY);
+    };
+    menuButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = menuButton.getBoundingClientRect();
+      showActions(rect.right, rect.bottom + 4);
+    });
     card.addEventListener('contextmenu', openMenu);
     stripeBar.addEventListener('contextmenu', openMenu);
     stripeHit.addEventListener('contextmenu', openMenu);
+    targetBadge.addEventListener('contextmenu', openMenu);
 
     // The stripe hit-area and the (now-detached) card no longer share a DOM ancestor, so ":hover"
     // can't bridge them with a plain CSS descendant selector; open/close state is tracked on the
@@ -644,17 +661,38 @@ class AnnotationMarginWidget extends WidgetType {
     let closeTimer: number | undefined;
     const openCard = () => {
       window.clearTimeout(closeTimer);
-      card.classList.add('is-open');
+      card.classList.add('is-open', 'is-active');
+      repositionAnnotationGroups(view);
     };
     const scheduleClose = () => {
-      closeTimer = window.setTimeout(() => card.classList.remove('is-open'), 300);
+      closeTimer = window.setTimeout(() => {
+        card.classList.remove('is-active');
+        if (!card.classList.contains('is-locked') && !card.matches(':focus-within')) card.classList.remove('is-open');
+        repositionAnnotationGroups(view);
+      }, 300);
     };
     stripeHit.addEventListener('mouseenter', openCard);
     stripeHit.addEventListener('mouseleave', scheduleClose);
+    targetBadge.addEventListener('mouseenter', openCard);
+    targetBadge.addEventListener('mouseleave', scheduleClose);
     card.addEventListener('mouseenter', openCard);
     card.addEventListener('mouseleave', scheduleClose);
+    card.addEventListener('focusin', openCard);
+    card.addEventListener('focusout', scheduleClose);
+    const toggleLocked = (event: MouseEvent) => {
+      event.preventDefault();
+      const locking = lockedAnnotationKey !== this.pinKey;
+      lockedAnnotationKey = locking ? this.pinKey : undefined;
+      findWorkspaceElement(view)?.querySelectorAll('.annotation-card.is-locked')
+        .forEach((element) => element.classList.remove('is-locked'));
+      card.classList.toggle('is-locked', locking);
+      if (locking) openCard();
+      else scheduleClose();
+    };
+    stripeHit.addEventListener('mousedown', toggleLocked);
+    targetBadge.addEventListener('mousedown', toggleLocked);
 
-    group.append(card, connectorPath, stripeBar, stripeHit);
+    group.append(card, connectorPath, stripeBar, stripeHit, targetBadge);
     const workspaceElement = findWorkspaceElement(view);
     (workspaceElement ?? anchor).append(group);
     this.group = group;
@@ -690,9 +728,9 @@ class AnnotationMarginWidget extends WidgetType {
     this.resizeObserver.observe(card);
     if (workspaceElement) this.resizeObserver.observe(workspaceElement);
 
-    if (pendingFocusAnnotationFrom === this.annotation.from) {
+    if (this.members.some(({ annotation }) => pendingFocusAnnotationFrom === annotation.from)) {
       pendingFocusAnnotationFrom = undefined;
-      window.setTimeout(() => textarea.focus(), 0);
+      window.setTimeout(() => textareas[0]?.focus(), 0);
     }
 
     return anchor;
@@ -708,7 +746,6 @@ class AnnotationMarginWidget extends WidgetType {
   }
 }
 
-type ColoredAnnotation = { annotation: AnnotationRange; color: string; collapsed: boolean };
 type TargetGroup = { from: number; to: number; left: ColoredAnnotation[]; right: ColoredAnnotation[] };
 
 function buildAnnotationDecorations(state: EditorState): DecorationSet {
@@ -734,8 +771,8 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
       }
       group[annotation.side].push({
         annotation,
-        color: colorForAnnotation(annotations, annotation),
-        collapsed: collapsedAnnotations.has(annotation.from),
+        color: annotationColor(annotations, annotation),
+        collapsed: collapsedAnnotations.has(annotation.id !== undefined ? `id:${annotation.id}` : `${annotation.side}:${annotation.from}`),
       });
     }
     for (const group of groups.values()) {
@@ -747,20 +784,17 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
       // single-line target doesn't have that conflict, and inline positioning reads better there
       // anyway (not that it matters for rendering now — the anchor itself is invisible either way).
       const isWholeBlock = state.doc.lineAt(group.from).number !== state.doc.lineAt(group.to).number;
-      group.left.forEach(({ annotation, color, collapsed }, stackIndex) => {
+      for (const side of ['left', 'right'] as const) {
+        const members = group[side];
+        if (!members.length) continue;
+        const primary = members[0];
+        const collapsed = members.every((member) => member.collapsed);
         ranges.push(Decoration.widget({
-          widget: new AnnotationMarginWidget('left', annotation, color, collapsed, group.from, group.to, stackIndex),
-          side: -1,
+          widget: new AnnotationMarginWidget(side, primary.annotation, primary.color, collapsed, members, group.from, group.to, 0),
+          side: side === 'left' ? -1 : 1,
           block: isWholeBlock,
-        }).range(group.from));
-      });
-      group.right.forEach(({ annotation, color, collapsed }, stackIndex) => {
-        ranges.push(Decoration.widget({
-          widget: new AnnotationMarginWidget('right', annotation, color, collapsed, group.from, group.to, stackIndex),
-          side: 1,
-          block: isWholeBlock,
-        }).range(group.to));
-      });
+        }).range(side === 'left' ? group.from : group.to));
+      }
     }
   }
 
@@ -779,6 +813,36 @@ const annotationField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const annotationOpenPattern = /^[ \t]*(<<<|>>>)(?:\[([1-9]\d*)\])?([0-9a-fA-F]{6})?\s*$/;
+const annotationClosePattern = /^[ \t]*(<<<|>>>)\s*$/;
+
+// Returns the marker of the annotation that is still open immediately before `before`. This
+// mirrors loommark-core's non-nesting fence rules closely enough to distinguish a user's closing
+// delimiter from a new opener while the third character is still being typed.
+function openAnnotationMarkerBefore(source: string, before: number): '<<<' | '>>>' | undefined {
+  const excluded = fencedCodeRanges(source);
+  const lines = source.split('\n');
+  let offset = 0;
+  let open: '<<<' | '>>>' | undefined;
+
+  for (const line of lines) {
+    const lineFrom = offset;
+    if (lineFrom >= before) break;
+    if (!containsPosition(excluded, lineFrom)) {
+      if (!open) {
+        const match = line.match(annotationOpenPattern);
+        if (match) open = match[1] as '<<<' | '>>>';
+      } else {
+        const match = line.match(annotationClosePattern);
+        if (match?.[1] === open) open = undefined;
+      }
+    }
+    offset += line.length + 1;
+  }
+
+  return open;
+}
+
 // Typing the 3rd `<` (or `>`) of a delimiter line auto-closes it immediately, the same way
 // loommark-core's own completeBlockDelimiters does for code fences/math. Without this, a bare
 // `<<<` typed anywhere with no matching close left "open" until the next `<<<`/`>>>` line
@@ -795,10 +859,19 @@ const completeAnnotationDelimiters = EditorView.inputHandler.of((view, from, to,
   const indent = before.match(/^ {0,3}/)?.[0] ?? '';
   if (before !== `${indent}${text}${text}`) return false;
 
-  const tag = newAnnotationColorTag(view.state.doc.toString());
+  const source = view.state.doc.toString();
+  if (containsPosition(fencedCodeRanges(source), line.from)) return false;
+  const marker = text === '<' ? '<<<' : '>>>';
+  if (openAnnotationMarkerBefore(source, line.from) === marker) return false;
+
+  const tag = nextAnnotationOpeningTag(source);
+  pendingFocusAnnotationFrom = line.from;
   view.dispatch({
     changes: { from, to, insert: `${text}${tag}\n\n${indent}${text}${text}${text}` },
-    selection: { anchor: from + 1 + tag.length },
+    // The annotation is immediately replaced by a hidden block decoration. Never leave the
+    // document selection inside that hidden source: Backspace/Enter would otherwise mutate its
+    // generated color tag and delimiters before the card's textarea receives focus.
+    selection: { anchor: line.from },
     userEvent: 'input.type',
   });
   return true;
@@ -828,7 +901,7 @@ function annotateCurrentLine(side: 'left' | 'right') {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
     const insertAt = line.to;
     const focusFrom = insertAt + 1;
-    const tag = newAnnotationColorTag(view.state.doc.toString());
+    const tag = nextAnnotationOpeningTag(view.state.doc.toString());
     pendingFocusAnnotationFrom = focusFrom;
     view.dispatch({ changes: { from: insertAt, insert: `\n${marker}${tag}\n\n${marker}` } });
     return true;
