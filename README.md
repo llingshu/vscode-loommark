@@ -49,6 +49,14 @@ file must not format, normalize, escape, or otherwise rewrite it.
 
 ## Changelog
 
+### 0.5.2
+
+- Fixed restored LoomMark tabs after an Extension Host restart. A tab that VS Code retained without
+  a live custom-editor provider is now closed and recreated automatically, establishing a new
+  `TextDocument` synchronization channel before the editor accepts ongoing work.
+- Fixed fenced code blocks containing Markdown-looking headings. Their contents now remain code:
+  they do not create heading styling, heading Cards, or outline entries.
+
 ### 0.5.1
 
 - Fixed a critical data-loss risk after an Extension Host restart. Existing Markdown tabs now

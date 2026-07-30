@@ -97,8 +97,8 @@ connectionWarning.querySelector<HTMLButtonElement>('[data-loommark-retry-connect
   requestInitialization();
 });
 
-// A retained Webview may outlive an extension host. Do not leave a newly reloaded Webview as an
-// apparently-editable blank surface while waiting for that host to attach.
+// Do not leave a newly reloaded Webview as an apparently-editable blank surface while waiting for
+// its extension host to attach.
 initialConnectionTimeout = window.setTimeout(() => {
   if (!initialized) showConnectionWarning();
 }, 8000);

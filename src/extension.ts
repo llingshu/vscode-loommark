@@ -26,6 +26,12 @@ export function activate(context: vscode.ExtensionContext): void {
     console.error('LoomMark could not update the default editor association.', error);
   });
   syncAssociation();
+  const restoredEditorReconnect = setTimeout(() => {
+    void provider.reconnectRestoredEditors().catch((error: unknown) => {
+      console.error('LoomMark could not reconnect restored editors.', error);
+      void vscode.window.showErrorMessage(`LoomMark could not reconnect restored Markdown editors: ${String(error)}`);
+    });
+  }, 350);
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(viewType, provider, {
       supportsMultipleEditorsPerDocument: false,
@@ -40,8 +46,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('loommark.copyDiagnostics', async () => {
       if (!provider.requestDiagnostics()) {
-        void vscode.window.showWarningMessage('Open a Markdown file in LoomMark first.');
+        await vscode.env.clipboard.writeText(JSON.stringify(provider.getLifecycleDiagnostics(), null, 2));
+        void vscode.window.showWarningMessage('LoomMark has no connected editor. Host diagnostics were copied to the clipboard.');
       }
+    }),
+    vscode.commands.registerCommand('loommark.reconnectRestoredEditors', async () => {
+      await provider.reconnectRestoredEditors();
     }),
     vscode.commands.registerCommand('loommark.toggleCardMode', async () => {
       const configuration = vscode.workspace.getConfiguration('loommark');
@@ -65,6 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     provider,
     outlineProvider,
+    { dispose: () => clearTimeout(restoredEditorReconnect) },
   );
 }
 
@@ -361,6 +372,7 @@ class MarkdownOutlineTree implements vscode.TreeDataProvider<HeadingTreeNode>, v
 class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
   activeDocumentUri: vscode.Uri | undefined;
   private activePanel: vscode.WebviewPanel | undefined;
+  private readonly resolvedDocumentCounts = new Map<string, number>();
   private readonly activeDocumentEmitter = new vscode.EventEmitter<vscode.TextDocument | undefined>();
   readonly onDidChangeActiveDocument = this.activeDocumentEmitter.event;
 
@@ -370,6 +382,8 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     document: vscode.TextDocument,
     panel: vscode.WebviewPanel,
   ): Promise<void> {
+    const documentKey = document.uri.toString();
+    this.resolvedDocumentCounts.set(documentKey, (this.resolvedDocumentCounts.get(documentKey) ?? 0) + 1);
     this.setActiveDocument(document, panel);
     const documentDirectory = vscode.Uri.joinPath(document.uri, '..');
     // Relative image and link paths may climb above the document's own directory (a
@@ -394,7 +408,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     let lastBackgroundWarning = '';
     let lastCardImageWarning = '';
 
-    const post = (message: HostToWebview) => panel.webview.postMessage(message);
+    const post = (message: HostToWebview): Thenable<boolean> => panel.webview.postMessage(message);
     const loadConfiguration = async (): Promise<EditorConfiguration> => {
       const background = await resolvedBackground(panel.webview, document);
       const cardImage = await resolvedCardImage(panel.webview);
@@ -418,7 +432,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       }
       return editorConfiguration(background, cardImage);
     };
-    const initialize = async () => post({
+    const initialize = async (): Promise<boolean> => post({
       type: 'init',
       text: document.getText(),
       revision: documentRevision,
@@ -426,12 +440,25 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       wikiFiles: await findWikiFiles(document),
       ...await loadConfiguration(),
     });
+    let initialization: Promise<boolean> | undefined;
+    const initializeWebview = async (): Promise<boolean> => {
+      // A restored, retained Webview may have been created by the previous extension host and
+      // therefore never send `ready` to this new host. Send the authoritative snapshot from this
+      // side as well; a genuinely new Webview still uses its normal ready message as the fallback.
+      if (!initialization) {
+        initialization = initialize().finally(() => {
+          initialization = undefined;
+        });
+      }
+      const delivered = await initialization;
+      ready ||= delivered;
+      return delivered;
+    };
 
     const messageSubscription = panel.webview.onDidReceiveMessage(async (raw: unknown) => {
       if (!isWebviewMessage(raw)) return;
       if (raw.type === 'ready') {
-        ready = true;
-        await initialize();
+        await initializeWebview();
         return;
       }
       if (raw.type === 'openLink') {
@@ -527,6 +554,13 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       void refreshWikiFiles();
     });
 
+    // Do not depend exclusively on a message from the Webview. This is the critical recovery
+    // path after `Developer: Restart Extension Host` with a Markdown custom editor still open.
+    void initializeWebview().catch((error: unknown) => {
+      console.error('LoomMark could not initialize a restored editor.', error);
+      void vscode.window.showErrorMessage(`LoomMark could not reconnect this Markdown editor: ${String(error)}`);
+    });
+
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.active) this.setActiveDocument(document, panel);
     });
@@ -537,12 +571,39 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       createFilesSubscription.dispose();
       deleteFilesSubscription.dispose();
       renameFilesSubscription.dispose();
-      if (this.activeDocumentUri?.toString() === document.uri.toString()) {
+      if (this.activePanel === panel) {
         this.activeDocumentUri = undefined;
         this.activePanel = undefined;
         this.activeDocumentEmitter.fire(undefined);
       }
+      const remaining = (this.resolvedDocumentCounts.get(documentKey) ?? 1) - 1;
+      if (remaining > 0) this.resolvedDocumentCounts.set(documentKey, remaining);
+      else this.resolvedDocumentCounts.delete(documentKey);
     });
+  }
+
+  async reconnectRestoredEditors(): Promise<void> {
+    const restored = vscode.window.tabGroups.all.flatMap((group) => group.tabs.flatMap((tab) => {
+      const input = tab.input;
+      if (!(input instanceof vscode.TabInputCustom) || input.viewType !== viewType) return [];
+      if (this.resolvedDocumentCounts.has(input.uri.toString())) return [];
+      return [{ tab, uri: input.uri, viewColumn: group.viewColumn, preview: tab.isPreview, active: tab.isActive }];
+    }));
+
+    // The extension host has no panel handle for these restored tabs, so it cannot receive their
+    // Webview messages. `vscode.openWith` alone only focuses the still-open custom tab, so first
+    // close that zombie tab and then open the URI with LoomMark to make VS Code construct a fresh
+    // CustomTextEditorProvider panel.
+    for (const tab of restored) {
+      const options = {
+        viewColumn: tab.viewColumn,
+        preview: tab.preview,
+        preserveFocus: !tab.active,
+      };
+      const closed = await vscode.window.tabGroups.close(tab.tab, true);
+      if (!closed) throw new Error(`VS Code did not close restored LoomMark tab ${tab.uri.toString()}.`);
+      await vscode.commands.executeCommand('vscode.openWith', tab.uri, viewType, options);
+    }
   }
 
   revealHeading(ordinal: number): Thenable<boolean> | undefined {
@@ -553,6 +614,31 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     if (!this.activePanel) return false;
     void this.activePanel.webview.postMessage({ type: 'requestDiagnostics' } satisfies HostToWebview);
     return true;
+  }
+
+  getLifecycleDiagnostics(): Record<string, unknown> {
+    return {
+      activeDocumentUri: this.activeDocumentUri?.toString(),
+      hasActivePanel: Boolean(this.activePanel),
+      resolvedDocumentCounts: Object.fromEntries(this.resolvedDocumentCounts),
+      tabGroups: vscode.window.tabGroups.all.map((group) => ({
+        viewColumn: group.viewColumn,
+        active: group.activeTab?.label,
+        tabs: group.tabs.map((tab) => {
+          const input = tab.input;
+          return input instanceof vscode.TabInputCustom
+            ? {
+              label: tab.label,
+              active: tab.isActive,
+              dirty: tab.isDirty,
+              input: 'custom',
+              viewType: input.viewType,
+              uri: input.uri.toString(),
+            }
+            : { label: tab.label, active: tab.isActive, dirty: tab.isDirty, input: input?.constructor?.name ?? typeof input };
+        }),
+      })),
+    };
   }
 
   dispose(): void {
