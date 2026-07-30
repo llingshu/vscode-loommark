@@ -22,6 +22,55 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
+.loommark-connection-warning {
+  position: fixed;
+  z-index: 200;
+  inset: auto 16px 16px auto;
+  width: min(440px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--vscode-editorError-foreground, #f14c4c);
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-editor-foreground);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.loommark-connection-warning strong {
+  color: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+.loommark-connection-warning p {
+  margin: 6px 0 12px;
+}
+
+.loommark-connection-warning-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loommark-connection-warning button {
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  cursor: pointer;
+}
+
+.loommark-connection-warning button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.loommark-workspace.loommark-sync-offline .loommark-editor-root {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.58;
+}
+
 body.vscode-dark .loommark-workspace {
   --loommark-card-image-surface-alpha: 68%;
   --loommark-code-surface: #fafafa;

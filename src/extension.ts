@@ -28,11 +28,10 @@ export function activate(context: vscode.ExtensionContext): void {
   syncAssociation();
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(viewType, provider, {
-      webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: false,
     }),
     vscode.commands.registerCommand('loommark.openSource', async () => {
-      const uri = provider.activeDocumentUri;
+      const uri = activeLoomMarkDocumentUri() ?? provider.activeDocumentUri;
       if (uri) await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
     }),
     vscode.commands.registerCommand('loommark.focusOutline', async () => {
@@ -67,6 +66,17 @@ export function activate(context: vscode.ExtensionContext): void {
     provider,
     outlineProvider,
   );
+}
+
+// `activePanel` is useful for sending messages to the editor, but is not a reliable source for
+// commands after an extension-host restart: existing custom-editor tabs can be restored before
+// they emit a new view-state event. The tab model is owned by VS Code and always identifies the
+// tab the command was invoked from.
+function activeLoomMarkDocumentUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  return input instanceof vscode.TabInputCustom && input.viewType === viewType
+    ? input.uri
+    : undefined;
 }
 
 async function syncDefaultEditorAssociation(): Promise<void> {
@@ -454,8 +464,15 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         new vscode.Range(document.positionAt(splice.from), document.positionAt(splice.to)),
         splice.insert,
       );
-      const applied = await vscode.workspace.applyEdit(edit);
-      applyingClientEdit = false;
+      let applied = false;
+      let applyError: string | undefined;
+      try {
+        applied = await vscode.workspace.applyEdit(edit);
+      } catch (error: unknown) {
+        applyError = String(error);
+      } finally {
+        applyingClientEdit = false;
+      }
 
       if (applied) {
         documentRevision = document.version;
@@ -466,7 +483,9 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
           text: document.getText(),
         });
       } else {
-        await post({ type: 'documentChanged', text: document.getText(), documentRevision });
+        const detail = applyError ?? 'VS Code rejected the document edit.';
+        await post({ type: 'syncError', clientRevision: raw.clientRevision, error: detail });
+        void vscode.window.showErrorMessage(`LoomMark could not write this Markdown edit: ${detail}`);
       }
     });
 

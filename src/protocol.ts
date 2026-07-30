@@ -21,6 +21,7 @@ export type HostToWebview =
   | ({ type: 'init'; text: string; revision: number; resourceBase: string; wikiFiles: string[] } & EditorConfiguration)
   | ({ type: 'configuration' } & EditorConfiguration)
   | { type: 'ack'; clientRevision: number; documentRevision: number; text: string }
+  | { type: 'syncError'; clientRevision: number; error: string }
   | { type: 'documentChanged'; text: string; documentRevision: number }
   | { type: 'revealHeading'; ordinal: number }
   | { type: 'wikiFilesChanged'; wikiFiles: string[] }

@@ -49,6 +49,17 @@ file must not format, normalize, escape, or otherwise rewrite it.
 
 ## Changelog
 
+### 0.5.1
+
+- Fixed a critical data-loss risk after an Extension Host restart. Existing Markdown tabs now
+  recreate their Webview instead of retaining a detached in-memory editor; edits reconnect to the
+  authoritative VS Code `TextDocument` before they can appear saved.
+- Added explicit persistence protection: a rejected document write or an unacknowledged sync now
+  blocks further editing, reports the failure, and offers recovery-text copying rather than
+  silently accepting edits that have not reached disk.
+- Fixed **Open Source Editor** to resolve the current custom-editor tab instead of a stale tab
+  remembered before the Extension Host restart.
+
 ### 0.5.0
 
 - Extracted the reusable CodeMirror Markdown editor kernel into the open-source

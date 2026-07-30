@@ -4,6 +4,21 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-07-30
+
+### Fixed
+
+- Fixed a critical data-loss path after an Extension Host restart: a retained Markdown Webview
+  could continue to accept edits after losing its `TextDocument` synchronization listener, while
+  VS Code showed no dirty state and nothing reached disk. LoomMark now recreates the Webview when
+  a tab is restored, so the current document and extension host complete a fresh handshake.
+- Added a persistence fail-safe. If VS Code rejects a `WorkspaceEdit`, or if an edit receives no
+  acknowledgement, LoomMark immediately shows a blocking unsaved warning, prevents further input,
+  and lets the user copy the recovery text instead of silently treating local Webview state as
+  saved.
+- Fixed **Open Source Editor** after a host restart to use the actual active custom-editor tab,
+  rather than a stale document URI retained from another tab.
+
 ## [Unreleased]
 
 ### Added
