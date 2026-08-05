@@ -44,10 +44,19 @@ file must not format, normalize, escape, or otherwise rewrite it.
   both generated from source text.
 - Minimal VS Code `WorkspaceEdit` synchronization with stale-update protection.
 - Cursor position is remembered and restored when reopening a document.
+- Reading position is remembered too: returning to a recreated editor restores the same visible
+  document location, including after layout-affecting rich rendering has settled, and restores
+  editor focus so typing can continue immediately.
 - Built-in diagnostics command for inspecting the Webview, synchronization state, links, completion,
   and code-block decorations.
 
 ## Changelog
+
+### 0.5.3
+
+- Restored editors retain both the cursor and the reading position. LoomMark saves a scroll
+  position plus a visible-line anchor, so switching back to a document or recreating its Webview
+  returns to the same place even when cards, images, or wrapping have changed its height.
 
 ### 0.5.2
 

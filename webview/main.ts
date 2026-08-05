@@ -11,7 +11,13 @@ declare function acquireVsCodeApi<State>(): {
   setState(state: State): void;
 };
 
-type SavedState = { text: string; documentRevision: number; outlineCollapsed?: boolean; cursor?: number };
+type SavedState = {
+  text: string;
+  documentRevision: number;
+  outlineCollapsed?: boolean;
+  cursor?: number;
+  viewport?: { scrollTop: number; anchor: number; offset: number };
+};
 type LinkOpenResult = { status: 'opened' | 'error'; resolvedUri?: string; error?: string };
 type PasteImageResult = { relativePath?: string; error?: string };
 
@@ -115,6 +121,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       documentRevision: message.revision,
       initialOutlineCollapsed: savedState?.outlineCollapsed,
       initialCursor: savedState?.cursor,
+      initialViewport: savedState?.viewport,
       onSync(text, baseRevision, clientRevision) {
         vscode.postMessage({ type: 'edit', text, baseRevision, clientRevision });
         clearSyncTimeout(clientRevision);

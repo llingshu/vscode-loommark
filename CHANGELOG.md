@@ -4,6 +4,17 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-08-05
+
+### Fixed
+
+- Restored LoomMark editors now return to the exact reading position, not merely the saved cursor.
+  The Webview persists its scroll position together with a top-visible-line anchor and offset; when
+  the editor is recreated, the anchor corrects the position after cards, images, or wrapping have
+  changed the document's layout.
+- Returning to a restored editor also focuses the remembered cursor automatically, so typing can
+  continue immediately without first clicking the editing surface.
+
 ## [0.5.2] - 2026-07-30
 
 ### Fixed
