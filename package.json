@@ -390,7 +390,7 @@
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",
-    "@codemirror/view": "^6.43.6",
+    "@codemirror/view": "^6.43.7",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.1",
     "@llingshu/loommark-core": "^0.1.4",
