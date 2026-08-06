@@ -4,6 +4,7 @@
 .vscode-test/**
 artifacts/**
 docs/**
+image/**
 node_modules/**
 out/**
 scripts/**

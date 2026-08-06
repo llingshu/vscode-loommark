@@ -3,6 +3,7 @@ import {
   annotationColor,
   containsPosition,
   fencedCodeRanges,
+  imageRanges,
   nextAnnotationOpeningTag,
   renderAnnotationInlineMarkdown,
   resolveAnnotationTarget,
@@ -112,6 +113,40 @@ function findLineElement(view: EditorView, pos: number): HTMLElement | null {
   return element?.closest('.cm-line') ?? null;
 }
 
+// Tables, block images, and display math replace their Markdown source with one DOM widget rather
+// than retaining `.cm-line` descendants. Their own box is the correct annotation target: it gives
+// a stripe the full block height and places its badge at the true left/right edge just as a line
+// target does. `domAtPos` commonly reaches the widget, but at a replacement boundary CodeMirror
+// may return the content wrapper instead, so geometry supplies a reliable fallback.
+function findBlockWidgetElement(view: EditorView, from: number, to: number): HTMLElement | null {
+  const widgets = Array.from(view.dom.querySelectorAll<HTMLElement>('.cm-loommark-table, .cm-loommark-image.is-block, .cm-loommark-math.is-block'));
+  // Block widgets expose the exact source range they replace. This is more reliable than
+  // domAtPos/coordsAtPos: replacement decorations intentionally have no text DOM at their
+  // source positions, so those APIs may resolve to an adjacent placeholder line instead.
+  const exact = widgets.find((candidate) => Number(candidate.dataset.loommarkFrom) === from
+    && Number(candidate.dataset.loommarkTo) === to);
+  if (exact) return exact;
+
+  const { node } = view.domAtPos(from);
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const direct = element?.closest<HTMLElement>('.cm-loommark-table, .cm-loommark-image.is-block, .cm-loommark-math.is-block');
+  if (direct) return direct;
+  const coords = view.coordsAtPos(from);
+  if (!coords) return null;
+  return widgets
+    .filter((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return coords.top >= rect.top - 1 && coords.top <= rect.bottom + 1;
+    })
+    .sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width)[0] ?? null;
+}
+
+function findTargetElement(view: EditorView, from: number, to: number): HTMLElement | null {
+  // Prefer the actual block surface over a nearby .cm-line placeholder. This also gives the
+  // stripe the full block height instead of the height of the first hidden Markdown line.
+  return findBlockWidgetElement(view, from, to) ?? findLineElement(view, from);
+}
+
 // One stripe bar per annotation attached to a target, stacked inward from that side's own
 // line-box edge (index 0 = outermost, closest to the edge = first/oldest annotation on this
 // target) — a real overlay element (see findLineElement's comment for why), not a
@@ -194,35 +229,34 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
     const noteCount = Math.max(1, Number(group.dataset.noteCount) || 1);
     const targetFrom = Number(group.dataset.targetFrom);
     const targetTo = Number(group.dataset.targetTo);
-    const topLineRect = Number.isFinite(targetFrom) ? findLineElement(view, targetFrom)?.getBoundingClientRect() : undefined;
-    const bottomLineRect = Number.isFinite(targetTo) ? findLineElement(view, targetTo)?.getBoundingClientRect() : undefined;
-    // A table (unlike a fenced-code block, which still renders real per-line `.cm-line` elements
-    // under its own styling) replaces its whole source with one opaque widget — no `.cm-line`
-    // exists anywhere inside it, so findLineElement comes back empty there. Falling all the way
-    // back to offscreen in that case would make the card vanish entirely, not just lose its
-    // stripe (the true original limitation, and a much smaller loss than the card disappearing).
-    // view.coordsAtPos still resolves a position inside a replaced range to that widget's own
-    // boundary, so it's a safe fallback for the card/connector's vertical position specifically —
-    // just not for the stripe's left/right edge, which has no meaningful "line box" to match when
-    // there's no real line there at all.
-    const topCoords = !topLineRect && Number.isFinite(targetFrom) ? view.coordsAtPos(targetFrom) : null;
-    const naturalTop = topLineRect
-      ? topLineRect.top - workspaceRect.top + scrollTop
+    const topTarget = Number.isFinite(targetFrom) && Number.isFinite(targetTo)
+      ? findTargetElement(view, targetFrom, targetTo)
+      : null;
+    const bottomTarget = Number.isFinite(targetFrom) && Number.isFinite(targetTo)
+      ? findTargetElement(view, targetTo, targetTo)
+      : null;
+    const topTargetRect = topTarget?.getBoundingClientRect();
+    // A whole-widget target has one box for both endpoints. A fenced code block retains lines,
+    // so its end uses the final line; other widgets use the one block rectangle throughout.
+    const bottomTargetRect = bottomTarget?.getBoundingClientRect() ?? topTargetRect;
+    const topCoords = !topTargetRect && Number.isFinite(targetFrom) ? view.coordsAtPos(targetFrom) : null;
+    const naturalTop = topTargetRect
+      ? topTargetRect.top - workspaceRect.top + scrollTop
       : topCoords
         ? topCoords.top - workspaceRect.top + scrollTop
         : null;
     const stripeTop = naturalTop ?? 0;
-    const stripeHeight = topLineRect && bottomLineRect
-      ? (bottomLineRect.bottom - topLineRect.top)
+    const stripeHeight = topTargetRect && bottomTargetRect
+      ? (bottomTargetRect.bottom - topTargetRect.top)
       : 0;
-    const barLeft = !topLineRect ? 0
+    const barLeft = !topTargetRect ? 0
       : side === 'left'
-        ? (topLineRect.left - workspaceRect.left + scrollLeft) + stackIndex * (BAR_WIDTH + BAR_GAP)
-        : (topLineRect.right - workspaceRect.left + scrollLeft) - (stackIndex + 1) * BAR_WIDTH - stackIndex * BAR_GAP;
-    const targetBadgeLeft = !topLineRect ? 0
+        ? (topTargetRect.left - workspaceRect.left + scrollLeft) + stackIndex * (BAR_WIDTH + BAR_GAP)
+        : (topTargetRect.right - workspaceRect.left + scrollLeft) - (stackIndex + 1) * BAR_WIDTH - stackIndex * BAR_GAP;
+    const targetBadgeLeft = !topTargetRect ? 0
       : side === 'left'
-        ? (topLineRect.left - workspaceRect.left + scrollLeft) - 12
-        : (topLineRect.right - workspaceRect.left + scrollLeft) + 12;
+        ? (topTargetRect.left - workspaceRect.left + scrollLeft) - 12
+        : (topTargetRect.right - workspaceRect.left + scrollLeft) + 12;
     // A target can own several annotations on the same side. Stacking their number chips down the
     // margin keeps each ID legible instead of letting later chips disappear beyond the page edge.
     const targetBadgeTop = stripeTop + 10 + stackIndex * 20;
@@ -548,8 +582,7 @@ class AnnotationMarginWidget extends WidgetType {
       const rendered = document.createElement('div');
       rendered.className = 'annotation-card-rendered';
       rendered.tabIndex = 0;
-      rendered.setAttribute('role', 'button');
-      rendered.setAttribute('aria-label', 'Edit annotation');
+      rendered.setAttribute('aria-label', 'Annotation text. Double-click or press Enter to edit.');
       renderAnnotationInlineMarkdown(rendered, annotation.text);
       const textarea = document.createElement('textarea');
       textarea.className = 'annotation-card-text';
@@ -574,13 +607,21 @@ class AnnotationMarginWidget extends WidgetType {
         section.classList.add('is-editing');
         window.setTimeout(() => textarea.focus(), 0);
       };
-      rendered.addEventListener('mousedown', (event) => {
+      rendered.addEventListener('dblclick', (event) => {
         if ((event.target as HTMLElement).closest('a')) return;
-        event.preventDefault();
         startEditing();
       });
       rendered.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(rendered);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          event.preventDefault();
+          return;
+        }
+        if (event.key !== 'Enter') return;
         event.preventDefault();
         startEditing();
       });
@@ -789,7 +830,14 @@ function buildAnnotationDecorations(state: EditorState): DecorationSet {
       // block:true too gives it its own slot instead of competing for the same one; a
       // single-line target doesn't have that conflict, and inline positioning reads better there
       // anyway (not that it matters for rendering now — the anchor itself is invisible either way).
-      const isWholeBlock = state.doc.lineAt(group.from).number !== state.doc.lineAt(group.to).number;
+      // Most complete block targets span lines. A standalone image is the exception: LoomMark
+      // replaces its one source line with a block widget, so an inline annotation anchor at the
+      // same boundary is absorbed by that replacement decoration. Treat it as a block anchor too.
+      const isStandaloneImage = imageRanges(source).some((image) => image.ownLine
+        && image.from === group.from
+        && image.to === group.to);
+      const isWholeBlock = isStandaloneImage
+        || state.doc.lineAt(group.from).number !== state.doc.lineAt(group.to).number;
       for (const side of ['left', 'right'] as const) {
         const members = group[side];
         if (!members.length) continue;

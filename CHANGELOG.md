@@ -4,6 +4,22 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-08-05
+
+### Added
+
+- Standalone Markdown images now render as centered figures in their own bordered container by
+  default, with the image's `[]` alt text shown as a caption. Use `"no-center"` and/or
+  `"no-frame"` in the optional image title to opt out of either default.
+- Added a README gallery with an editor overview and examples of nested Card modes, list guides,
+  and mathematical rendering.
+
+### Fixed
+
+- Annotation stripes and numbered badges now attach to standalone rendered images as well as
+  tables, fenced code blocks, and display math. Their block-level anchor can no longer be
+  swallowed by the image replacement decoration.
+
 ## [0.5.3] - 2026-08-05
 
 ### Fixed

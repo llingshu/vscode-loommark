@@ -12,6 +12,10 @@ LoomMark does not parse a document into a rich-text model and serialize the whol
 Markdown. Visual features are CodeMirror decorations layered over the original text. Opening a
 file must not format, normalize, escape, or otherwise rewrite it.
 
+<p align="center">
+  <img src="docs/images/overview.png" alt="LoomMark rendering rich Markdown, annotation cards, and the Markdown outline in VS Code" width="1100">
+</p>
+
 ## Highlights
 
 - Continuous editing with normal cursor movement, selection, undo, IME composition, and fast input.
@@ -50,7 +54,41 @@ file must not format, normalize, escape, or otherwise rewrite it.
 - Built-in diagnostics command for inspecting the Webview, synchronization state, links, completion,
   and code-block decorations.
 
+## Gallery
+
+### Nested Card Mode
+
+Heading sections can remain plain, use colored accent rails, or form nested Cards while preserving
+the exact Markdown source beneath the editor surface.
+
+<p align="center">
+  <img src="docs/images/card-mode-off.png" alt="LoomMark with Card Mode off" width="48%">
+  <img src="docs/images/card-mode-accent.png" alt="LoomMark Card Mode with colored accent rails" width="48%">
+</p>
+
+<p align="center">
+  <img src="docs/images/card-mode-tint.png" alt="LoomMark Card Mode with nested tinted sections" width="48%">
+  <img src="docs/images/card-mode-card.png" alt="LoomMark Card Mode with nested bordered sections" width="48%">
+</p>
+
+### Lists And Math
+
+Nested list guides remain visible across continuation paragraphs, ordered lists can cycle their
+labels, and inline or display mathematics renders in place.
+
+<p align="center">
+  <img src="docs/images/lists-and-math.png" alt="LoomMark nested list guides and display mathematics" width="720">
+</p>
+
 ## Changelog
+
+### 0.5.4
+
+- Standalone images now default to a centered, framed figure with their `[]` alt text as a
+  caption. The optional title accepts `"no-center"` and `"no-frame"` to opt out.
+- Annotation blocks now anchor their stripe and numbered badge to standalone rendered images,
+  matching the existing table, code-block, and display-math behavior.
+- Added an image gallery covering rich rendering and Card mode variants.
 
 ### 0.5.3
 
@@ -268,7 +306,11 @@ separators, no vertical lines) — useful for reference tables like a CLI comman
 
 ## Images
 
-`![alt](path)` renders inline or, on its own line, as a block image. Relative paths resolve
+`![alt](path)` renders inline or, on its own line, as a centered block image in an independent
+bordered container. Add presentation tokens in the optional title only to opt out:
+`![alt](path "no-center")` keeps the block aligned to the source column,
+`![alt](path "no-frame")` removes its container, and `"no-center no-frame"` disables both.
+Other title text remains accepted and has no visual effect. Relative paths resolve
 against the document's own directory and may climb into a sibling folder (`../assets/x.png`) as
 long as the target stays inside the document's workspace folder; documents opened outside any
 workspace can only reach their own directory. Paths with spaces or special characters can be
@@ -371,6 +413,8 @@ with everything else on the same side — whenever there's enough room for it th
 collapses to just the stripe, revealed on hover (or forced open regardless of available room via the
 right-click "Pin" below). A note can be individually collapsed to a one-line preview or edited
 directly; its height follows short content and scrolls once long content reaches the viewport limit.
+Its rendered text supports normal pointer selection and copying. Double-click the text, or focus it
+and press Enter, to edit with the standard select-all, copy, paste, undo, and redo shortcuts.
 Delete, add another note at the same attachment point, and pin/unpin live in the visible ellipsis
 menu (and remain available by right-click). Stacking several blocks back
 to back (either side, or via "Add note") all attach to the same original line rather than to each
