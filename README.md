@@ -82,6 +82,13 @@ labels, and inline or display mathematics renders in place.
 
 ## Changelog
 
+### 0.5.5
+
+- Native HTML in Markdown now renders safely for common block and inline elements while preserving
+  the original source for editing. Fenced `html` code remains literal code.
+- Fixed oversized formulas, inaccurate heading jumps, skipped vertical cursor movement, annotation
+  block/list rendering issues, and an oversized find widget.
+
 ### 0.5.4
 
 - Standalone images now default to a centered, framed figure with their `[]` alt text as a

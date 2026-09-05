@@ -85,12 +85,12 @@ class HiddenWidget extends WidgetType {
 const PIN_THRESHOLD_PX = 292;
 
 // The workspace container (createLoomMarkEditor's own `.loommark-workspace`, position:relative,
-// overflow-y:auto — view.dom's grandparent) is the one element wide enough, and un-indented
+// with the editor's internal scroller — view.dom's grandparent) is the one element wide enough, and un-indented
 // enough, to anchor a card flush against the true left/right edge regardless of how deeply the
 // target line itself is nested inside a heading Card (which indents via margin-left) or how far
 // into the editing area it sits. Anchoring there also means the card scrolls naturally with the
-// document: position:absolute inside a scrolling positioned ancestor tracks that ancestor's
-// content, it isn't pinned to the viewport.
+// document. The layout pass adds the internal scroller's offset so these outer overlay elements
+// track the editor content instead of appearing pinned to the viewport.
 function findWorkspaceElement(view: EditorView): HTMLElement | undefined {
   return view.dom.parentElement?.parentElement ?? undefined;
 }
@@ -108,7 +108,10 @@ function findWorkspaceElement(view: EditorView): HTMLElement | undefined {
 // loommark-core's own fields, always won, silently erasing the heading card's own background.
 // An independent overlay element never touches the line's attributes at all, so it can't collide.
 function findLineElement(view: EditorView, pos: number): HTMLElement | null {
-  const { node } = view.domAtPos(pos);
+  // End offsets point between two lines. Resolving the line start first keeps a multi-line
+  // annotation target anchored to its final real line instead of the following line/placeholder.
+  const line = view.state.doc.lineAt(Math.min(pos, view.state.doc.length));
+  const { node } = view.domAtPos(line.from);
   const element = node instanceof HTMLElement ? node : node.parentElement;
   return element?.closest('.cm-line') ?? null;
 }
@@ -206,8 +209,10 @@ function measureGroupLayout(view: EditorView): GroupLayoutResult[] {
   const workspaceElement = findWorkspaceElement(view);
   if (!workspaceElement) return [];
   const workspaceRect = workspaceElement.getBoundingClientRect();
-  const scrollLeft = workspaceElement.scrollLeft;
-  const scrollTop = workspaceElement.scrollTop;
+  // The editor's internal scroller is the live coordinate system. The workspace is only the
+  // absolute overlay container, so its scrollTop remains zero after the scroll-container fix.
+  const scrollLeft = view.scrollDOM.scrollLeft;
+  const scrollTop = view.scrollDOM.scrollTop;
 
   type RawEntry = {
     card: HTMLElement; connectorPath: HTMLElement;
@@ -936,7 +941,9 @@ const completeAnnotationDelimiters = EditorView.inputHandler.of((view, from, to,
 // window/panel resize that rewraps a long line, or an edit above the target that pushes it down,
 // without changing this annotation's own content/color/collapsed state.
 const repositionOnGeometryChange = EditorView.updateListener.of((update) => {
-  if (update.geometryChanged || update.docChanged) repositionAnnotationGroups(update.view);
+  if (update.geometryChanged || update.docChanged || update.viewportChanged) {
+    repositionAnnotationGroups(update.view);
+  }
 });
 
 // Wraps the line the cursor is currently on in a fresh, empty margin annotation block and focuses

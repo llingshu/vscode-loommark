@@ -4,6 +4,18 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-09-05
+
+### Added
+
+- Native HTML in Markdown now renders safely for common block and inline elements while preserving
+  the original source for editing. Fenced `html` code remains literal code.
+
+### Fixed
+
+- Fixed oversized formulas, inaccurate heading jumps, skipped vertical cursor movement, annotation
+  block/list rendering issues, and an oversized find widget.
+
 ## [0.5.4] - 2026-08-05
 
 ### Added
