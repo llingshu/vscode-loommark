@@ -394,7 +394,7 @@
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.1",
     "@llingshu/loommark-core": "^0.1.5",
-    "katex": "^0.18.1",
+    "katex": "^0.18.5",
     "mdast-util-from-markdown": "^2.0.3"
   },
   "devDependencies": {
