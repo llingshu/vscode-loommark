@@ -2,7 +2,7 @@
   "name": "loommark",
   "displayName": "LoomMark",
   "description": "A source-backed, live-rendering WYSIWYG Markdown editor for VS Code.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "publisher": "llingshu",
   "license": "MIT",
   "icon": "assets/icon.png",
@@ -69,6 +69,10 @@
       {
         "command": "loommark.copyDiagnostics",
         "title": "LoomMark: Copy Editor Diagnostics"
+      },
+      {
+        "command": "loommark.copyPerformanceDiagnostics",
+        "title": "LoomMark: Copy Editor Performance Diagnostics"
       },
       {
         "command": "loommark.reconnectRestoredEditors",

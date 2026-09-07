@@ -4,6 +4,15 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-09-07
+
+### Fixed
+
+- Deferred Wiki indexing and image resource resolution until after the editor's first render, and
+  cached the workspace file index to improve opening speed.
+- Prevented duplicate Webview initialization and added one-click performance diagnostics with
+  ordered Host/Webview timing events.
+
 ## [0.5.5] - 2026-09-05
 
 ### Added

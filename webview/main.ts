@@ -3,7 +3,7 @@ import '@llingshu/loommark-core/style.css';
 import './vscode-theme.css';
 import './annotation.css';
 import { annotationExtension } from './annotation-extension';
-import type { HostToWebview, WebviewToHost } from '../src/protocol';
+import type { HostToWebview, PerformanceEvent, WebviewToHost } from '../src/protocol';
 
 declare function acquireVsCodeApi<State>(): {
   postMessage(message: WebviewToHost): void;
@@ -22,6 +22,21 @@ type LinkOpenResult = { status: 'opened' | 'error'; resolvedUri?: string; error?
 type PasteImageResult = { relativePath?: string; error?: string };
 
 const vscode = acquireVsCodeApi<SavedState>();
+const webviewStartedAt = performance.now();
+const performanceEvents: PerformanceEvent[] = [];
+const perfLog = (phase: string, detail = ''): void => {
+  const event: PerformanceEvent = {
+    at: new Date().toISOString(),
+    phase: `webview:${phase}`,
+    elapsedMs: Math.round(performance.now() - webviewStartedAt),
+    ...(detail ? { detail } : {}),
+  };
+  performanceEvents.push(event);
+  while (performanceEvents.length > 100) performanceEvents.shift();
+  vscode.postMessage({ type: 'performance', events: performanceEvents });
+  console.info(`[LoomMark perf] ${event.phase} +${event.elapsedMs}ms${detail ? ` ${detail}` : ''}`);
+};
+perfLog('script-start');
 const savedState = vscode.getState();
 const root: HTMLElement = (() => {
   const candidate = document.getElementById('loommark-root');
@@ -112,10 +127,12 @@ initialConnectionTimeout = window.setTimeout(() => {
 window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
   const message = event.data;
   if (message.type === 'init') {
+    perfLog('init-received', `textLength=${message.text.length}`);
     clearInitialConnectionTimeout();
     clearAllSyncTimeouts();
     initialized = true;
     editor?.destroy();
+    const editorStartedAt = performance.now();
     editor = createLoomMarkEditor(root, {
       ...message,
       documentRevision: message.revision,
@@ -148,9 +165,12 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
       },
       extensions: [annotationExtension()],
     });
+    perfLog('editor-created', `duration=${Math.round(performance.now() - editorStartedAt)}ms`);
     root.append(connectionWarning);
     hideConnectionWarning();
+    requestAnimationFrame(() => requestAnimationFrame(() => perfLog('first-frame')));
   } else if (message.type === 'configuration') {
+    perfLog('configuration-received');
     editor?.updateConfiguration(message);
   } else if (message.type === 'ack') {
     clearSyncTimeout(message.clientRevision);
@@ -164,6 +184,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
   } else if (message.type === 'revealHeading') {
     editor?.revealHeadingByOrdinal(message.ordinal);
   } else if (message.type === 'wikiFilesChanged') {
+    perfLog('wiki-files-received', `count=${message.wikiFiles.length}`);
     editor?.setWikiFiles(message.wikiFiles);
   } else if (message.type === 'linkOpenResult') {
     pendingLinkRequest?.(message);

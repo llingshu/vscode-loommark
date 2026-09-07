@@ -9,7 +9,7 @@ import {
   singleSplice,
   type HeadingTreeNode,
 } from '@llingshu/loommark-core/pure';
-import type { BackgroundConfiguration, CardImageConfiguration, EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode } from './protocol';
+import type { BackgroundConfiguration, CardImageConfiguration, EditorConfiguration, HostToWebview, OutlineMode, EditorTheme, TableMode, TableStyle, OrderedListStyle, CardMode, PerformanceEvent } from './protocol';
 import { CARD_MODE_ORDER, isWebviewMessage } from './protocol';
 
 const viewType = 'loommark.editor';
@@ -18,6 +18,8 @@ const viewType = 'loommark.editor';
 // webview/main.ts's own copy (kept in sync manually; there is no shared runtime module between
 // the two bundles for a six-entry constant).
 const DEFAULT_CARD_COLORS = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be3455', '#087f8c'];
+
+const wikiFileCache = new Map<string, vscode.Uri[]>();
 
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new LoomMarkProvider(context);
@@ -48,6 +50,11 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!provider.requestDiagnostics()) {
         await vscode.env.clipboard.writeText(JSON.stringify(provider.getLifecycleDiagnostics(), null, 2));
         void vscode.window.showWarningMessage('LoomMark has no connected editor. Host diagnostics were copied to the clipboard.');
+      }
+    }),
+    vscode.commands.registerCommand('loommark.copyPerformanceDiagnostics', async () => {
+      if (!provider.copyPerformanceDiagnostics()) {
+        void vscode.window.showWarningMessage('LoomMark has no active editor performance data.');
       }
     }),
     vscode.commands.registerCommand('loommark.reconnectRestoredEditors', async () => {
@@ -209,16 +216,9 @@ async function resolvedBackground(
   webview: vscode.Webview,
   document: vscode.TextDocument,
 ): Promise<BackgroundConfiguration> {
+  const result = backgroundConfigurationDefaults();
+  const enabled = result.enabled;
   const configuration = vscode.workspace.getConfiguration('loommark');
-  const enabled = configuration.get('background.enabled', false);
-  const result: BackgroundConfiguration = {
-    enabled,
-    opacity: clampSetting(configuration.get('background.opacity', 0.72), 0, 1),
-    blur: clampSetting(configuration.get('background.blur', 14), 0, 80),
-    saturation: clampSetting(configuration.get('background.saturation', 0.7), 0, 2),
-    overlay: clampSetting(configuration.get('background.overlay', 0.42), 0, 1),
-    status: enabled ? 'missing' : 'disabled',
-  };
   const source = configuredImagePath('background.path');
   if (!enabled || !source) return result;
   if (source.kind === 'remote') {
@@ -267,17 +267,8 @@ async function resolvedBackground(
 }
 
 async function resolvedCardImage(webview: vscode.Webview): Promise<CardImageConfiguration> {
-  const configuration = vscode.workspace.getConfiguration('loommark');
-  const enabled = configuration.get('cardImage.enabled', false);
-  const result: CardImageConfiguration = {
-    enabled,
-    imageUris: [],
-    opacity: clampSetting(configuration.get('cardImage.opacity', 0.72), 0, 1),
-    blur: clampSetting(configuration.get('cardImage.blur', 4), 0, 40),
-    saturation: clampSetting(configuration.get('cardImage.saturation', 0.75), 0, 2),
-    overlay: clampSetting(configuration.get('cardImage.overlay', 0.18), 0, 1),
-    status: enabled ? 'missing' : 'disabled',
-  };
+  const result = cardImageConfigurationDefaults();
+  const enabled = result.enabled;
   const source = configuredImagePath('cardImage.path');
   if (!enabled || !source) return result;
   if (source.kind === 'remote') {
@@ -317,6 +308,33 @@ async function resolvedCardImage(webview: vscode.Webview): Promise<CardImageConf
       : detail;
   }
   return result;
+}
+
+function backgroundConfigurationDefaults(): BackgroundConfiguration {
+  const configuration = vscode.workspace.getConfiguration('loommark');
+  const enabled = configuration.get('background.enabled', false);
+  return {
+    enabled,
+    opacity: clampSetting(configuration.get('background.opacity', 0.72), 0, 1),
+    blur: clampSetting(configuration.get('background.blur', 14), 0, 80),
+    saturation: clampSetting(configuration.get('background.saturation', 0.7), 0, 2),
+    overlay: clampSetting(configuration.get('background.overlay', 0.42), 0, 1),
+    status: enabled ? 'missing' : 'disabled',
+  };
+}
+
+function cardImageConfigurationDefaults(): CardImageConfiguration {
+  const configuration = vscode.workspace.getConfiguration('loommark');
+  const enabled = configuration.get('cardImage.enabled', false);
+  return {
+    enabled,
+    imageUris: [],
+    opacity: clampSetting(configuration.get('cardImage.opacity', 0.72), 0, 1),
+    blur: clampSetting(configuration.get('cardImage.blur', 4), 0, 40),
+    saturation: clampSetting(configuration.get('cardImage.saturation', 0.75), 0, 2),
+    overlay: clampSetting(configuration.get('cardImage.overlay', 0.18), 0, 1),
+    status: enabled ? 'missing' : 'disabled',
+  };
 }
 
 class MarkdownOutlineTree implements vscode.TreeDataProvider<HeadingTreeNode>, vscode.Disposable {
@@ -373,6 +391,8 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
   activeDocumentUri: vscode.Uri | undefined;
   private activePanel: vscode.WebviewPanel | undefined;
   private readonly resolvedDocumentCounts = new Map<string, number>();
+  private readonly hostPerformanceReports = new Map<string, PerformanceEvent[]>();
+  private readonly webviewPerformanceReports = new Map<string, PerformanceEvent[]>();
   private readonly activeDocumentEmitter = new vscode.EventEmitter<vscode.TextDocument | undefined>();
   readonly onDidChangeActiveDocument = this.activeDocumentEmitter.event;
 
@@ -383,6 +403,17 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     panel: vscode.WebviewPanel,
   ): Promise<void> {
     const documentKey = document.uri.toString();
+    const perfStartedAt = Date.now();
+    const perfLog = (phase: string, detail = ''): void => {
+      this.recordPerformance(documentKey, {
+        at: new Date().toISOString(),
+        phase: `host:${phase}`,
+        elapsedMs: Date.now() - perfStartedAt,
+        ...(detail ? { detail } : {}),
+      });
+      console.info(`[LoomMark perf] ${phase} +${Date.now() - perfStartedAt}ms${detail ? ` ${detail}` : ''}`);
+    };
+    perfLog('resolve:start');
     this.resolvedDocumentCounts.set(documentKey, (this.resolvedDocumentCounts.get(documentKey) ?? 0) + 1);
     this.setActiveDocument(document, panel);
     const documentDirectory = vscode.Uri.joinPath(document.uri, '..');
@@ -391,16 +422,15 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     // one exists so those resolve; a loose file outside any workspace keeps the
     // narrower default of only its own directory.
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    const configuredBackgroundRoots = await backgroundResourceRoots();
     panel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
         workspaceFolder?.uri ?? documentDirectory,
-        ...configuredBackgroundRoots,
       ],
     };
     panel.webview.html = this.html(panel.webview);
+    perfLog('webview:html-set');
 
     let documentRevision = document.version;
     let applyingClientEdit = false;
@@ -408,7 +438,11 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     let lastBackgroundWarning = '';
     let lastCardImageWarning = '';
 
-    const post = (message: HostToWebview): Thenable<boolean> => panel.webview.postMessage(message);
+    let panelDisposed = false;
+    const post = (message: HostToWebview): Thenable<boolean> => {
+      if (panelDisposed) return Promise.resolve(false);
+      return panel.webview.postMessage(message);
+    };
     const loadConfiguration = async (): Promise<EditorConfiguration> => {
       const background = await resolvedBackground(panel.webview, document);
       const cardImage = await resolvedCardImage(panel.webview);
@@ -432,19 +466,54 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       }
       return editorConfiguration(background, cardImage);
     };
-    const initialize = async (): Promise<boolean> => post({
-      type: 'init',
-      text: document.getText(),
-      revision: documentRevision,
-      resourceBase: ensureTrailingSlash(panel.webview.asWebviewUri(documentDirectory).toString()),
-      wikiFiles: await findWikiFiles(document),
-      ...await loadConfiguration(),
-    });
+    let enrichmentStarted = false;
+    const enrichWebview = async (): Promise<void> => {
+      if (enrichmentStarted) return;
+      enrichmentStarted = true;
+      perfLog('enrichment:start');
+      try {
+        const [wikiFiles, backgroundRoots, background, cardImage] = await Promise.all([
+          findWikiFiles(document),
+          backgroundResourceRoots(),
+          resolvedBackground(panel.webview, document),
+          resolvedCardImage(panel.webview),
+        ]);
+        if (panelDisposed) return;
+        panel.webview.options = {
+          ...panel.webview.options,
+          localResourceRoots: [
+            vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+            workspaceFolder?.uri ?? documentDirectory,
+            ...backgroundRoots,
+          ],
+        };
+        await post({ type: 'configuration', ...editorConfiguration(background, cardImage) });
+        await post({ type: 'wikiFilesChanged', wikiFiles });
+        perfLog('enrichment:complete', `wikiFiles=${wikiFiles.length}`);
+      } catch (error: unknown) {
+        if (!panelDisposed) console.warn('LoomMark could not load deferred editor resources.', error);
+      }
+    };
+    const initialize = async (): Promise<boolean> => {
+      perfLog('init:send-start');
+      const delivered = await post({
+        type: 'init',
+        text: document.getText(),
+        revision: documentRevision,
+        resourceBase: ensureTrailingSlash(panel.webview.asWebviewUri(documentDirectory).toString()),
+        wikiFiles: [],
+        ...editorConfiguration(backgroundConfigurationDefaults(), cardImageConfigurationDefaults()),
+      });
+      perfLog('init:send-complete', `delivered=${delivered}`);
+      if (delivered) void enrichWebview();
+      return delivered;
+    };
     let initialization: Promise<boolean> | undefined;
     const initializeWebview = async (): Promise<boolean> => {
       // A restored, retained Webview may have been created by the previous extension host and
       // therefore never send `ready` to this new host. Send the authoritative snapshot from this
       // side as well; a genuinely new Webview still uses its normal ready message as the fallback.
+      if (ready) return true;
       if (!initialization) {
         initialization = initialize().finally(() => {
           initialization = undefined;
@@ -469,6 +538,16 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       if (raw.type === 'diagnostics') {
         await vscode.env.clipboard.writeText(raw.report);
         void vscode.window.showInformationMessage('LoomMark diagnostics copied to the clipboard.');
+        return;
+      }
+      if (raw.type === 'performance') {
+        const previous = this.webviewPerformanceReports.get(documentKey) ?? [];
+        // Each Webview event carries the complete snapshot. Messages can cross while the
+        // extension host is processing them, so an older, shorter snapshot must not replace a
+        // newer one.
+        if (raw.events.length >= previous.length) {
+          this.webviewPerformanceReports.set(documentKey, raw.events.slice(-100));
+        }
         return;
       }
       if (raw.type === 'pasteImage') {
@@ -545,12 +624,15 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       await post({ type: 'wikiFilesChanged', wikiFiles: await findWikiFiles(document) });
     };
     const createFilesSubscription = vscode.workspace.onDidCreateFiles(() => {
+      wikiFileCache.clear();
       void refreshWikiFiles();
     });
     const deleteFilesSubscription = vscode.workspace.onDidDeleteFiles(() => {
+      wikiFileCache.clear();
       void refreshWikiFiles();
     });
     const renameFilesSubscription = vscode.workspace.onDidRenameFiles(() => {
+      wikiFileCache.clear();
       void refreshWikiFiles();
     });
 
@@ -565,6 +647,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       if (event.webviewPanel.active) this.setActiveDocument(document, panel);
     });
     panel.onDidDispose(() => {
+      panelDisposed = true;
       messageSubscription.dispose();
       documentSubscription.dispose();
       configurationSubscription.dispose();
@@ -639,6 +722,30 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         }),
       })),
     };
+  }
+
+  private recordPerformance(documentKey: string, event: PerformanceEvent): void {
+    const events = this.hostPerformanceReports.get(documentKey) ?? [];
+    events.push(event);
+    this.hostPerformanceReports.set(documentKey, events.slice(-100));
+  }
+
+  copyPerformanceDiagnostics(): boolean {
+    const documentKey = this.activeDocumentUri?.toString();
+    if (!documentKey) return false;
+    const performance = [
+      ...(this.hostPerformanceReports.get(documentKey) ?? []),
+      ...(this.webviewPerformanceReports.get(documentKey) ?? []),
+    ].sort((left, right) => left.at.localeCompare(right.at));
+    const report = {
+      generatedAt: new Date().toISOString(),
+      documentUri: documentKey,
+      lifecycle: this.getLifecycleDiagnostics(),
+      performance,
+    };
+    void vscode.env.clipboard.writeText(JSON.stringify(report, null, 2));
+    void vscode.window.showInformationMessage('LoomMark performance diagnostics copied to the clipboard.');
+    return true;
   }
 
   dispose(): void {
@@ -784,13 +891,21 @@ function ensureTrailingSlash(uri: string): string {
 }
 
 async function findWikiFiles(document: vscode.TextDocument): Promise<string[]> {
-  const files = await vscode.workspace.findFiles(
-    '**/*',
-    '**/{.git,node_modules,.vscode-test}/**',
-    3000,
-  );
+  const startedAt = Date.now();
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+  const cacheKey = workspaceFolder?.uri.toString() ?? path.posix.dirname(document.uri.toString());
+  let files = wikiFileCache.get(cacheKey);
+  const cacheHit = Boolean(files);
+  if (!files) {
+    files = await vscode.workspace.findFiles(
+      '**/*',
+      '**/{.git,node_modules,.vscode-test}/**',
+      3000,
+    );
+    wikiFileCache.set(cacheKey, files);
+  }
   const directory = path.posix.dirname(document.uri.path);
-  return files
+  const result = files
     .filter((uri) => uri.toString() !== document.uri.toString())
     .map((uri) => {
       const relative = path.posix.relative(directory, uri.path);
@@ -800,6 +915,8 @@ async function findWikiFiles(document: vscode.TextDocument): Promise<string[]> {
       return /\.(?:md|markdown)$/i.test(relative) ? relative.replace(/\.(?:md|markdown)$/i, '') : relative;
     })
     .sort((left, right) => left.localeCompare(right));
+  console.info(`[LoomMark perf] wiki-index ${cacheHit ? 'cache-hit' : 'scan'} +${Date.now() - startedAt}ms files=${files.length} results=${result.length}`);
+  return result;
 }
 
 export function deactivate(): void {}

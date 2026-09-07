@@ -82,6 +82,13 @@ labels, and inline or display mathematics renders in place.
 
 ## Changelog
 
+### 0.5.6
+
+- Deferred Wiki indexing and image resource resolution until after the editor's first render, and
+  cached the workspace file index to improve opening speed.
+- Prevented duplicate Webview initialization and added one-click performance diagnostics with
+  ordered Host/Webview timing events.
+
 ### 0.5.5
 
 - Native HTML in Markdown now renders safely for common block and inline elements while preserving

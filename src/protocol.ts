@@ -29,12 +29,20 @@ export type HostToWebview =
   | { type: 'requestDiagnostics' }
   | { type: 'imagePasteResult'; requestId: number; relativePath?: string; error?: string };
 
+export type PerformanceEvent = {
+  at: string;
+  phase: string;
+  elapsedMs: number;
+  detail?: string;
+};
+
 export type WebviewToHost =
   | { type: 'ready' }
   | { type: 'edit'; text: string; baseRevision: number; clientRevision: number }
   | { type: 'openLink'; href: string; wiki?: boolean }
   | { type: 'diagnostics'; report: string }
-  | { type: 'pasteImage'; requestId: number; data: string; mimeType: string };
+  | { type: 'pasteImage'; requestId: number; data: string; mimeType: string }
+  | { type: 'performance'; events: PerformanceEvent[] };
 
 export function isWebviewMessage(value: unknown): value is WebviewToHost {
   if (!value || typeof value !== 'object') return false;
@@ -45,6 +53,16 @@ export function isWebviewMessage(value: unknown): value is WebviewToHost {
     return Number.isInteger(message.requestId)
       && typeof message.data === 'string'
       && typeof message.mimeType === 'string';
+  }
+  if (message.type === 'performance') {
+    return Array.isArray(message.events) && message.events.every((event) => {
+      if (!event || typeof event !== 'object') return false;
+      const candidate = event as Record<string, unknown>;
+      return typeof candidate.at === 'string'
+        && typeof candidate.phase === 'string'
+        && typeof candidate.elapsedMs === 'number'
+        && (candidate.detail === undefined || typeof candidate.detail === 'string');
+    });
   }
   return (message.type === 'edit'
     && typeof message.text === 'string'
