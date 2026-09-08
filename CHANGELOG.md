@@ -4,6 +4,13 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-09-08
+
+### Fixed
+
+- Fixed a startup race where the extension sent the initial document before the Webview had
+  installed its message listener, leaving the editor stuck on the unsaved-connection warning.
+
 ## [0.5.6] - 2026-09-07
 
 ### Fixed

@@ -636,13 +636,6 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       void refreshWikiFiles();
     });
 
-    // Do not depend exclusively on a message from the Webview. This is the critical recovery
-    // path after `Developer: Restart Extension Host` with a Markdown custom editor still open.
-    void initializeWebview().catch((error: unknown) => {
-      console.error('LoomMark could not initialize a restored editor.', error);
-      void vscode.window.showErrorMessage(`LoomMark could not reconnect this Markdown editor: ${String(error)}`);
-    });
-
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.active) this.setActiveDocument(document, panel);
     });

@@ -4,8 +4,8 @@ title: "LoomMark"
 type: software
 authors:
   - family-names: "llingshu"
-version: 0.5.6
-date-released: 2026-09-07
+version: 0.5.7
+date-released: 2026-09-08
 url: "https://github.com/llingshu/vscode-loommark"
 repository-code: "https://github.com/llingshu/vscode-loommark"
 license: MIT

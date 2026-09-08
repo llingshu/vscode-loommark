@@ -82,6 +82,11 @@ labels, and inline or display mathematics renders in place.
 
 ## Changelog
 
+### 0.5.7
+
+- Fixed a startup race where the extension sent the initial document before the Webview had
+  installed its message listener, leaving the editor stuck on the unsaved-connection warning.
+
 ### 0.5.6
 
 - Deferred Wiki indexing and image resource resolution until after the editor's first render, and
