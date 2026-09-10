@@ -82,6 +82,11 @@ labels, and inline or display mathematics renders in place.
 
 ## Changelog
 
+### 0.5.8
+
+- Fixed reconnecting Webviews that could remain blank after sending a second `ready` message.
+- Added panel/Webview lifecycle details to `LoomMark: Copy Editor Diagnostics`.
+
 ### 0.5.7
 
 - Fixed a startup race where the extension sent the initial document before the Webview had

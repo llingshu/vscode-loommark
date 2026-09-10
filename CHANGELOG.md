@@ -4,6 +4,17 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-09-10
+
+### Added
+
+- Added panel and Webview lifecycle details to `LoomMark: Copy Editor Diagnostics`.
+
+### Fixed
+
+- Fixed reconnecting Webviews that could remain blank after sending a second `ready` message.
+- Serialized restored-editor reconnect attempts and ensured one active panel per document.
+
 ## [0.5.7] - 2026-09-08
 
 ### Fixed

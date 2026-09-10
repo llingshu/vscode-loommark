@@ -23,13 +23,14 @@ type PasteImageResult = { relativePath?: string; error?: string };
 
 const vscode = acquireVsCodeApi<SavedState>();
 const webviewStartedAt = performance.now();
+const webviewInstanceId = Math.random().toString(36).slice(2, 10);
 const performanceEvents: PerformanceEvent[] = [];
 const perfLog = (phase: string, detail = ''): void => {
   const event: PerformanceEvent = {
     at: new Date().toISOString(),
     phase: `webview:${phase}`,
     elapsedMs: Math.round(performance.now() - webviewStartedAt),
-    ...(detail ? { detail } : {}),
+    detail: [`instance=${webviewInstanceId}`, detail].filter(Boolean).join(' '),
   };
   performanceEvents.push(event);
   while (performanceEvents.length > 100) performanceEvents.shift();
@@ -88,12 +89,14 @@ function clearAllSyncTimeouts(): void {
   for (const clientRevision of syncTimeouts.keys()) clearSyncTimeout(clientRevision);
 }
 
-function requestInitialization(): void {
+function requestInitialization(reason = 'startup'): void {
+  perfLog('ready-sent', `reason=${reason}`);
   vscode.postMessage({ type: 'ready' });
 }
 
 function showConnectionWarning(detail = defaultConnectionWarning): void {
   connected = false;
+  perfLog('connection-warning-shown', detail);
   root.classList.add('loommark-sync-offline');
   connectionWarningMessage.textContent = detail;
   connectionWarning.hidden = false;
@@ -101,7 +104,9 @@ function showConnectionWarning(detail = defaultConnectionWarning): void {
 }
 
 function hideConnectionWarning(): void {
+  const wasConnected = connected;
   connected = true;
+  if (!wasConnected) perfLog('connection-restored');
   root.classList.remove('loommark-sync-offline');
   connectionWarning.hidden = true;
 }
@@ -115,7 +120,7 @@ connectionWarning.querySelector<HTMLButtonElement>('[data-loommark-copy-recovery
   }
 });
 connectionWarning.querySelector<HTMLButtonElement>('[data-loommark-retry-connection]')?.addEventListener('click', () => {
-  requestInitialization();
+  requestInitialization('retry-button');
 });
 
 // Do not leave a newly reloaded Webview as an apparently-editable blank surface while waiting for
@@ -200,10 +205,10 @@ window.addEventListener('message', (event: MessageEvent<HostToWebview>) => {
 });
 
 window.addEventListener('focus', () => {
-  if (!connected) requestInitialization();
+  if (!connected) requestInitialization('window-focus');
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && !connected) requestInitialization();
+  if (document.visibilityState === 'visible' && !connected) requestInitialization('visibility-restored');
 });
 
 requestInitialization();

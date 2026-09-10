@@ -21,6 +21,13 @@ const DEFAULT_CARD_COLORS = ['#7c3aed', '#2563eb', '#168a72', '#b46a08', '#be345
 
 const wikiFileCache = new Map<string, vscode.Uri[]>();
 
+type LifecycleEvent = {
+  at: string;
+  event: string;
+  panelId: number;
+  detail?: string;
+};
+
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new LoomMarkProvider(context);
   const outlineProvider = new MarkdownOutlineTree();
@@ -48,7 +55,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('loommark.copyDiagnostics', async () => {
       if (!provider.requestDiagnostics()) {
-        await vscode.env.clipboard.writeText(JSON.stringify(provider.getLifecycleDiagnostics(), null, 2));
+        await vscode.env.clipboard.writeText(JSON.stringify(provider.getDiagnosticsReport(), null, 2));
         void vscode.window.showWarningMessage('LoomMark has no connected editor. Host diagnostics were copied to the clipboard.');
       }
     }),
@@ -390,10 +397,15 @@ class MarkdownOutlineTree implements vscode.TreeDataProvider<HeadingTreeNode>, v
 class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
   activeDocumentUri: vscode.Uri | undefined;
   private activePanel: vscode.WebviewPanel | undefined;
+  private readonly panelsByDocument = new Map<string, vscode.WebviewPanel>();
+  private readonly panelIds = new WeakMap<vscode.WebviewPanel, number>();
+  private nextPanelId = 1;
   private readonly resolvedDocumentCounts = new Map<string, number>();
+  private readonly lifecycleReports = new Map<string, LifecycleEvent[]>();
   private readonly hostPerformanceReports = new Map<string, PerformanceEvent[]>();
   private readonly webviewPerformanceReports = new Map<string, PerformanceEvent[]>();
   private readonly activeDocumentEmitter = new vscode.EventEmitter<vscode.TextDocument | undefined>();
+  private reconnectingRestoredEditors: Promise<void> | undefined;
   readonly onDidChangeActiveDocument = this.activeDocumentEmitter.event;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -403,6 +415,13 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     panel: vscode.WebviewPanel,
   ): Promise<void> {
     const documentKey = document.uri.toString();
+    const panelId = this.getPanelId(panel);
+    const previousPanel = this.panelsByDocument.get(documentKey);
+    if (previousPanel && previousPanel !== panel) {
+      this.recordLifecycle(documentKey, 'panel-replaced', panelId, `previousPanel=${this.getPanelId(previousPanel)}`);
+      previousPanel.dispose();
+    }
+    this.panelsByDocument.set(documentKey, panel);
     const perfStartedAt = Date.now();
     const perfLog = (phase: string, detail = ''): void => {
       this.recordPerformance(documentKey, {
@@ -414,6 +433,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
       console.info(`[LoomMark perf] ${phase} +${Date.now() - perfStartedAt}ms${detail ? ` ${detail}` : ''}`);
     };
     perfLog('resolve:start');
+    this.recordLifecycle(documentKey, 'resolve-start', panelId, `previousPanel=${previousPanel ? this.getPanelId(previousPanel) : 'none'}`);
     this.resolvedDocumentCounts.set(documentKey, (this.resolvedDocumentCounts.get(documentKey) ?? 0) + 1);
     this.setActiveDocument(document, panel);
     const documentDirectory = vscode.Uri.joinPath(document.uri, '..');
@@ -431,6 +451,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     };
     panel.webview.html = this.html(panel.webview);
     perfLog('webview:html-set');
+    this.recordLifecycle(documentKey, 'html-set', panelId);
 
     let documentRevision = document.version;
     let applyingClientEdit = false;
@@ -496,6 +517,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     };
     const initialize = async (): Promise<boolean> => {
       perfLog('init:send-start');
+      this.recordLifecycle(documentKey, 'init-send-start', panelId);
       const delivered = await post({
         type: 'init',
         text: document.getText(),
@@ -505,15 +527,19 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         ...editorConfiguration(backgroundConfigurationDefaults(), cardImageConfigurationDefaults()),
       });
       perfLog('init:send-complete', `delivered=${delivered}`);
+      this.recordLifecycle(documentKey, 'init-send-complete', panelId, `delivered=${delivered}`);
       if (delivered) void enrichWebview();
       return delivered;
     };
     let initialization: Promise<boolean> | undefined;
-    const initializeWebview = async (): Promise<boolean> => {
+    const initializeWebview = async (force = false): Promise<boolean> => {
       // A restored, retained Webview may have been created by the previous extension host and
       // therefore never send `ready` to this new host. Send the authoritative snapshot from this
       // side as well; a genuinely new Webview still uses its normal ready message as the fallback.
-      if (ready) return true;
+      if (ready && !force) {
+        this.recordLifecycle(documentKey, 'init-skipped', panelId, 'reason=already-initialized');
+        return true;
+      }
       if (!initialization) {
         initialization = initialize().finally(() => {
           initialization = undefined;
@@ -527,7 +553,8 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     const messageSubscription = panel.webview.onDidReceiveMessage(async (raw: unknown) => {
       if (!isWebviewMessage(raw)) return;
       if (raw.type === 'ready') {
-        await initializeWebview();
+        this.recordLifecycle(documentKey, 'ready-received', panelId, `ready=${ready}`);
+        await initializeWebview(ready);
         return;
       }
       if (raw.type === 'openLink') {
@@ -536,7 +563,21 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         return;
       }
       if (raw.type === 'diagnostics') {
-        await vscode.env.clipboard.writeText(raw.report);
+        let editorDiagnostics: unknown = raw.report;
+        try {
+          editorDiagnostics = JSON.parse(raw.report);
+        } catch {
+          // Preserve the raw Webview report when an older or broken Webview sends non-JSON text.
+        }
+        const report = {
+          generatedAt: new Date().toISOString(),
+          documentUri: documentKey,
+          lifecycle: this.getLifecycleDiagnostics(),
+          lifecycleEvents: this.lifecycleReports.get(documentKey) ?? [],
+          performance: this.getPerformanceEvents(documentKey),
+          editor: editorDiagnostics,
+        };
+        await vscode.env.clipboard.writeText(JSON.stringify(report, null, 2));
         void vscode.window.showInformationMessage('LoomMark diagnostics copied to the clipboard.');
         return;
       }
@@ -641,6 +682,7 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     });
     panel.onDidDispose(() => {
       panelDisposed = true;
+      this.recordLifecycle(documentKey, 'panel-disposed', panelId, `active=${this.activePanel === panel}`);
       messageSubscription.dispose();
       documentSubscription.dispose();
       configurationSubscription.dispose();
@@ -652,6 +694,9 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
         this.activePanel = undefined;
         this.activeDocumentEmitter.fire(undefined);
       }
+      if (this.panelsByDocument.get(documentKey) === panel) {
+        this.panelsByDocument.delete(documentKey);
+      }
       const remaining = (this.resolvedDocumentCounts.get(documentKey) ?? 1) - 1;
       if (remaining > 0) this.resolvedDocumentCounts.set(documentKey, remaining);
       else this.resolvedDocumentCounts.delete(documentKey);
@@ -659,27 +704,34 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
   }
 
   async reconnectRestoredEditors(): Promise<void> {
-    const restored = vscode.window.tabGroups.all.flatMap((group) => group.tabs.flatMap((tab) => {
-      const input = tab.input;
-      if (!(input instanceof vscode.TabInputCustom) || input.viewType !== viewType) return [];
-      if (this.resolvedDocumentCounts.has(input.uri.toString())) return [];
-      return [{ tab, uri: input.uri, viewColumn: group.viewColumn, preview: tab.isPreview, active: tab.isActive }];
-    }));
+    if (this.reconnectingRestoredEditors) return this.reconnectingRestoredEditors;
+    const reconnect = (async () => {
+      const restored = vscode.window.tabGroups.all.flatMap((group) => group.tabs.flatMap((tab) => {
+        const input = tab.input;
+        if (!(input instanceof vscode.TabInputCustom) || input.viewType !== viewType) return [];
+        if (this.resolvedDocumentCounts.has(input.uri.toString())) return [];
+        return [{ tab, uri: input.uri, viewColumn: group.viewColumn, preview: tab.isPreview, active: tab.isActive }];
+      }));
 
-    // The extension host has no panel handle for these restored tabs, so it cannot receive their
-    // Webview messages. `vscode.openWith` alone only focuses the still-open custom tab, so first
-    // close that zombie tab and then open the URI with LoomMark to make VS Code construct a fresh
-    // CustomTextEditorProvider panel.
-    for (const tab of restored) {
-      const options = {
-        viewColumn: tab.viewColumn,
-        preview: tab.preview,
-        preserveFocus: !tab.active,
-      };
-      const closed = await vscode.window.tabGroups.close(tab.tab, true);
-      if (!closed) throw new Error(`VS Code did not close restored LoomMark tab ${tab.uri.toString()}.`);
-      await vscode.commands.executeCommand('vscode.openWith', tab.uri, viewType, options);
-    }
+      // The extension host has no panel handle for these restored tabs, so it cannot receive their
+      // Webview messages. `vscode.openWith` alone only focuses the still-open custom tab, so first
+      // close that zombie tab and then open the URI with LoomMark to make VS Code construct a fresh
+      // CustomTextEditorProvider panel.
+      for (const tab of restored) {
+        const options = {
+          viewColumn: tab.viewColumn,
+          preview: tab.preview,
+          preserveFocus: !tab.active,
+        };
+        const closed = await vscode.window.tabGroups.close(tab.tab, true);
+        if (!closed) throw new Error(`VS Code did not close restored LoomMark tab ${tab.uri.toString()}.`);
+        await vscode.commands.executeCommand('vscode.openWith', tab.uri, viewType, options);
+      }
+    })().finally(() => {
+      this.reconnectingRestoredEditors = undefined;
+    });
+    this.reconnectingRestoredEditors = reconnect;
+    return reconnect;
   }
 
   revealHeading(ordinal: number): Thenable<boolean> | undefined {
@@ -717,24 +769,58 @@ class LoomMarkProvider implements vscode.CustomTextEditorProvider, vscode.Dispos
     };
   }
 
+  getDiagnosticsReport(): Record<string, unknown> {
+    const documentKey = this.activeDocumentUri?.toString();
+    return {
+      generatedAt: new Date().toISOString(),
+      documentUri: documentKey,
+      lifecycle: this.getLifecycleDiagnostics(),
+      lifecycleEvents: documentKey ? this.lifecycleReports.get(documentKey) ?? [] : [],
+      performance: documentKey ? this.getPerformanceEvents(documentKey) : [],
+    };
+  }
+
   private recordPerformance(documentKey: string, event: PerformanceEvent): void {
     const events = this.hostPerformanceReports.get(documentKey) ?? [];
     events.push(event);
     this.hostPerformanceReports.set(documentKey, events.slice(-100));
   }
 
-  copyPerformanceDiagnostics(): boolean {
-    const documentKey = this.activeDocumentUri?.toString();
-    if (!documentKey) return false;
-    const performance = [
+  private getPanelId(panel: vscode.WebviewPanel): number {
+    const existing = this.panelIds.get(panel);
+    if (existing !== undefined) return existing;
+    const panelId = this.nextPanelId++;
+    this.panelIds.set(panel, panelId);
+    return panelId;
+  }
+
+  private recordLifecycle(documentKey: string, event: string, panelId: number, detail = ''): void {
+    const events = this.lifecycleReports.get(documentKey) ?? [];
+    events.push({
+      at: new Date().toISOString(),
+      event,
+      panelId,
+      ...(detail ? { detail } : {}),
+    });
+    this.lifecycleReports.set(documentKey, events.slice(-100));
+  }
+
+  private getPerformanceEvents(documentKey: string): PerformanceEvent[] {
+    return [
       ...(this.hostPerformanceReports.get(documentKey) ?? []),
       ...(this.webviewPerformanceReports.get(documentKey) ?? []),
     ].sort((left, right) => left.at.localeCompare(right.at));
+  }
+
+  copyPerformanceDiagnostics(): boolean {
+    const documentKey = this.activeDocumentUri?.toString();
+    if (!documentKey) return false;
     const report = {
       generatedAt: new Date().toISOString(),
       documentUri: documentKey,
       lifecycle: this.getLifecycleDiagnostics(),
-      performance,
+      lifecycleEvents: this.lifecycleReports.get(documentKey) ?? [],
+      performance: this.getPerformanceEvents(documentKey),
     };
     void vscode.env.clipboard.writeText(JSON.stringify(report, null, 2));
     void vscode.window.showInformationMessage('LoomMark performance diagnostics copied to the clipboard.');
