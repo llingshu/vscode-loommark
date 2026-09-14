@@ -100,7 +100,7 @@ function showConnectionWarning(detail = defaultConnectionWarning): void {
   root.classList.add('loommark-sync-offline');
   connectionWarningMessage.textContent = detail;
   connectionWarning.hidden = false;
-  connectionWarning.focus();
+  connectionWarning.focus({ preventScroll: true });
 }
 
 function hideConnectionWarning(): void {

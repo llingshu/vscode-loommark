@@ -4,6 +4,12 @@ All notable changes to LoomMark are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-09-14
+
+### Fixed
+
+- Prevented connection warnings from scrolling the editor back to the top when they receive focus.
+
 ## [0.5.8] - 2026-09-10
 
 ### Added

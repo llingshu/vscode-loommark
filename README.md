@@ -82,6 +82,10 @@ labels, and inline or display mathematics renders in place.
 
 ## Changelog
 
+### 0.5.9
+
+- Prevented connection warnings from scrolling the editor back to the top when they receive focus.
+
 ### 0.5.8
 
 - Fixed reconnecting Webviews that could remain blank after sending a second `ready` message.
